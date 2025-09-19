@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* base para claro/escuro (igual ao que a app espera) */
+@layer base {
+  html { @apply bg-slate-50 text-slate-800; }
+  html.dark { @apply bg-slate-950 text-slate-100; }
+}
+
+/* utilitários que usas no JSX e não existem no Tailwind */
+@layer components {
+  .glass {
+    @apply bg-white/70 backdrop-blur border border-slate-200
+           dark:bg-slate-900/60 dark:border-slate-800;
+  }
+  .ring-focus:focus-visible {
+    @apply outline-none ring-2 ring-indigo-500 ring-offset-2
+           ring-offset-white dark:ring-offset-slate-900;
+  }
+  .drop-target {
+    @apply ring-2 ring-indigo-400 border-indigo-400/60;
+  }
+}
+
