@@ -1,4 +1,8 @@
 ﻿import React, { useState, useMemo, useEffect } from 'react';
+import { Route, Switch } from "wouter";
+import AuthPage from "./pages/Auth";
+import PrivateRoutes from "./routes/PrivateRoutes"; // se fores usar a opção PrivateRoutes
+// (e importa as tuas páginas que já existem, ex.: Dashboard, Manutencoes, etc.)
 
 
 /* ---------- Helpers ---------- */
@@ -85,31 +89,18 @@ function parseCatalogCSV(text){const lines=text.replace(/\r\n/g,'\n').replace(/\
 
 
 
-function printOrderHTML(o, priceOf, codeOf){
-  const rows = o.items.map(it=>{
-    const p   = priceOf(it.name);
-    const c   = codeOf(it.name, o.project) || '—';
-    const qty = Number(it.qty)||0;
-    const sub = p*qty;
-    return `<tr>
-      <td>${it.name}</td><td>${c}</td>
-      <td style="text-align:right">${qty}</td>
-      <td style="text-align:right">${p.toFixed(2)} €</td>
-      <td style="text-align:right">${sub.toFixed(2)} €</td>
-    </tr>`;
-  }).join('');
-
-  function orderToEmailText(o, priceOf, codeOf) {
-  const linhas = o.items.map(it=>{
+// ---------- Impressão de Pedidos ----------
+function orderToEmailText(o, priceOf, codeOf) {
+  const linhas = o.items.map(it => {
     const p = priceOf(it.name);
     const c = codeOf(it.name, o.project) || '';
-    const sub = p * (Number(it.qty)||0);
-    return `- ${it.name}${c?` [${c}]`:''} × ${it.qty} @ ${p.toFixed(2)}€ = ${sub.toFixed(2)}€`;
+    const sub = p * (Number(it.qty) || 0);
+    return `- ${it.name}${c ? ` [${c}]` : ''} × ${it.qty} @ ${p.toFixed(2)}€ = ${sub.toFixed(2)}€`;
   });
-  const total = o.items.reduce((s,it)=> s + priceOf(it.name)*(Number(it.qty)||0), 0);
+  const total = o.items.reduce((s, it) => s + priceOf(it.name) * (Number(it.qty) || 0), 0);
   return [
     `Pedido de Material — ${o.project}`,
-    `Requisitante: ${o.requestedBy||'—'} · Data: ${o.requestedAt}`,
+    `Requisitante: ${o.requestedBy || '—'} · Data: ${o.requestedAt}`,
     ``,
     ...linhas,
     ``,
@@ -129,18 +120,68 @@ function openPrintWindow(html) {
       return true;
     }
   } catch {}
-  // Fallback: descarrega o HTML se a popup for bloqueada
   try {
     const blob = new Blob([html], { type: 'text/html' });
     const url  = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `relatorio_timesheets_${todayISO()}.html`;
+    a.download = `pedido_material_${todayISO()}.html`;
     a.click();
     URL.revokeObjectURL(url);
   } catch {}
   return false;
 }
+
+function printOrderHTML(o, priceOf, codeOf) {
+  const rows = o.items.map(it => {
+    const p   = priceOf(it.name);
+    const c   = codeOf(it.name, o.project) || '—';
+    const qty = Number(it.qty) || 0;
+    const sub = p * qty;
+    return `<tr>
+      <td>${it.name}</td><td>${c}</td>
+      <td style="text-align:right">${qty}</td>
+      <td style="text-align:right">${p.toFixed(2)} €</td>
+      <td style="text-align:right">${sub.toFixed(2)} €</td>
+    </tr>`;
+  }).join('');
+
+  const total = o.items.reduce((s,it)=>s+priceOf(it.name)*(Number(it.qty)||0),0);
+
+  return `<!doctype html><html><head><meta charset="utf-8"/>
+  <title>Pedido ${o.id}</title>
+  <style>
+    body{font:14px/1.4 system-ui,Segoe UI,Roboto,Arial;padding:24px;color:#0f172a}
+    h1{margin:0 0 8px;font-size:20px}
+    .meta{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:10px 0 12px}
+    table{width:100%;border-collapse:collapse}
+    th,td{border:1px solid #cbd5e1;padding:8px}
+    th{text-align:left;background:#f8fafc}
+    tfoot td{font-weight:600;background:#f1f5f9}
+    .right{text-align:right}
+  </style></head><body>
+    <h1>Pedido de Material</h1>
+    <div class="meta">
+      <div><b>Projeto:</b> ${o.project}</div>
+      <div><b>Requisitante:</b> ${o.requestedBy||'—'}</div>
+      <div><b>Data:</b> ${o.requestedAt}</div>
+      <div><b>ID:</b> ${o.id}</div>
+      ${o.notes?`<div style="grid-column:1/-1"><b>Notas:</b> ${o.notes}</div>`:''}
+    </div>
+    <table>
+      <thead>
+        <tr><th>Item</th><th>Código</th><th class="right">Qtd</th><th class="right">Preço</th><th class="right">Subtotal</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="4" class="right">Total</td><td class="right">${total.toFixed(2)} €</td></tr></tfoot>
+    </table>
+  </body></html>`;
+}
+
+function printOrder(o, priceOf, codeOf) {
+  openPrintWindow(printOrderHTML(o, priceOf, codeOf));
+}
+
 
 
 
@@ -332,109 +373,6 @@ function printTimesheetCycleReport(entries = []) {
   </body></html>`;
 
   openPrintWindow(html);
-}
-
-
-
-
-
-// ---- RELATÓRIO: Registo de horas do ciclo 21→20 ----
-function printTimesheetCycleReport(entries = []) {
-  const { start, end } = getCycle(0);
-  const inRange = (iso) => {
-    if (!iso) return false;
-    const d = new Date(iso); d.setHours(0,0,0,0);
-    const a = new Date(start), b = new Date(end);
-    a.setHours(0,0,0,0); b.setHours(0,0,0,0);
-    return d >= a && d <= b;
-  };
-
-  // só “Trabalho Normal” (ajusta se quiseres incluir Férias/Baixa/Falta)
-  const rows = entries
-    .filter(t => t.template === 'Trabalho Normal' && inRange(t.date))
-    .sort((a,b) =>
-      (a.date||'').localeCompare(b.date||'') ||
-      (a.worker||a.supervisor||'').localeCompare(b.worker||b.supervisor||'')
-    );
-
-  const totH  = rows.reduce((s,t)=> s + (Number(t.hours)||0), 0);
-  const totOT = rows.reduce((s,t)=> s + (Number(t.overtime)||0), 0);
-
-  const tr = rows.map(t => `
-    <tr>
-      <td>${t.date||'—'}</td>
-      <td>${t.worker||t.supervisor||'—'}</td>
-      <td>${t.project||'—'}</td>
-      <td style="text-align:right">${Number(t.hours||0).toFixed(2)}</td>
-      <td style="text-align:right">${Number(t.overtime||0).toFixed(2)}</td>
-      <td>${t.notes ? String(t.notes).replace(/</g,'&lt;') : ''}</td>
-    </tr>
-  `).join('');
-
-  const html = `<!doctype html><html><head><meta charset="utf-8"/>
-  <title>Registo de Horas — ${start.toLocaleDateString('pt-PT')} a ${end.toLocaleDateString('pt-PT')}</title>
-  <style>
-    body{font:14px/1.4 system-ui,Segoe UI,Roboto,Arial;padding:24px;color:#0f172a}
-    h1{margin:0 0 8px;font-size:20px}
-    .muted{color:#64748b;margin-bottom:14px}
-    table{width:100%;border-collapse:collapse}
-    th,td{border:1px solid #cbd5e1;padding:8px}
-    th{text-align:left;background:#f8fafc}
-    tfoot td{font-weight:600;background:#f1f5f9}
-    .right{text-align:right}
-  </style></head><body>
-    <h1>Registo de Horas (ciclo 21→20)</h1>
-    <div class="muted">${start.toLocaleDateString('pt-PT')} – ${end.toLocaleDateString('pt-PT')}</div>
-    <table>
-      <thead>
-        <tr><th>Data</th><th>Colaborador</th><th>Projeto</th><th class="right">Horas</th><th class="right">Extra</th><th>Obs.</th></tr>
-      </thead>
-      <tbody>${tr || '<tr><td colspan="6" style="text-align:center;color:#64748b">Sem registos no intervalo.</td></tr>'}</tbody>
-      <tfoot>
-        <tr><td colspan="3" class="right">Totais</td><td class="right">${totH.toFixed(2)}</td><td class="right">${totOT.toFixed(2)}</td><td></td></tr>
-      </tfoot>
-    </table>
-  </body></html>`;
-
-  const w = window.open('', '_blank');
-  w.document.write(html);
-  w.document.close();
-  w.focus?.();
-  setTimeout(()=>{ try{ w.print(); }catch{} }, 100);
-}
-
-
-
-  const total = o.items.reduce((s,it)=>s+priceOf(it.name)*(Number(it.qty)||0),0);
-
-  return `<!doctype html><html><head><meta charset="utf-8"/>
-  <title>Pedido ${o.id}</title>
-  <style>/* estilos iguais aos de cima */</style>
-  </head><body>
-    <!-- conteúdo igual ao de cima, sem a tag <script> -->
-    <h1>Pedido de Material</h1>
-    <div class="meta">
-      <div><b>Projeto:</b> ${o.project}</div>
-      <div><b>Requisitante:</b> ${o.requestedBy||'—'}</div>
-      <div><b>Data:</b> ${o.requestedAt}</div>
-      <div><b>ID:</b> ${o.id}</div>
-      ${o.notes?`<div><b>Notas:</b> ${o.notes}</div>`:''}
-    </div>
-    <table>
-      <tr><th>Item</th><th>Código</th><th class="right">Qtd</th><th class="right">Preço</th><th class="right">Subtotal</th></tr>
-      ${rows}
-      <tr><th colspan="4" class="right">Total</th><th class="right">${total.toFixed(2)} €</th></tr>
-    </table>
-  </body></html>`;
-}
-
-function printOrder(o, priceOf, codeOf){
-  const w = window.open('', '_blank');
-  w.document.write(printOrderHTML(o, priceOf, codeOf));
-  w.document.close();
-  // dá um microtempo para render e imprime
-  w.focus?.();
-  setTimeout(() => { try { w.print(); } catch {} }, 100);
 }
 
 
