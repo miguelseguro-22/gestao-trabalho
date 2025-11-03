@@ -2,7 +2,6 @@
 import AuthPage from "./pages/Auth";
 import PrivateRoutes from "./routes/PrivateRoutes"; // se fores usar a opção PrivateRoutes
 // (e importa as tuas páginas que já existem, ex.: Dashboard, Manutencoes, etc.)
->>>>>>> origin/main
 
 
 /* ---------- Helpers ---------- */
