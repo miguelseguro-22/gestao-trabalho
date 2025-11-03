@@ -88,7 +88,6 @@ function parseCatalogCSV(text){const lines=text.replace(/\r\n/g,'\n').replace(/\
 
 
 
-<<<<<<< HEAD
 function printOrderHTML(o, priceOf, codeOf){
   const rows = o.items.map(it=>{
     const p   = priceOf(it.name);
@@ -127,7 +126,6 @@ function orderToEmailText(o, priceOf, codeOf) {
   return [
     `Pedido de Material — ${o.project}`,
     `Requisitante: ${o.requestedBy || '—'} · Data: ${o.requestedAt}`,
->>>>>>> origin/main
     ``,
     ...linhas,
     ``,
@@ -147,27 +145,22 @@ function openPrintWindow(html) {
       return true;
     }
   } catch {}
-<<<<<<< HEAD
   // Fallback: descarrega o HTML se a popup for bloqueada
 =======
->>>>>>> origin/main
   try {
     const blob = new Blob([html], { type: 'text/html' });
     const url  = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-<<<<<<< HEAD
     a.download = `relatorio_timesheets_${todayISO()}.html`;
 =======
     a.download = `pedido_material_${todayISO()}.html`;
->>>>>>> origin/main
     a.click();
     URL.revokeObjectURL(url);
   } catch {}
   return false;
 }
 
-<<<<<<< HEAD
 =======
 function printOrderHTML(o, priceOf, codeOf) {
   const rows = o.items.map(it => {
@@ -219,8 +212,6 @@ function printOrder(o, priceOf, codeOf) {
   openPrintWindow(printOrderHTML(o, priceOf, codeOf));
 }
 
-
->>>>>>> origin/main
 
 
 function buildTimesheetCycleRows({ worker, timeEntries, cycle }) {
@@ -353,12 +344,10 @@ function exportTimesheetCycleCSV(entries = []) {
   download(`relatorio_timesheets_${todayISO()}.csv`, csv);
 }
 
-<<<<<<< HEAD
 
 // ---- RELATÓRIO: Registo de horas do ciclo 21→20 ----
 =======
 // HTML imprimível — esta é a que o botão deve chamar
->>>>>>> origin/main
 function printTimesheetCycleReport(entries = []) {
   const { start, end } = getCycle(0);
   const inRange = (iso) => {
@@ -369,12 +358,10 @@ function printTimesheetCycleReport(entries = []) {
     return d >= a && d <= b;
   };
 
-<<<<<<< HEAD
   // só “Trabalho Normal” (ajusta se quiseres incluir Férias/Baixa/Falta)
   const rows = entries
 =======
   const rows = (entries||[])
->>>>>>> origin/main
     .filter(t => t.template === 'Trabalho Normal' && inRange(t.date))
     .sort((a,b) =>
       (a.date||'').localeCompare(b.date||'') ||
@@ -420,7 +407,6 @@ function printTimesheetCycleReport(entries = []) {
     </table>
   </body></html>`;
 
-<<<<<<< HEAD
   const w = window.open('', '_blank');
   w.document.write(html);
   w.document.close();
@@ -457,7 +443,6 @@ function printOrder(o, priceOf, codeOf){
   setTimeout(() => { try { w.print(); } catch {} }, 100);
 =======
   openPrintWindow(html);
->>>>>>> origin/main
 }
 
 
