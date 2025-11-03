@@ -1,7 +1,4 @@
 ﻿import React, { useState, useMemo, useEffect } from 'react';
-import AuthPage from "./pages/Auth";
-import PrivateRoutes from "./routes/PrivateRoutes"; // se fores usar a opção PrivateRoutes
-// (e importa as tuas páginas que já existem, ex.: Dashboard, Manutencoes, etc.)
 
 
 /* ---------- Helpers ---------- */
@@ -113,19 +110,6 @@ function printOrderHTML(o, priceOf, codeOf){
   return [
     `Pedido de Material — ${o.project}`,
     `Requisitante: ${o.requestedBy||'—'} · Data: ${o.requestedAt}`,
-=======
-// ---------- Impressão de Pedidos ----------
-function orderToEmailText(o, priceOf, codeOf) {
-  const linhas = o.items.map(it => {
-    const p = priceOf(it.name);
-    const c = codeOf(it.name, o.project) || '';
-    const sub = p * (Number(it.qty) || 0);
-    return `- ${it.name}${c ? ` [${c}]` : ''} × ${it.qty} @ ${p.toFixed(2)}€ = ${sub.toFixed(2)}€`;
-  });
-  const total = o.items.reduce((s, it) => s + priceOf(it.name) * (Number(it.qty) || 0), 0);
-  return [
-    `Pedido de Material — ${o.project}`,
-    `Requisitante: ${o.requestedBy || '—'} · Data: ${o.requestedAt}`,
     ``,
     ...linhas,
     ``,
@@ -146,70 +130,16 @@ function openPrintWindow(html) {
     }
   } catch {}
   // Fallback: descarrega o HTML se a popup for bloqueada
-=======
   try {
     const blob = new Blob([html], { type: 'text/html' });
     const url  = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `relatorio_timesheets_${todayISO()}.html`;
-=======
-    a.download = `pedido_material_${todayISO()}.html`;
     a.click();
     URL.revokeObjectURL(url);
   } catch {}
   return false;
-}
-
-=======
-function printOrderHTML(o, priceOf, codeOf) {
-  const rows = o.items.map(it => {
-    const p   = priceOf(it.name);
-    const c   = codeOf(it.name, o.project) || '—';
-    const qty = Number(it.qty) || 0;
-    const sub = p * qty;
-    return `<tr>
-      <td>${it.name}</td><td>${c}</td>
-      <td style="text-align:right">${qty}</td>
-      <td style="text-align:right">${p.toFixed(2)} €</td>
-      <td style="text-align:right">${sub.toFixed(2)} €</td>
-    </tr>`;
-  }).join('');
-
-  const total = o.items.reduce((s,it)=>s+priceOf(it.name)*(Number(it.qty)||0),0);
-
-  return `<!doctype html><html><head><meta charset="utf-8"/>
-  <title>Pedido ${o.id}</title>
-  <style>
-    body{font:14px/1.4 system-ui,Segoe UI,Roboto,Arial;padding:24px;color:#0f172a}
-    h1{margin:0 0 8px;font-size:20px}
-    .meta{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:10px 0 12px}
-    table{width:100%;border-collapse:collapse}
-    th,td{border:1px solid #cbd5e1;padding:8px}
-    th{text-align:left;background:#f8fafc}
-    tfoot td{font-weight:600;background:#f1f5f9}
-    .right{text-align:right}
-  </style></head><body>
-    <h1>Pedido de Material</h1>
-    <div class="meta">
-      <div><b>Projeto:</b> ${o.project}</div>
-      <div><b>Requisitante:</b> ${o.requestedBy||'—'}</div>
-      <div><b>Data:</b> ${o.requestedAt}</div>
-      <div><b>ID:</b> ${o.id}</div>
-      ${o.notes?`<div style="grid-column:1/-1"><b>Notas:</b> ${o.notes}</div>`:''}
-    </div>
-    <table>
-      <thead>
-        <tr><th>Item</th><th>Código</th><th class="right">Qtd</th><th class="right">Preço</th><th class="right">Subtotal</th></tr>
-      </thead>
-      <tbody>${rows}</tbody>
-      <tfoot><tr><td colspan="4" class="right">Total</td><td class="right">${total.toFixed(2)} €</td></tr></tfoot>
-    </table>
-  </body></html>`;
-}
-
-function printOrder(o, priceOf, codeOf) {
-  openPrintWindow(printOrderHTML(o, priceOf, codeOf));
 }
 
 
@@ -344,10 +274,71 @@ function exportTimesheetCycleCSV(entries = []) {
   download(`relatorio_timesheets_${todayISO()}.csv`, csv);
 }
 
+// HTML imprimível — esta é a que o botão deve chamar
+function printTimesheetCycleReport(entries = []) {
+  const { start, end } = getCycle(0);
+  const inRange = (iso) => {
+    if (!iso) return false;
+    const d = new Date(iso); d.setHours(0,0,0,0);
+    const a = new Date(start), b = new Date(end);
+    a.setHours(0,0,0,0); b.setHours(0,0,0,0);
+    return d >= a && d <= b;
+  };
+
+  const rows = (entries||[])
+    .filter(t => t.template === 'Trabalho Normal' && inRange(t.date))
+    .sort((a,b) =>
+      (a.date||'').localeCompare(b.date||'') ||
+      (a.worker||a.supervisor||'').localeCompare(b.worker||b.supervisor||'')
+    );
+
+  const totH  = rows.reduce((s,t)=> s + (Number(t.hours)||0), 0);
+  const totOT = rows.reduce((s,t)=> s + (Number(t.overtime)||0), 0);
+
+  const tr = rows.map(t => `
+    <tr>
+      <td>${t.date||'—'}</td>
+      <td>${t.worker||t.supervisor||'—'}</td>
+      <td>${t.project||'—'}</td>
+      <td style="text-align:right">${Number(t.hours||0).toFixed(2)}</td>
+      <td style="text-align:right">${Number(t.overtime||0).toFixed(2)}</td>
+      <td>${t.notes ? String(t.notes).replace(/</g,'&lt;') : ''}</td>
+    </tr>
+  `).join('');
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"/>
+  <title>Registo de Horas — ${start.toLocaleDateString('pt-PT')} a ${end.toLocaleDateString('pt-PT')}</title>
+  <style>
+    body{font:14px/1.4 system-ui,Segoe UI,Roboto,Arial;padding:24px;color:#0f172a}
+    h1{margin:0 0 8px;font-size:20px}
+    .muted{color:#64748b;margin-bottom:14px}
+    table{width:100%;border-collapse:collapse}
+    th,td{border:1px solid #cbd5e1;padding:8px}
+    th{text-align:left;background:#f8fafc}
+    tfoot td{font-weight:600;background:#f1f5f9}
+    .right{text-align:right}
+  </style></head><body>
+    <h1>Registo de Horas (ciclo 21→20)</h1>
+    <div class="muted">${start.toLocaleDateString('pt-PT')} – ${end.toLocaleDateString('pt-PT')}</div>
+    <table>
+      <thead>
+        <tr><th>Data</th><th>Colaborador</th><th>Projeto</th><th class="right">Horas</th><th class="right">Extra</th><th>Obs.</th></tr>
+      </thead>
+      <tbody>${tr || '<tr><td colspan="6" style="text-align:center;color:#64748b">Sem registos no intervalo.</td></tr>'}</tbody>
+      <tfoot>
+        <tr><td colspan="3" class="right">Totais</td><td class="right">${totH.toFixed(2)}</td><td class="right">${totOT.toFixed(2)}</td><td></td></tr>
+      </tfoot>
+    </table>
+  </body></html>`;
+
+  openPrintWindow(html);
+}
+
+
+
+
 
 // ---- RELATÓRIO: Registo de horas do ciclo 21→20 ----
-=======
-// HTML imprimível — esta é a que o botão deve chamar
 function printTimesheetCycleReport(entries = []) {
   const { start, end } = getCycle(0);
   const inRange = (iso) => {
@@ -360,8 +351,6 @@ function printTimesheetCycleReport(entries = []) {
 
   // só “Trabalho Normal” (ajusta se quiseres incluir Férias/Baixa/Falta)
   const rows = entries
-=======
-  const rows = (entries||[])
     .filter(t => t.template === 'Trabalho Normal' && inRange(t.date))
     .sort((a,b) =>
       (a.date||'').localeCompare(b.date||'') ||
@@ -414,6 +403,11 @@ function printTimesheetCycleReport(entries = []) {
   setTimeout(()=>{ try{ w.print(); }catch{} }, 100);
 }
 
+
+
+  const total = o.items.reduce((s,it)=>s+priceOf(it.name)*(Number(it.qty)||0),0);
+
+  return `<!doctype html><html><head><meta charset="utf-8"/>
   <title>Pedido ${o.id}</title>
   <style>/* estilos iguais aos de cima */</style>
   </head><body>
@@ -441,8 +435,6 @@ function printOrder(o, priceOf, codeOf){
   // dá um microtempo para render e imprime
   w.focus?.();
   setTimeout(() => { try { w.print(); } catch {} }, 100);
-=======
-  openPrintWindow(html);
 }
 
 
@@ -2528,39 +2520,6 @@ const defaultViewForRole = (role) =>
 ];
 
 const LoginView = ({ onLogin }) => {
-<<<<<<< HEAD
-  const [email,setEmail] = React.useState('');
-  const [password,setPassword] = React.useState('');
-  const [loading,setLoading] = React.useState(false);
-  const [error,setError] = React.useState('');
-  const [showRegister,setShowRegister] = React.useState(false);
-  const [role,setRole] = React.useState('tecnico'); // só usado no registo
-
-  const handleLogin = async () => {
-    setLoading(true); setError('');
-    try{
-      const u = await Auth.login(email.trim(), password);
-      onLogin(u);
-    }catch(e){
-      setError(e?.message || 'Falha no login.');
-    }finally{
-      setLoading(false);
-    }
-  };
-
-  const handleRegister = async () => {
-    setLoading(true); setError('');
-    try{
-      const u = await Auth.register(email.trim(), password, role);
-      // Opcional: podes pedir confirmação de email no Supabase (Auth > Email confirmations)
-      onLogin(u);
-    }catch(e){
-      setError(e?.message || 'Falha no registo.');
-    }finally{
-      setLoading(false);
-    }
-  };
-=======
   const [username, setUsername] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [role, setRole] = React.useState('tecnico');
@@ -2573,7 +2532,6 @@ const LoginView = ({ onLogin }) => {
    window.Auth?.login(username || 'Utilizador', '***', effectiveRole);
    onLogin(window.Auth?.user());
  };
->>>>>>> origin/main
 
   return (
     <div className="min-h-screen grid place-items-center p-4 bg-slate-50 dark:bg-slate-950">
@@ -2590,85 +2548,26 @@ const LoginView = ({ onLogin }) => {
 
         <div className="space-y-3">
           <label className="text-sm">
-<<<<<<< HEAD
-            Email
-            <input
-              type="email"
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              placeholder="nome@empresa.com"
-              value={email}
-              onChange={e=>setEmail(e.target.value)}
-=======
             Nome de Utilizador
             <input
               className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
               placeholder="Digite seu usuário"
               value={username}
               onChange={e=>setUsername(e.target.value)}
->>>>>>> origin/main
             />
           </label>
 
           <label className="text-sm">
-<<<<<<< HEAD
-            Palavra-passe
-            <input
-              type="password"
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              placeholder="••••••••"
-=======
             Senha
             <input
               type="password"
               className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
               placeholder="Digite sua senha"
->>>>>>> origin/main
               value={password}
               onChange={e=>setPassword(e.target.value)}
             />
           </label>
 
-<<<<<<< HEAD
-          {showRegister && (
-            <label className="text-sm">
-              Papel do utilizador
-              <select
-                className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                value={role}
-                onChange={e=>setRole(e.target.value)}
-              >
-                <option value="tecnico">Técnico</option>
-                <option value="encarregado">Encarregado</option>
-                <option value="diretor">Diretor de Obra</option>
-                <option value="logistica">Gestor de Logística</option>
-                <option value="admin">Administrador</option>
-              </select>
-            </label>
-          )}
-
-          {error && <div className="text-xs text-rose-500">{error}</div>}
-
-          {!showRegister ? (
-            <Button className="w-full justify-center" onClick={handleLogin} disabled={loading}>
-              {loading ? 'A entrar…' : 'Entrar'}
-            </Button>
-          ) : (
-            <Button className="w-full justify-center" onClick={handleRegister} disabled={loading}>
-              {loading ? 'A registar…' : 'Criar conta'}
-            </Button>
-          )}
-
-          <div className="text-xs text-center text-slate-500 dark:text-slate-400">
-            {showRegister ? 'Já tens conta?' : 'Ainda não tens conta?'}{' '}
-            <button
-              className="underline"
-              onClick={()=>setShowRegister(v=>!v)}
-              type="button"
-            >
-              {showRegister ? 'Entrar' : 'Criar conta'}
-            </button>
-          </div>
-=======
           <label className="text-sm">
             Tipo de Utilizador (apenas para demo sem password)
             <select
@@ -2719,17 +2618,12 @@ const LoginView = ({ onLogin }) => {
             </div>
           </div>
           {/* === fim do bloco === */}
->>>>>>> origin/main
         </div>
       </Card>
     </div>
   );
 };
 
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/main
 const JOB_TYPES = ['Instalação','Manutenção','Visita Técnica','Reunião'];
 
 function AgendaQuickForm({ initial, setAgenda, onClose, peopleNames=[], projectNames=[] }) {
@@ -3406,8 +3300,6 @@ const DashboardView = () => (
   </div>
 </Modal>
 
-<<<<<<< HEAD
-=======
 {/* Escolha rápida: registar horas / agendar (apenas hoje+futuro) */}
 <Modal
   open={modal?.name==='day-actions'}
@@ -3433,7 +3325,6 @@ const DashboardView = () => (
   </div>
 </Modal>
 
->>>>>>> origin/main
 {/* Agendamento rápido (formulário compacto) */}
 <Modal open={modal?.name==='agenda-add'} title="Agendar Trabalho" onClose={()=>setModal(null)}>
   <AgendaQuickForm initial={modal?.initial}
