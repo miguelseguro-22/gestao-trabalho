@@ -1,4 +1,10 @@
 ﻿import React, { useState, useMemo, useEffect } from 'react';
+<<<<<<< HEAD
+=======
+import AuthPage from "./pages/Auth";
+import PrivateRoutes from "./routes/PrivateRoutes"; // se fores usar a opção PrivateRoutes
+// (e importa as tuas páginas que já existem, ex.: Dashboard, Manutencoes, etc.)
+>>>>>>> origin/main
 
 
 /* ---------- Helpers ---------- */
@@ -85,6 +91,7 @@ function parseCatalogCSV(text){const lines=text.replace(/\r\n/g,'\n').replace(/\
 
 
 
+<<<<<<< HEAD
 function printOrderHTML(o, priceOf, codeOf){
   const rows = o.items.map(it=>{
     const p   = priceOf(it.name);
@@ -110,6 +117,20 @@ function printOrderHTML(o, priceOf, codeOf){
   return [
     `Pedido de Material — ${o.project}`,
     `Requisitante: ${o.requestedBy||'—'} · Data: ${o.requestedAt}`,
+=======
+// ---------- Impressão de Pedidos ----------
+function orderToEmailText(o, priceOf, codeOf) {
+  const linhas = o.items.map(it => {
+    const p = priceOf(it.name);
+    const c = codeOf(it.name, o.project) || '';
+    const sub = p * (Number(it.qty) || 0);
+    return `- ${it.name}${c ? ` [${c}]` : ''} × ${it.qty} @ ${p.toFixed(2)}€ = ${sub.toFixed(2)}€`;
+  });
+  const total = o.items.reduce((s, it) => s + priceOf(it.name) * (Number(it.qty) || 0), 0);
+  return [
+    `Pedido de Material — ${o.project}`,
+    `Requisitante: ${o.requestedBy || '—'} · Data: ${o.requestedAt}`,
+>>>>>>> origin/main
     ``,
     ...linhas,
     ``,
@@ -129,19 +150,80 @@ function openPrintWindow(html) {
       return true;
     }
   } catch {}
+<<<<<<< HEAD
   // Fallback: descarrega o HTML se a popup for bloqueada
+=======
+>>>>>>> origin/main
   try {
     const blob = new Blob([html], { type: 'text/html' });
     const url  = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
+<<<<<<< HEAD
     a.download = `relatorio_timesheets_${todayISO()}.html`;
+=======
+    a.download = `pedido_material_${todayISO()}.html`;
+>>>>>>> origin/main
     a.click();
     URL.revokeObjectURL(url);
   } catch {}
   return false;
 }
 
+<<<<<<< HEAD
+=======
+function printOrderHTML(o, priceOf, codeOf) {
+  const rows = o.items.map(it => {
+    const p   = priceOf(it.name);
+    const c   = codeOf(it.name, o.project) || '—';
+    const qty = Number(it.qty) || 0;
+    const sub = p * qty;
+    return `<tr>
+      <td>${it.name}</td><td>${c}</td>
+      <td style="text-align:right">${qty}</td>
+      <td style="text-align:right">${p.toFixed(2)} €</td>
+      <td style="text-align:right">${sub.toFixed(2)} €</td>
+    </tr>`;
+  }).join('');
+
+  const total = o.items.reduce((s,it)=>s+priceOf(it.name)*(Number(it.qty)||0),0);
+
+  return `<!doctype html><html><head><meta charset="utf-8"/>
+  <title>Pedido ${o.id}</title>
+  <style>
+    body{font:14px/1.4 system-ui,Segoe UI,Roboto,Arial;padding:24px;color:#0f172a}
+    h1{margin:0 0 8px;font-size:20px}
+    .meta{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:10px 0 12px}
+    table{width:100%;border-collapse:collapse}
+    th,td{border:1px solid #cbd5e1;padding:8px}
+    th{text-align:left;background:#f8fafc}
+    tfoot td{font-weight:600;background:#f1f5f9}
+    .right{text-align:right}
+  </style></head><body>
+    <h1>Pedido de Material</h1>
+    <div class="meta">
+      <div><b>Projeto:</b> ${o.project}</div>
+      <div><b>Requisitante:</b> ${o.requestedBy||'—'}</div>
+      <div><b>Data:</b> ${o.requestedAt}</div>
+      <div><b>ID:</b> ${o.id}</div>
+      ${o.notes?`<div style="grid-column:1/-1"><b>Notas:</b> ${o.notes}</div>`:''}
+    </div>
+    <table>
+      <thead>
+        <tr><th>Item</th><th>Código</th><th class="right">Qtd</th><th class="right">Preço</th><th class="right">Subtotal</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="4" class="right">Total</td><td class="right">${total.toFixed(2)} €</td></tr></tfoot>
+    </table>
+  </body></html>`;
+}
+
+function printOrder(o, priceOf, codeOf) {
+  openPrintWindow(printOrderHTML(o, priceOf, codeOf));
+}
+
+
+>>>>>>> origin/main
 
 
 function buildTimesheetCycleRows({ worker, timeEntries, cycle }) {
@@ -274,8 +356,12 @@ function exportTimesheetCycleCSV(entries = []) {
   download(`relatorio_timesheets_${todayISO()}.csv`, csv);
 }
 
+<<<<<<< HEAD
 
 // ---- RELATÓRIO: Registo de horas do ciclo 21→20 ----
+=======
+// HTML imprimível — esta é a que o botão deve chamar
+>>>>>>> origin/main
 function printTimesheetCycleReport(entries = []) {
   const { start, end } = getCycle(0);
   const inRange = (iso) => {
@@ -286,8 +372,12 @@ function printTimesheetCycleReport(entries = []) {
     return d >= a && d <= b;
   };
 
+<<<<<<< HEAD
   // só “Trabalho Normal” (ajusta se quiseres incluir Férias/Baixa/Falta)
   const rows = entries
+=======
+  const rows = (entries||[])
+>>>>>>> origin/main
     .filter(t => t.template === 'Trabalho Normal' && inRange(t.date))
     .sort((a,b) =>
       (a.date||'').localeCompare(b.date||'') ||
@@ -333,6 +423,7 @@ function printTimesheetCycleReport(entries = []) {
     </table>
   </body></html>`;
 
+<<<<<<< HEAD
   const w = window.open('', '_blank');
   w.document.write(html);
   w.document.close();
@@ -367,6 +458,9 @@ function printOrder(o, priceOf, codeOf){
   // dá um microtempo para render e imprime
   w.focus?.();
   setTimeout(() => { try { w.print(); } catch {} }, 100);
+=======
+  openPrintWindow(html);
+>>>>>>> origin/main
 }
 
 
@@ -2452,6 +2546,7 @@ const defaultViewForRole = (role) =>
 ];
 
 const LoginView = ({ onLogin }) => {
+<<<<<<< HEAD
   const [email,setEmail] = React.useState('');
   const [password,setPassword] = React.useState('');
   const [loading,setLoading] = React.useState(false);
@@ -2483,6 +2578,20 @@ const LoginView = ({ onLogin }) => {
       setLoading(false);
     }
   };
+=======
+  const [username, setUsername] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [role, setRole] = React.useState('tecnico');
+  const [showCreds, setShowCreds] = React.useState(false);
+
+ const handleSubmit = () => {
+   const chosen = TEST_CREDS.find(c => c.user === username && c.pass === password);
+   const effectiveRole = chosen?.role || role;
+   // regista no Auth (guarda em storage)
+   window.Auth?.login(username || 'Utilizador', '***', effectiveRole);
+   onLogin(window.Auth?.user());
+ };
+>>>>>>> origin/main
 
   return (
     <div className="min-h-screen grid place-items-center p-4 bg-slate-50 dark:bg-slate-950">
@@ -2499,6 +2608,7 @@ const LoginView = ({ onLogin }) => {
 
         <div className="space-y-3">
           <label className="text-sm">
+<<<<<<< HEAD
             Email
             <input
               type="email"
@@ -2506,20 +2616,37 @@ const LoginView = ({ onLogin }) => {
               placeholder="nome@empresa.com"
               value={email}
               onChange={e=>setEmail(e.target.value)}
+=======
+            Nome de Utilizador
+            <input
+              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              placeholder="Digite seu usuário"
+              value={username}
+              onChange={e=>setUsername(e.target.value)}
+>>>>>>> origin/main
             />
           </label>
 
           <label className="text-sm">
+<<<<<<< HEAD
             Palavra-passe
             <input
               type="password"
               className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
               placeholder="••••••••"
+=======
+            Senha
+            <input
+              type="password"
+              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              placeholder="Digite sua senha"
+>>>>>>> origin/main
               value={password}
               onChange={e=>setPassword(e.target.value)}
             />
           </label>
 
+<<<<<<< HEAD
           {showRegister && (
             <label className="text-sm">
               Papel do utilizador
@@ -2559,13 +2686,68 @@ const LoginView = ({ onLogin }) => {
               {showRegister ? 'Entrar' : 'Criar conta'}
             </button>
           </div>
+=======
+          <label className="text-sm">
+            Tipo de Utilizador (apenas para demo sem password)
+            <select
+              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={role}
+              onChange={e=>setRole(e.target.value)}
+            >
+              <option value="tecnico">Técnico</option>
+              <option value="encarregado">Encarregado</option>
+              <option value="diretor">Diretor de Obra</option>
+              <option value="logistica">Gestor de Logística</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </label>
+
+          <Button className="w-full justify-center" onClick={handleSubmit}>
+            Entrar
+          </Button>
+
+          {/* === AQUI entra exatamente o bloco que partilhaste === */}
+          <div className="mt-4 space-y-2">
+            <Button variant="secondary" className="w-full justify-center" onClick={()=>setShowCreds(s=>!s)}>
+              <Icon name="eye"/> {showCreds ? 'Esconder' : 'Mostrar'} Credenciais de Teste
+            </Button>
+
+            {showCreds && (
+              <div className="grid grid-cols-2 gap-2">
+                {TEST_CREDS.map(c => (
+                  <button
+                    key={c.role}
+                    type="button"
+                    className="rounded-xl border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
+                    onClick={()=>{
+                      setUsername(c.user);
+                      setPassword(c.pass);
+                      onLogin({ name: c.user, role: c.role }); // entra direto
+                    }}
+                    title={`${c.user} / ${c.pass}`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="text-[11px] text-slate-400 mt-2 text-center">
+              Podes entrar como qualquer perfil para veres os acessos específicos.
+            </div>
+          </div>
+          {/* === fim do bloco === */}
+>>>>>>> origin/main
         </div>
       </Card>
     </div>
   );
 };
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/main
 const JOB_TYPES = ['Instalação','Manutenção','Visita Técnica','Reunião'];
 
 function AgendaQuickForm({ initial, setAgenda, onClose, peopleNames=[], projectNames=[] }) {
@@ -3242,6 +3424,34 @@ const DashboardView = () => (
   </div>
 </Modal>
 
+<<<<<<< HEAD
+=======
+{/* Escolha rápida: registar horas / agendar (apenas hoje+futuro) */}
+<Modal
+  open={modal?.name==='day-actions'}
+  title={`Ações — ${fmtDate(modal?.dateISO||todayISO())}`}
+  onClose={()=>setModal(null)}
+>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <button className="rounded-2xl border p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
+      onClick={()=>setModal({name:'add-time', initial:{ date: modal?.dateISO, template:'Trabalho Normal' }})}
+    >
+      <div className="text-sm text-slate-500">Registar</div>
+      <div className="mt-1 font-semibold">Registar horas</div>
+      <div className="text-xs text-slate-400 mt-1">Criar timesheet para este dia</div>
+    </button>
+
+    <button className="rounded-2xl border p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
+      onClick={()=>setModal({name:'agenda-add', initial:{ date: modal?.dateISO, time:'08:00', jobType:'Instalação' }})}
+    >
+      <div className="text-sm text-slate-500">Agendar</div>
+      <div className="mt-1 font-semibold">Agendar trabalho</div>
+      <div className="text-xs text-slate-400 mt-1">Obra, hora e tipo</div>
+    </button>
+  </div>
+</Modal>
+
+>>>>>>> origin/main
 {/* Agendamento rápido (formulário compacto) */}
 <Modal open={modal?.name==='agenda-add'} title="Agendar Trabalho" onClose={()=>setModal(null)}>
   <AgendaQuickForm initial={modal?.initial}
