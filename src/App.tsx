@@ -3617,7 +3617,6 @@ const DashboardView = () => (
         <ImportCenter onClose={()=>setModal(null)} setters={setters} addToast={()=>{}} log={(m)=>addToast(m)}/>
       </Modal>
     </div>
-  );
-}
+  );    
 
 export default App;
