@@ -1,8 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
-import Card from './components/Card';
-import Button from './components/Button';
-import Icon from './components/Icon';
-// ... (resto dos imports que o teu projeto usa)
+import { createRoot } from 'react-dom/client'; // se estiveres a usar aqui
+// restantes imports: Card, Button, Icon, etc.
+
 
 
 
@@ -2664,21 +2663,26 @@ function AgendaQuickForm({ initial, setAgenda, onClose, peopleNames=[], projectN
 }
 
 
-
-/* ---------- App ---------- */
 function App() {
-  // Carrega qualquer estado persistente (excepto auth)
-  const persisted = loadState();
+  const persisted = loadState?.(); // se tiveres esta função, mantém; se não existe, remove esta linha
 
-  // Estado de autenticação
+  // 🔐 Estado de autenticação
   const [auth, setAuth] = useState<any | null>(window.Auth?.user() ?? null);
 
-  // Vista inicial
+  // 👁️ Vista actual da app (inicial com base no role)
   const [view, setView] = useState(
     auth ? defaultViewForRole(auth.role) : 'timesheets'
   );
 
-  // ... outros useState (jobs, timeEntries, etc.)
+  // UI / navegação
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [modal, setModal] = useState<any | null>(null);
+
+  // 👉 A PARTIR DAQUI vêm os restantes estados que já tinhas:
+  // const [jobs, setJobs] = useState(...);
+  // const [timeEntries, setTimeEntries] = useState(...);
+  // const [materials, setMaterials] = useState(...);
+  // etc...
 
 
 
@@ -2722,7 +2726,8 @@ const visibleTimeEntries = React.useMemo(() => {
   return timeEntries;
 }, [auth?.role, auth?.name, timeEntries]);
 
- useEffect(() => {
+  // 🔄 Refresca a sessão do Supabase ao montar a app
+  useEffect(() => {
     let cancelled = false;
 
     (async () => {
@@ -2737,6 +2742,8 @@ const visibleTimeEntries = React.useMemo(() => {
     };
   }, []);
 
+
+  // Se não estiver autenticado, mostra o login
   if (!auth) {
     return (
       <LoginView
@@ -2747,6 +2754,15 @@ const visibleTimeEntries = React.useMemo(() => {
       />
     );
   }
+
+  // Daqui para baixo: return "normal" da app (layout, sidebar, etc.)
+  return (
+    <div className="min-h-screen flex">
+      {/* sidebar, header, conteúdo, etc. */}
+    </div>
+  );
+}
+
 
 
 const visibleOrders = React.useMemo(() => {
