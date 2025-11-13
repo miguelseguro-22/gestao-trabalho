@@ -2509,6 +2509,7 @@ const defaultViewForRole = (role: string) =>
   role === 'logistica'   ? 'logistics'  :
   'dashboard'
 // LoginView real: pede email e password e usa Supabase
+// Login real: estética antiga + funcionalidade Supabase
 function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -2521,10 +2522,11 @@ function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
     setError(null);
 
     const res = await window.Auth?.login(email, password);
+
     setLoading(false);
 
     if (res?.ok) {
-      onLogin(res.user); // recebe { id, name, role }
+      onLogin(res.user); // user: { id, name, role }
     } else {
       setError(res?.error || 'Credenciais inválidas');
     }
@@ -2533,22 +2535,53 @@ function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
   return (
     <div className="min-h-screen grid place-items-center p-4 bg-slate-50 dark:bg-slate-950">
       <Card className="max-w-md w-full p-5">
+        {/* Cabeçalho igual ao login antigo */}
         <div className="flex items-center gap-2 mb-4">
-          {/* ... cabeçalho ... */}
+          <div className="p-2 rounded-xl bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900">
+            <Icon name="activity" />
+          </div>
+          <div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">Plataforma</div>
+            <div className="font-semibold dark:text-slate-100">Gestão de Trabalho</div>
+          </div>
         </div>
+
         <form onSubmit={handleSubmit} className="space-y-3">
           <label className="text-sm">
             Email
-            <input type="email" className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              value={email} onChange={e => setEmail(e.target.value)} required />
+            <input
+              type="email"
+              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              placeholder="Digite o seu email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+            />
           </label>
+
           <label className="text-sm">
             Password
-            <input type="password" className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              value={password} onChange={e => setPassword(e.target.value)} required />
+            <input
+              type="password"
+              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              placeholder="Digite a sua password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+            />
           </label>
-          {error && <div className="text-red-500 text-xs">{error}</div>}
-          <Button type="submit" className="w-full justify-center" disabled={loading}>
+
+          {error && (
+            <div className="text-red-500 text-xs">
+              {error}
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            className="w-full justify-center"
+            disabled={loading}
+          >
             {loading ? 'A entrar…' : 'Entrar'}
           </Button>
         </form>
