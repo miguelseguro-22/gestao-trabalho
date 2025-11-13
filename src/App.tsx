@@ -2743,17 +2743,6 @@ const visibleTimeEntries = React.useMemo(() => {
   }, []);
 
 
-  // Se não estiver autenticado, mostra o login
-  if (!auth) {
-    return (
-      <LoginView
-        onLogin={(u) => {
-          setAuth(u);
-          setView(defaultViewForRole(u.role));
-        }}
-      />
-    );
-  }
 
   // Daqui para baixo: return "normal" da app (layout, sidebar, etc.)
   return (
@@ -3144,6 +3133,17 @@ const DashboardView = () => (
     if (can('obraReport')) { setProjectFocus(p); setView('obra-report'); }
   };
 
+    // 🔐 Guard de autenticação: se não há auth, mostra Login
+  if (!auth) {
+    return (
+      <LoginView
+        onLogin={(u) => {
+          setAuth(u);
+          setView(defaultViewForRole(u.role));
+        }}
+      />
+    );
+  }
 
   return(
     <div className={`min-h-screen ${density==='compact'?'text-[15px]':''}`} data-density={density}>
@@ -3176,8 +3176,14 @@ const DashboardView = () => (
           </div>
 
           <div className="px-2 pb-2 text-xs text-slate-500 dark:text-slate-400">
-            Utilizador: <b className="dark:text-slate-200">{auth.name}</b> · {ROLE_LABELS[auth.role]}
-          </div>
+  Utilizador:{' '}
+  <b className="dark:text-slate-200">
+    {auth?.name || '—'}
+  </b>
+  {' · '}
+  {ROLE_LABELS[auth?.role as keyof typeof ROLE_LABELS] || '—'}
+</div>
+
 
           <div className="mt-2 space-y-1">
   {can('dashboard') && <NavItem id="dashboard" icon="activity" label="Dashboard"/>}
