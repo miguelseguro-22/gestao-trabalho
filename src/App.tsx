@@ -2645,7 +2645,6 @@ function App(){
   const persisted = loadState()
 const [auth, setAuth] = React.useState<any | null>(window.Auth?.user() ?? null);
 
-)
 
 
   const [theme,setTheme]=useState(persisted?.theme||'light');
