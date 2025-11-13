@@ -2999,23 +2999,6 @@ const DashboardView = () => (
       );
     })()}
 
-
-    React.useEffect(() => {
-  let cancelled = false
-
-  ;(async () => {
-    const u = await window.Auth?.refresh()
-    if (!cancelled) {
-      setAuth(u || null)
-    }
-  })()
-
-  return () => {
-    cancelled = true
-  }
-}, [])
-
-
     {/* --- Horas por dia (semana atual) --- */}
     <Card className="p-4">
       <div className="flex items-center justify-between mb-3">
@@ -3107,14 +3090,28 @@ const DashboardView = () => (
 
   const TableMaterials=()=>(<section className="space-y-4"><PageHeader icon="package" title="Materiais" actions={<Button onClick={()=>setModal({name:'add-order'})}><Icon name="plus"/> Novo Pedido</Button>}/><TableSimple columns={["Data","Projeto","Item","Qtd","Requisitante","Estado"]} rows={MaterialsFlat.map(m=>[m.requestedAt,m.project,m.item,m.qty,m.requestedBy,m.status])}/></section>);
 
+  // 🔁 Refrescar sessão quando a App monta
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const u = await window.Auth?.refresh();
+      if (!cancelled) {
+        setAuth(u || null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
  // Se não estiver autenticado, mostra o login
 if (!auth) {
   return (
     <LoginView
-      onLogin={(u) => {
-        setAuth(u);
-        setView(defaultViewForRole(u.role));
-      }}
+     onLogin={(u) => {
+  setAuth(u);
+  setView(defaultViewForRole(u.role));
+}}
     />
   );
 }
@@ -3291,30 +3288,6 @@ if (!auth) {
   </div>
 </Modal>
 
-{/* Escolha rápida: registar horas / agendar (apenas hoje+futuro) */}
-<Modal
-  open={modal?.name==='day-actions'}
-  title={`Ações — ${fmtDate(modal?.dateISO||todayISO())}`}
-  onClose={()=>setModal(null)}
->
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-    <button className="rounded-2xl border p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
-      onClick={()=>setModal({name:'add-time', initial:{ date: modal?.dateISO, template:'Trabalho Normal' }})}
-    >
-      <div className="text-sm text-slate-500">Registar</div>
-      <div className="mt-1 font-semibold">Registar horas</div>
-      <div className="text-xs text-slate-400 mt-1">Criar timesheet para este dia</div>
-    </button>
-
-    <button className="rounded-2xl border p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
-      onClick={()=>setModal({name:'agenda-add', initial:{ date: modal?.dateISO, time:'08:00', jobType:'Instalação' }})}
-    >
-      <div className="text-sm text-slate-500">Agendar</div>
-      <div className="mt-1 font-semibold">Agendar trabalho</div>
-      <div className="text-xs text-slate-400 mt-1">Obra, hora e tipo</div>
-    </button>
-  </div>
-</Modal>
 
 {/* Agendamento rápido (formulário compacto) */}
 <Modal open={modal?.name==='agenda-add'} title="Agendar Trabalho" onClose={()=>setModal(null)}>
