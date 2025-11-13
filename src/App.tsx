@@ -2761,7 +2761,7 @@ const visibleTimeEntries = React.useMemo(() => {
       {/* sidebar, header, conteúdo, etc. */}
     </div>
   );
-}
+
 
 
 
@@ -2780,8 +2780,6 @@ const visibleOrders = React.useMemo(() => {
   const catalogMaps=useMemo(()=>buildCatalogMaps(catalog),[catalog]);
   const uniqueFamilies=useMemo(()=>Array.from(new Set(catalog.map(c=>String(c.family||'').trim()).filter(Boolean))).sort(),[catalog]);
 
-  const [sidebarOpen,setSidebarOpen]=useState(false);
-  const [modal,setModal]=useState(null);
 
   // dentro de function App() { ... } mas ANTES do return do App
 const TimesheetsView = () => (
