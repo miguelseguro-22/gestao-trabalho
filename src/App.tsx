@@ -2744,13 +2744,6 @@ const visibleTimeEntries = React.useMemo(() => {
 
 
 
-  // Daqui para baixo: return "normal" da app (layout, sidebar, etc.)
-  return (
-    <div className="min-h-screen flex">
-      {/* sidebar, header, conteúdo, etc. */}
-    </div>
-  );
-
 
 
 
