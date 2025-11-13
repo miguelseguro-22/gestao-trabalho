@@ -1,4 +1,7 @@
-﻿import React, { useState, useMemo, useEffect } from 'react';
+﻿import React from 'react';
+import { createRoot } from 'react-dom/client';
+// e o resto dos imports que já tinhas (Card, Button, Icon, etc.)
+
 
 
 /* ---------- Helpers ---------- */
