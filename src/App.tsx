@@ -3616,5 +3616,6 @@ const DashboardView = () => (
       </Modal>
     </div>
   );    
+}
 
 export default App;
