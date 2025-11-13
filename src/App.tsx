@@ -2765,7 +2765,6 @@ const visibleOrders = React.useMemo(() => {
   const uniqueFamilies=useMemo(()=>Array.from(new Set(catalog.map(c=>String(c.family||'').trim()).filter(Boolean))).sort(),[catalog]);
 
   const [sidebarOpen,setSidebarOpen]=useState(false);
-  const [view,setView]=useState('dashboard');
   const [modal,setModal]=useState(null);
 
   // dentro de function App() { ... } mas ANTES do return do App
