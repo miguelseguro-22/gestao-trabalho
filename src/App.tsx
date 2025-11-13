@@ -2481,7 +2481,7 @@ const TimesheetTemplateForm = ({
   );
 };
 
-/* ---------- AUTH / LOGIN ---------- */
+//* ---------- AUTH / LOGIN ---------- */
 const ROLE_LABELS = {
   tecnico: 'Técnico',
   encarregado: 'Encarregado',
@@ -2490,7 +2490,6 @@ const ROLE_LABELS = {
   admin: 'Administrador',
 };
 
-// ROLE_LABELS já ok; acrescenta nas permissões:
 const CAN = {
   dashboard:   new Set(['admin']),
   timesheets:  new Set(['tecnico','encarregado','admin']),
@@ -2503,35 +2502,37 @@ const CAN = {
   agenda:      new Set(['encarregado','diretor','admin']),
 };
 
-
-const defaultViewForRole = (role) =>
-  role==='tecnico'   ? 'timesheets' :
-  role==='encarregado'? 'timesheets' :
-  role==='diretor'   ? 'obras'      :
-  role==='logistica' ? 'logistics'  :
+const defaultViewForRole = (role: string) =>
+  role === 'tecnico'     ? 'timesheets' :
+  role === 'encarregado' ? 'timesheets' :
+  role === 'diretor'     ? 'obras'      :
+  role === 'logistica'   ? 'logistics'  :
   'dashboard';
 
-  const TEST_CREDS = [
-  { label:'Técnico',     role:'tecnico',     user:'tecnico@demo',     pass:'demo123' },
-  { label:'Encarregado', role:'encarregado', user:'encarregado@demo', pass:'demo123' },
-  { label:'Diretor',     role:'diretor',     user:'diretor@demo',     pass:'demo123' },
-  { label:'Logística',   role:'logistica',   user:'logistica@demo',   pass:'demo123' },
-  { label:'Admin',       role:'admin',       user:'admin@demo',       pass:'demo123' },
-];
-
-const LoginView = ({ onLogin }) => {
-  const [username, setUsername] = React.useState('');
+  
+// Vista de Login real (usa window.Auth + Supabase)
+function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
+  const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
-  const [role, setRole] = React.useState('tecnico');
-  const [showCreds, setShowCreds] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
 
- const handleSubmit = () => {
-   const chosen = TEST_CREDS.find(c => c.user === username && c.pass === password);
-   const effectiveRole = chosen?.role || role;
-   // regista no Auth (guarda em storage)
-   window.Auth?.login(username || 'Utilizador', '***', effectiveRole);
-   onLogin(window.Auth?.user());
- };
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    const res = await window.Auth?.login(email, password); // implementado em auth.tsx
+
+    setLoading(false);
+
+    if (res?.ok) {
+      // res.user deve vir com { id, nome, role }
+      onLogin(res.user);
+    } else {
+      setError(res?.error || 'Credenciais inválidas');
+    }
+  };
 
   return (
     <div className="min-h-screen grid place-items-center p-4 bg-slate-50 dark:bg-slate-950">
@@ -2546,83 +2547,46 @@ const LoginView = ({ onLogin }) => {
           </div>
         </div>
 
-        <div className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-3">
           <label className="text-sm">
-            Nome de Utilizador
+            Email
             <input
+              type="email"
               className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              placeholder="Digite seu usuário"
-              value={username}
-              onChange={e=>setUsername(e.target.value)}
+              placeholder="email@empresa.pt"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
             />
           </label>
 
           <label className="text-sm">
-            Senha
+            Password
             <input
               type="password"
               className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              placeholder="Digite sua senha"
+              placeholder="Digite a sua password"
               value={password}
-              onChange={e=>setPassword(e.target.value)}
+              onChange={e => setPassword(e.target.value)}
+              required
             />
           </label>
 
-          <label className="text-sm">
-            Tipo de Utilizador (apenas para demo sem password)
-            <select
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              value={role}
-              onChange={e=>setRole(e.target.value)}
-            >
-              <option value="tecnico">Técnico</option>
-              <option value="encarregado">Encarregado</option>
-              <option value="diretor">Diretor de Obra</option>
-              <option value="logistica">Gestor de Logística</option>
-              <option value="admin">Administrador</option>
-            </select>
-          </label>
-
-          <Button className="w-full justify-center" onClick={handleSubmit}>
-            Entrar
-          </Button>
-
-          {/* === AQUI entra exatamente o bloco que partilhaste === */}
-          <div className="mt-4 space-y-2">
-            <Button variant="secondary" className="w-full justify-center" onClick={()=>setShowCreds(s=>!s)}>
-              <Icon name="eye"/> {showCreds ? 'Esconder' : 'Mostrar'} Credenciais de Teste
-            </Button>
-
-            {showCreds && (
-              <div className="grid grid-cols-2 gap-2">
-                {TEST_CREDS.map(c => (
-                  <button
-                    key={c.role}
-                    type="button"
-                    className="rounded-xl border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
-                    onClick={()=>{
-                      setUsername(c.user);
-                      setPassword(c.pass);
-                      onLogin({ name: c.user, role: c.role }); // entra direto
-                    }}
-                    title={`${c.user} / ${c.pass}`}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <div className="text-[11px] text-slate-400 mt-2 text-center">
-              Podes entrar como qualquer perfil para veres os acessos específicos.
+          {error && (
+            <div className="text-red-500 text-xs">
+              {error}
             </div>
-          </div>
-          {/* === fim do bloco === */}
-        </div>
+          )}
+
+          <Button type="submit" className="w-full justify-center" disabled={loading}>
+            {loading ? 'A entrar…' : 'Entrar'}
+          </Button>
+        </form>
       </Card>
     </div>
   );
-};
+}
+
 
 const JOB_TYPES = ['Instalação','Manutenção','Visita Técnica','Reunião'];
 
