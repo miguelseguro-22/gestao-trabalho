@@ -126,11 +126,12 @@ function user(): AppUser | null {
 }
 
 export const Auth = {
-  login,
-  logout,
-  user,
-  refresh,
-}
+  login,   // chama supabase.auth.signInWithPassword
+  logout,  // chama supabase.auth.signOut
+  user,    // devolve utilizador do localStorage
+  refresh, // chama supabase.auth.getSession e actualiza o utilizador
+};
+
 
 declare global {
   interface Window {

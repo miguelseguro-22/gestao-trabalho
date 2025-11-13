@@ -5,8 +5,12 @@ import App from './App';
 import './index.css';
 import { setupAuth } from './auth';
 
+// Inicializa o cliente Supabase e regista window.Auth
 setupAuth();
-// … depois renderiza <App />
 
-
-createRoot(document.getElementById('root')!).render(<App />);
+const rootElement = document.getElementById('root') as HTMLElement;
+createRoot(rootElement).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);

@@ -1,6 +1,8 @@
-﻿import React from 'react';
-import { createRoot } from 'react-dom/client';
-// e o resto dos imports que já tinhas (Card, Button, Icon, etc.)
+﻿import React, { useState, useEffect, useMemo } from 'react';
+import Card from './components/Card';
+import Button from './components/Button';
+import Icon from './components/Icon';
+// ... (resto dos imports que o teu projeto usa)
 
 
 
@@ -2513,23 +2515,21 @@ const defaultViewForRole = (role: string) =>
   'dashboard'
 // LoginView real: pede email e password e usa Supabase
 // Login real: estética antiga + funcionalidade Supabase
+// Vista de login: cartão antigo com autenticação Supabase
 function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [error, setError] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
     const res = await window.Auth?.login(email, password);
-
     setLoading(false);
-
     if (res?.ok) {
-      onLogin(res.user); // user: { id, name, role }
+      onLogin(res.user);
     } else {
       setError(res?.error || 'Credenciais inválidas');
     }
@@ -2538,7 +2538,6 @@ function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
   return (
     <div className="min-h-screen grid place-items-center p-4 bg-slate-50 dark:bg-slate-950">
       <Card className="max-w-md w-full p-5">
-        {/* Cabeçalho igual ao login antigo */}
         <div className="flex items-center gap-2 mb-4">
           <div className="p-2 rounded-xl bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900">
             <Icon name="activity" />
@@ -2548,7 +2547,6 @@ function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
             <div className="font-semibold dark:text-slate-100">Gestão de Trabalho</div>
           </div>
         </div>
-
         <form onSubmit={handleSubmit} className="space-y-3">
           <label className="text-sm">
             Email
@@ -2561,7 +2559,6 @@ function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
               required
             />
           </label>
-
           <label className="text-sm">
             Password
             <input
@@ -2573,18 +2570,10 @@ function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
               required
             />
           </label>
-
           {error && (
-            <div className="text-red-500 text-xs">
-              {error}
-            </div>
+            <div className="text-red-500 text-xs">{error}</div>
           )}
-
-          <Button
-            type="submit"
-            className="w-full justify-center"
-            disabled={loading}
-          >
+          <Button type="submit" className="w-full justify-center" disabled={loading}>
             {loading ? 'A entrar…' : 'Entrar'}
           </Button>
         </form>
@@ -2677,9 +2666,19 @@ function AgendaQuickForm({ initial, setAgenda, onClose, peopleNames=[], projectN
 
 
 /* ---------- App ---------- */
-function App(){
-  const persisted = loadState()
-const [auth, setAuth] = React.useState<any | null>(window.Auth?.user() ?? null);
+function App() {
+  // Carrega qualquer estado persistente (excepto auth)
+  const persisted = loadState();
+
+  // Estado de autenticação
+  const [auth, setAuth] = useState<any | null>(window.Auth?.user() ?? null);
+
+  // Vista inicial
+  const [view, setView] = useState(
+    auth ? defaultViewForRole(auth.role) : 'timesheets'
+  );
+
+  // ... outros useState (jobs, timeEntries, etc.)
 
 
 
@@ -2723,18 +2722,31 @@ const visibleTimeEntries = React.useMemo(() => {
   return timeEntries;
 }, [auth?.role, auth?.name, timeEntries]);
 
-React.useEffect(() => {
-  let cancelled = false;
-  (async () => {
-    const u = await window.Auth?.refresh();
-    if (!cancelled) {
-      setAuth(u || null);
-    }
-  })();
-  return () => {
-    cancelled = true;
-  };
-}, []);
+ useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const u = await window.Auth?.refresh();
+      if (!cancelled) {
+        setAuth(u || null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!auth) {
+    return (
+      <LoginView
+        onLogin={(u) => {
+          setAuth(u);
+          setView(defaultViewForRole(u.role));
+        }}
+      />
+    );
+  }
 
 
 const visibleOrders = React.useMemo(() => {
@@ -3112,17 +3124,6 @@ const DashboardView = () => (
 
   const TableMaterials=()=>(<section className="space-y-4"><PageHeader icon="package" title="Materiais" actions={<Button onClick={()=>setModal({name:'add-order'})}><Icon name="plus"/> Novo Pedido</Button>}/><TableSimple columns={["Data","Projeto","Item","Qtd","Requisitante","Estado"]} rows={MaterialsFlat.map(m=>[m.requestedAt,m.project,m.item,m.qty,m.requestedBy,m.status])}/></section>);
 
-
-if (!auth) {
-  return (
-    <LoginView
-      onLogin={(u) => {
-        setAuth(u);
-        setView(defaultViewForRole(u.role));
-      }}
-    />
-  );
-}
 
 
 
