@@ -2508,82 +2508,55 @@ const defaultViewForRole = (role: string) =>
   role === 'diretor'     ? 'obras'      :
   role === 'logistica'   ? 'logistics'  :
   'dashboard'
-
-// Login real: email + password -> Supabase (via window.Auth.login)
+// LoginView real: pede email e password e usa Supabase
 function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
-  const [email, setEmail] = React.useState('')
-  const [password, setPassword] = React.useState('')
-  const [error, setError] = React.useState<string | null>(null)
-  const [loading, setLoading] = React.useState(false)
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [error, setError] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
 
-    const res = await window.Auth?.login(email, password)
-
-    setLoading(false)
+    const res = await window.Auth?.login(email, password);
+    setLoading(false);
 
     if (res?.ok) {
-      onLogin(res.user)
+      onLogin(res.user); // recebe { id, name, role }
     } else {
-      setError(res?.error || 'Credenciais inválidas')
+      setError(res?.error || 'Credenciais inválidas');
     }
-  }
+  };
 
   return (
     <div className="min-h-screen grid place-items-center p-4 bg-slate-50 dark:bg-slate-950">
       <Card className="max-w-md w-full p-5">
         <div className="flex items-center gap-2 mb-4">
-          <div className="p-2 rounded-xl bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900">
-            <Icon name="activity" />
-          </div>
-          <div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">Plataforma</div>
-            <div className="font-semibold dark:text-slate-100">Gestão de Trabalho</div>
-          </div>
+          {/* ... cabeçalho ... */}
         </div>
-
         <form onSubmit={handleSubmit} className="space-y-3">
           <label className="text-sm">
             Email
-            <input
-              type="email"
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              placeholder="email@empresa.pt"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-            />
+            <input type="email" className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={email} onChange={e => setEmail(e.target.value)} required />
           </label>
-
           <label className="text-sm">
             Password
-            <input
-              type="password"
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              placeholder="Digite a sua password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-            />
+            <input type="password" className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={password} onChange={e => setPassword(e.target.value)} required />
           </label>
-
-          {error && (
-            <div className="text-red-500 text-xs">
-              {error}
-            </div>
-          )}
-
+          {error && <div className="text-red-500 text-xs">{error}</div>}
           <Button type="submit" className="w-full justify-center" disabled={loading}>
             {loading ? 'A entrar…' : 'Entrar'}
           </Button>
         </form>
       </Card>
     </div>
-  )
+  );
 }
+
 
 
 
@@ -2670,8 +2643,8 @@ function AgendaQuickForm({ initial, setAgenda, onClose, peopleNames=[], projectN
 /* ---------- App ---------- */
 function App(){
   const persisted = loadState()
-const [auth, setAuth] = React.useState<any | null>(
-  window.Auth?.user() ?? null
+const [auth, setAuth] = React.useState<any | null>(window.Auth?.user() ?? null);
+
 )
 
 
@@ -2714,6 +2687,20 @@ const visibleTimeEntries = React.useMemo(() => {
   }
   return timeEntries;
 }, [auth?.role, auth?.name, timeEntries]);
+
+React.useEffect(() => {
+  let cancelled = false;
+  (async () => {
+    const u = await window.Auth?.refresh();
+    if (!cancelled) {
+      setAuth(u || null);
+    }
+  })();
+  return () => {
+    cancelled = true;
+  };
+}, []);
+
 
 const visibleOrders = React.useMemo(() => {
   if (auth?.role === 'logistica' || auth?.role === 'admin') {
@@ -3090,31 +3077,18 @@ const DashboardView = () => (
 
   const TableMaterials=()=>(<section className="space-y-4"><PageHeader icon="package" title="Materiais" actions={<Button onClick={()=>setModal({name:'add-order'})}><Icon name="plus"/> Novo Pedido</Button>}/><TableSimple columns={["Data","Projeto","Item","Qtd","Requisitante","Estado"]} rows={MaterialsFlat.map(m=>[m.requestedAt,m.project,m.item,m.qty,m.requestedBy,m.status])}/></section>);
 
-  // 🔁 Refrescar sessão quando a App monta
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const u = await window.Auth?.refresh();
-      if (!cancelled) {
-        setAuth(u || null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
- // Se não estiver autenticado, mostra o login
 if (!auth) {
   return (
     <LoginView
-     onLogin={(u) => {
-  setAuth(u);
-  setView(defaultViewForRole(u.role));
-}}
+      onLogin={(u) => {
+        setAuth(u);
+        setView(defaultViewForRole(u.role));
+      }}
     />
   );
 }
+
 
 
   const openReport = (p) => {
