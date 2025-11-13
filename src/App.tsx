@@ -2481,14 +2481,14 @@ const TimesheetTemplateForm = ({
   );
 };
 
-//* ---------- AUTH / LOGIN ---------- */
+/* ---------- AUTH / LOGIN ---------- */
 const ROLE_LABELS = {
   tecnico: 'Técnico',
   encarregado: 'Encarregado',
   diretor: 'Diretor de Obra',
   logistica: 'Gestor de Logística',
   admin: 'Administrador',
-};
+} as const
 
 const CAN = {
   dashboard:   new Set(['admin']),
@@ -2500,39 +2500,37 @@ const CAN = {
   people:      new Set(['diretor','admin']),
   vehicles:    new Set(['diretor','admin']),
   agenda:      new Set(['encarregado','diretor','admin']),
-};
+}
 
 const defaultViewForRole = (role: string) =>
   role === 'tecnico'     ? 'timesheets' :
   role === 'encarregado' ? 'timesheets' :
   role === 'diretor'     ? 'obras'      :
   role === 'logistica'   ? 'logistics'  :
-  'dashboard';
+  'dashboard'
 
-  
-// Vista de Login real (usa window.Auth + Supabase)
+// Login real: email + password -> Supabase (via window.Auth.login)
 function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [error, setError] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(false);
+  const [email, setEmail] = React.useState('')
+  const [password, setPassword] = React.useState('')
+  const [error, setError] = React.useState<string | null>(null)
+  const [loading, setLoading] = React.useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
 
-    const res = await window.Auth?.login(email, password); // implementado em auth.tsx
+    const res = await window.Auth?.login(email, password)
 
-    setLoading(false);
+    setLoading(false)
 
     if (res?.ok) {
-      // res.user deve vir com { id, nome, role }
-      onLogin(res.user);
+      onLogin(res.user)
     } else {
-      setError(res?.error || 'Credenciais inválidas');
+      setError(res?.error || 'Credenciais inválidas')
     }
-  };
+  }
 
   return (
     <div className="min-h-screen grid place-items-center p-4 bg-slate-50 dark:bg-slate-950">
@@ -2584,8 +2582,9 @@ function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
         </form>
       </Card>
     </div>
-  );
+  )
 }
+
 
 
 const JOB_TYPES = ['Instalação','Manutenção','Visita Técnica','Reunião'];
@@ -2670,9 +2669,11 @@ function AgendaQuickForm({ initial, setAgenda, onClose, peopleNames=[], projectN
 
 /* ---------- App ---------- */
 function App(){
-  const persisted=loadState();
-  const [auth, setAuth] = useState(window.Auth?.user() || persisted?.auth || null);
-  const can = (feature) => !!CAN[feature]?.has(auth?.role);
+  const persisted = loadState()
+const [auth, setAuth] = React.useState<any | null>(
+  window.Auth?.user() ?? null
+)
+
 
   const [theme,setTheme]=useState(persisted?.theme||'light');
   const [density,setDensity]=useState(persisted?.density||'comfy');
@@ -2779,6 +2780,7 @@ const TimesheetsView = () => (
 
 
 
+
   const peopleNames = useMemo(
     () => Array.from(new Set([
       ...Object.keys(people || {}),
@@ -2794,8 +2796,8 @@ const TimesheetsView = () => (
   );
 
   useEffect(()=>{ 
-  saveState({timeEntries,orders,projects,activity,theme,density,catalog,people,prefs,auth,vehicles,agenda,suppliers}) 
-},[timeEntries,orders,projects,activity,theme,density,catalog,people,prefs,auth,vehicles,agenda,suppliers]);
+  saveState({timeEntries,orders,projects,activity,theme,density,catalog,people,prefs,vehicles,agenda,suppliers}) 
+},[timeEntries,orders,projects,activity,theme,density,catalog,people,prefs,vehicles,agenda,suppliers]);
 
   useEffect(()=>{ if (auth) setView(v => CAN[v]?.has(auth.role) ? v : defaultViewForRole(auth.role)); }, [auth]);
 
@@ -2997,6 +2999,23 @@ const DashboardView = () => (
       );
     })()}
 
+
+    React.useEffect(() => {
+  let cancelled = false
+
+  ;(async () => {
+    const u = await window.Auth?.refresh()
+    if (!cancelled) {
+      setAuth(u || null)
+    }
+  })()
+
+  return () => {
+    cancelled = true
+  }
+}, [])
+
+
     {/* --- Horas por dia (semana atual) --- */}
     <Card className="p-4">
       <div className="flex items-center justify-between mb-3">
@@ -3088,10 +3107,18 @@ const DashboardView = () => (
 
   const TableMaterials=()=>(<section className="space-y-4"><PageHeader icon="package" title="Materiais" actions={<Button onClick={()=>setModal({name:'add-order'})}><Icon name="plus"/> Novo Pedido</Button>}/><TableSimple columns={["Data","Projeto","Item","Qtd","Requisitante","Estado"]} rows={MaterialsFlat.map(m=>[m.requestedAt,m.project,m.item,m.qty,m.requestedBy,m.status])}/></section>);
 
-  // Se não estiver autenticado, mostra o login
-  if(!auth){
-    return <LoginView onLogin={(u)=>setAuth(u)} />;
-  }
+ // Se não estiver autenticado, mostra o login
+if (!auth) {
+  return (
+    <LoginView
+      onLogin={(u) => {
+        setAuth(u);
+        setView(defaultViewForRole(u.role));
+      }}
+    />
+  );
+}
+
 
   const openReport = (p) => {
     if (can('obraReport')) { setProjectFocus(p); setView('obra-report'); }

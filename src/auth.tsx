@@ -1,78 +1,145 @@
 ﻿// src/auth.tsx
 import supabase from './lib/supabaseClient'
 
-export function setupAuth() {
-  // Não criar utilizadores nem dados locais
+export type AppRole = 'tecnico' | 'encarregado' | 'diretor' | 'logistica' | 'admin'
 
-  /**
-   * Faz login com email/username e password via Supabase.
-   */
-  async function login(username: string, password: string) {
-    // Autentica usando Supabase; username aqui é o email
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: username,
-      password,
-    })
-    if (error || !data.user) {
-      return { ok: false, error: error?.message || 'Credenciais inválidas' }
-    }
-    // Após login, buscar perfil para obter nome e papel
-    const { data: profile, error: pError } = await supabase
-      .from('profiles')
-      .select('id, name, role')
-      .eq('id', data.user.id)
-      .single()
-    if (pError || !profile) {
-      await supabase.auth.signOut()
-      return { ok: false, error: pError?.message || 'Perfil não encontrado' }
-    }
-    // Guardar perfil em localStorage para compatibilidade com o restante código
-    const user = { id: profile.id, nome: profile.name, role: profile.role }
-    localStorage.setItem('auth_user', JSON.stringify(user))
-    return { ok: true, user }
-  }
+export interface AppUser {
+  id: string
+  email: string
+  name: string
+  role: AppRole
+}
 
-  /**
-   * Termina a sessão no Supabase e limpa dados locais.
-   */
-  async function logout() {
-    await supabase.auth.signOut()
-    localStorage.removeItem('auth_user')
-  }
+const AUTH_USER_KEY = 'auth_user'
 
-  /**
-   * Obtém o utilizador guardado (apenas o perfil, não o token).
-   */
-  function getUser() {
-    return JSON.parse(localStorage.getItem('auth_user') || 'null')
-  }
-
-  /**
-   * Verifica se o utilizador tem um dos papéis fornecidos.
-   */
-  function requireRole(roles: string[]) {
-    const u = getUser()
-    return !!u && roles.includes(u.role)
-  }
-
-  /**
-   * Verifica na tabela assignments se o utilizador está associado à obra.
-   */
-  async function isAssignedToObra(userId: string, obraId: string) {
-    const { data, error } = await supabase
-      .from('assignments')
-      .select('*')
-      .match({ user_id: userId, project_id: obraId })
-    return !!data && data.length > 0
-  }
-
-  // Expor API compatível com código existente
-  window.Auth = {
-    login,
-    logout,
-    user: getUser,
-    getUser,
-    requireRole,
-    isAssignedToObra,
+function loadStoredUser(): AppUser | null {
+  try {
+    const raw = window.localStorage.getItem(AUTH_USER_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as AppUser
+  } catch {
+    return null
   }
 }
+
+function storeUser(user: AppUser | null) {
+  try {
+    if (!user) {
+      window.localStorage.removeItem(AUTH_USER_KEY)
+    } else {
+      window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user))
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
+const VALID_ROLES: AppRole[] = ['tecnico', 'encarregado', 'diretor', 'logistica', 'admin']
+
+async function fetchUserProfile(userId: string, emailFallback: string): Promise<AppUser> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('name, role')
+    .eq('id', userId)
+    .single()
+
+  if (error) {
+    console.error('Erro a carregar perfil:', error)
+    throw new Error('Não foi possível carregar o perfil do utilizador')
+  }
+
+  const role = (data?.role || '').toLowerCase() as AppRole
+
+  if (!VALID_ROLES.includes(role)) {
+    console.error('Role inválido para utilizador', { userId, role })
+    throw new Error('Perfil sem role válido atribuído')
+  }
+
+  const user: AppUser = {
+    id: userId,
+    email: emailFallback,
+    name: data?.name || emailFallback,
+    role,
+  }
+
+  return user
+}
+
+async function login(
+  email: string,
+  password: string
+): Promise<{ ok: true; user: AppUser } | { ok: false; error: string }> {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+
+  if (error || !data?.user) {
+    console.error('Erro de login:', error)
+    return { ok: false, error: 'Credenciais inválidas' }
+  }
+
+  try {
+    const appUser = await fetchUserProfile(data.user.id, data.user.email || email)
+    storeUser(appUser)
+    return { ok: true, user: appUser }
+  } catch (err: any) {
+    console.error(err)
+    return { ok: false, error: err?.message || 'Erro a carregar o perfil do utilizador' }
+  }
+}
+
+async function logout(): Promise<void> {
+  try {
+    await supabase.auth.signOut()
+  } finally {
+    storeUser(null)
+  }
+}
+
+async function refresh(): Promise<AppUser | null> {
+  const { data, error } = await supabase.auth.getSession()
+  if (error) {
+    console.error('Erro ao obter sessão:', error)
+  }
+
+  const sess = data?.session
+  if (!sess?.user) {
+    storeUser(null)
+    return null
+  }
+
+  const currentStored = loadStoredUser()
+  if (currentStored && currentStored.id === sess.user.id) {
+    return currentStored
+  }
+
+  try {
+    const fresh = await fetchUserProfile(sess.user.id, sess.user.email || '')
+    storeUser(fresh)
+    return fresh
+  } catch {
+    storeUser(null)
+    return null
+  }
+}
+
+function user(): AppUser | null {
+  return loadStoredUser()
+}
+
+export const Auth = {
+  login,
+  logout,
+  user,
+  refresh,
+}
+
+declare global {
+  interface Window {
+    Auth?: typeof Auth
+  }
+}
+
+export function setupAuth() {
+  window.Auth = Auth
+}
+
+export default Auth
