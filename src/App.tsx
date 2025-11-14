@@ -2502,11 +2502,6 @@ function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
     </div>
   );
 }
-
-
-
-
-
 const JOB_TYPES = ['Instalação','Manutenção','Visita Técnica','Reunião'];
 
 function AgendaQuickForm({ initial, setAgenda, onClose, peopleNames=[], projectNames=[] }) {
@@ -2890,22 +2885,116 @@ function App() {
             </div>
           </div>
 
-          {view==='dashboard'&&<DashboardView/>}
-          {view==='timesheets'&&<TimesheetsView/>}
-          {view==='materials'&&<TableMaterials/>}
-          {view==='logistics'&&<LogisticsView orders={orders} moveOrderStatus={moveOrderStatus} setOrderPatch={setOrderPatch} setModal={setModal} download={download} catalogMaps={catalogMaps} projects={projects}/>}
-   {view==='people'   && <PeopleView   people={people}   setPeople={setPeople} />}
+          {/* DASHBOARD — versão simples, mas segura */}
+          {view === 'dashboard' && (
+            <section className="space-y-4">
+              <h1 className="text-xl font-semibold">Dashboard</h1>
 
-{view==='vehicles' && <VehiclesView vehicles={vehicles} setVehicles={setVehicles} />}
+              <p className="text-sm text-slate-500">
+                Utilizador: <b>{auth?.name || '—'}</b>{' · '}
+                Perfil:{' '}
+                {ROLE_LABELS[auth?.role as keyof typeof ROLE_LABELS] || '—'}
+              </p>
 
-{view==='agenda'   && (
-  <AgendaView
-    agenda={agenda}
-    setAgenda={setAgenda}
-    projectNames={projectNames}
-    peopleNames={peopleNames}
-  />
-)}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="p-4">
+                  <div className="text-xs text-slate-500 mb-1">Horas esta semana</div>
+                  <ul className="text-sm space-y-1">
+                    {hoursByDay.map((d) => (
+                      <li key={d.label} className="flex justify-between">
+                        <span>{d.label}</span>
+                        <span>{d.value.toFixed(1)} h</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+
+                <Card className="p-4">
+                  <div className="text-xs text-slate-500 mb-1">Últimos pedidos de material</div>
+                  <ul className="text-sm space-y-1">
+                    {MaterialsFlat.slice(0, 5).map((m, i) => (
+                      <li key={i} className="flex justify-between">
+                        <span>{m.project}</span>
+                        <span className="text-xs text-slate-500">
+                          {m.item} × {m.qty}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              </div>
+            </section>
+          )}
+
+          {/* TIMESHEETS — versão simples baseada em visibleTimeEntries */}
+          {view === 'timesheets' && (
+            <section className="space-y-4">
+              <h1 className="text-xl font-semibold">Timesheets</h1>
+
+              <TableSimple
+                columns={['Data', 'Colaborador', 'Projeto', 'Horas', 'Extra']}
+                rows={(visibleTimeEntries || []).map((t) => [
+                  t.template === 'Trabalho Normal'
+                    ? t.date
+                    : `${t.periodStart}→${t.periodEnd}`,
+                  t.worker || t.supervisor || '-',
+                  t.project || '-',
+                  t.hours || 0,
+                  t.overtime || 0,
+                ])}
+              />
+            </section>
+          )}
+
+          {/* MATERIAIS — versão simples baseada em visibleOrders */}
+          {view === 'materials' && (
+            <section className="space-y-4">
+              <h1 className="text-xl font-semibold">Pedidos de Material</h1>
+
+              <TableSimple
+                columns={['Data', 'Obra', 'Encarregado', 'Estado', 'Itens']}
+                rows={(visibleOrders || []).map((o) => [
+                  o.requestedAt,
+                  o.project,
+                  o.requestedBy || '-',
+                  o.status || '-',
+                  (o.items || [])
+                    .map((it) => `${it.name} × ${it.qty}`)
+                    .join(', '),
+                ])}
+              />
+            </section>
+          )}
+
+          {/* As restantes views mantêm-se como estão */}
+          {view === 'logistics' && (
+            <LogisticsView
+              orders={orders}
+              moveOrderStatus={moveOrderStatus}
+              setOrderPatch={setOrderPatch}
+              setModal={setModal}
+              download={download}
+              catalogMaps={catalogMaps}
+              projects={projects}
+            />
+          )}
+
+          {view === 'people' && (
+            <PeopleView people={people} setPeople={setPeople} />
+          )}
+
+          {view === 'vehicles' && (
+            <VehiclesView vehicles={vehicles} setVehicles={setVehicles} />
+          )}
+
+          {view === 'agenda' && (
+            <AgendaView
+              agenda={agenda}
+              setAgenda={setAgenda}
+              projectNames={projectNames}
+              peopleNames={peopleNames}
+            />
+          )}
 
           {view==='obras' && (
             <ObrasView
