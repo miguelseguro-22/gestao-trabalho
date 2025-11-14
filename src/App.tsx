@@ -2451,7 +2451,7 @@ function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
     }
   };
 
-  return (
+   return (
     <div className="min-h-screen grid place-items-center p-4 bg-slate-50 dark:bg-slate-950">
       <Card className="max-w-md w-full p-5 space-y-4">
         <div>
@@ -2501,7 +2501,7 @@ function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
       </Card>
     </div>
   );
-
+}
 
 
 
