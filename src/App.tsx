@@ -2628,32 +2628,37 @@ function AgendaQuickForm({ initial, setAgenda, onClose, peopleNames=[], projectN
 function App() {
   const persisted = loadState?.();
 
-  const [auth, setAuth] = useState<any | null>(
-    window.Auth?.user() ?? null
-  );
+  // 🔐 Auth & navegação
+  const [auth, setAuth] = useState<any | null>(window.Auth?.user() ?? null);
   const [view, setView] = useState(
     auth ? defaultViewForRole(auth.role) : 'timesheets'
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modal, setModal] = useState<any | null>(null);
+
+  // 🎨 UI / tema
   const [theme, setTheme] = useState(persisted?.theme || 'light');
   const [density, setDensity] = useState(persisted?.density || 'comfy');
 
-  // antes: const [people,setPeople]=useState(persisted?.people ||{});
-const [people,setPeople]=useState(migratePeople(persisted?.people) || {});
-const [vehicles, setVehicles] = useState(persisted?.vehicles || []);      // {id, plate, model, inspAt, serviceAt, notes}
-const [agenda, setAgenda]     = useState(persisted?.agenda || []);        // {id, date, worker, project, notes}
-const [suppliers, setSuppliers] = useState(persisted?.suppliers || {});   // { [supplierName]: [{name,code,price,family}] }
-  const [prefs,setPrefs]=useState(
+  // 📊 Dados principais
+  const [people, setPeople]       = useState(migratePeople(persisted?.people) || {});
+  const [vehicles, setVehicles]   = useState(persisted?.vehicles || []);
+  const [agenda, setAgenda]       = useState(persisted?.agenda || []);
+  const [suppliers, setSuppliers] = useState(persisted?.suppliers || {});
+  const [prefs, setPrefs]         = useState(
     persisted?.prefs || { defaultRate: DEFAULT_HOURLY_RATE, otMultiplier: DEFAULT_OT_MULTIPLIER }
   );
   const [projectFocus, setProjectFocus] = useState(null);
 
-  useEffect(() => { document.documentElement.classList.toggle('dark', theme === 'dark'); }, [theme]);
-
-  const defaultTime=[{id:uid(),date:todayISO(),template:'Trabalho Normal',project:'Obra #204',supervisor:'João Silva',hours:8,overtime:1},{id:uid(),date:todayISO(),template:'Férias',periodStart:todayISO(),periodEnd:todayISO(),hours:0,overtime:0}];
-  const defaultOrders=[{ id:uid(),project:'Primark Porto',requestedBy:'Hélder Pinto',status:'Pendente',requestedAt:todayISO(), items:[{name:'INTERRUPTOR UNIPOLAR',qty:1}] }];
-  const defaultProjects=[
+  // Defaults
+  const defaultTime = [
+    {id:uid(),date:todayISO(),template:'Trabalho Normal',project:'Obra #204',supervisor:'João Silva',hours:8,overtime:1},
+    {id:uid(),date:todayISO(),template:'Férias',periodStart:todayISO(),periodEnd:todayISO(),hours:0,overtime:0}
+  ];
+  const defaultOrders = [
+    { id:uid(),project:'Primark Porto',requestedBy:'Hélder Pinto',status:'Pendente',requestedAt:todayISO(), items:[{name:'INTERRUPTOR UNIPOLAR',qty:1}] }
+  ];
+  const defaultProjects = [
     {id:uid(),name:'Primark Porto',manager:'',type:'Eletricidade',family:'Logus 90'},
     {id:uid(),name:'Primark Covilhã',manager:'',type:'Eletricidade',family:'Logus 90'},
     {id:uid(),name:'Joom',manager:'',type:'Eletricidade',family:'Modus 55'},
@@ -2664,111 +2669,75 @@ const [suppliers, setSuppliers] = useState(persisted?.suppliers || {});   // { [
     {id:uid(),name:'JTI',manager:'',type:'Eletricidade',family:'Modus 55'},
   ];
 
-  const [timeEntries,setTimeEntries]=useState(persisted?.timeEntries||defaultTime);
-  const [orders,setOrders]=useState(persisted?.orders||defaultOrders);
+  const [timeEntries, setTimeEntries] = useState(persisted?.timeEntries || defaultTime);
+  const [orders,      setOrders]      = useState(persisted?.orders      || defaultOrders);
+  const [projects,    setProjects]    = useState(persisted?.projects    || defaultProjects);
+  const [activity,    setActivity]    = useState(
+    persisted?.activity || [{id:uid(), ts:new Date(), text:'App iniciada.'}]
+  );
+  const [catalog,     setCatalog]     = useState(persisted?.catalog || []);
 
+  // 🌙 Tema dark
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }, [theme]);
 
-    // 🔄 Refresca a sessão do Supabase ao montar a app
+  // 🔄 Refresca a sessão do Supabase ao montar a app
   useEffect(() => {
     let cancelled = false;
-
     (async () => {
       const u = await window.Auth?.refresh();
       if (!cancelled) {
         setAuth(u || null);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
-  // Persistência de estado (excepto auth)
+  // 💾 Persistência de estado (excepto auth)
   useEffect(() => {
-    saveState({ timeEntries, orders, projects, activity, theme, density, catalog, people, prefs, vehicles, agenda, suppliers });
-  }, [timeEntries, orders, projects, activity, theme, density, catalog, people, prefs, vehicles, agenda, suppliers]);
+    saveState({
+      timeEntries, orders, projects, activity,
+      theme, density, catalog, people, prefs,
+      vehicles, agenda, suppliers
+    });
+  }, [
+    timeEntries, orders, projects, activity,
+    theme, density, catalog, people, prefs,
+    vehicles, agenda, suppliers
+  ]);
 
-    // Ajusta a vista quando o role muda
+  // 🔁 Ajusta a vista quando o role muda
   useEffect(() => {
     if (auth) {
-      setView((v) => (CAN[v]?.has(auth.role) ? v : defaultViewForRole(auth.role)));
+      setView((v) =>
+        CAN[v as keyof typeof CAN]?.has(auth.role) ? v : defaultViewForRole(auth.role)
+      );
     }
   }, [auth]);
 
-
   // ---- VISIBILIDADE POR PERFIL ----
-const visibleTimeEntries = React.useMemo(() => {
-  if (auth?.role === 'tecnico' || auth?.role === 'encarregado') {
-    return (timeEntries || []).filter(t =>
-      t.worker === auth?.name || t.supervisor === auth?.name
-    );
-  }
-  return timeEntries;
-}, [auth?.role, auth?.name, timeEntries]);
+  const visibleTimeEntries = useMemo(() => {
+    if (auth?.role === 'tecnico' || auth?.role === 'encarregado') {
+      return (timeEntries || []).filter(t =>
+        t.worker === auth?.name || t.supervisor === auth?.name
+      );
+    }
+    return timeEntries;
+  }, [auth?.role, auth?.name, timeEntries]);
 
-const visibleOrders = React.useMemo(() => {
-  if (auth?.role === 'logistica' || auth?.role === 'admin') {
-    return orders;
-  }
-  return (orders || []).filter(o => o.requestedBy === auth?.name);
-}, [auth?.role, auth?.name, orders]);
+  const visibleOrders = useMemo(() => {
+    if (auth?.role === 'logistica' || auth?.role === 'admin') {
+      return orders;
+    }
+    return (orders || []).filter(o => o.requestedBy === auth?.name);
+  }, [auth?.role, auth?.name, orders]);
 
-
-  const [projects,setProjects]=useState(persisted?.projects||defaultProjects);
-  const [activity,setActivity]=useState(persisted?.activity||[{id:uid(),ts:new Date(),text:'App iniciada.'}]);
-  const [catalog,setCatalog]=useState(persisted?.catalog||[]);
-
-  const catalogMaps=useMemo(()=>buildCatalogMaps(catalog),[catalog]);
-  const uniqueFamilies=useMemo(()=>Array.from(new Set(catalog.map(c=>String(c.family||'').trim()).filter(Boolean))).sort(),[catalog]);
-
-
-  // dentro de function App() { ... } mas ANTES do return do App
-const TimesheetsView = () => (
-  <section className="space-y-4">
-    <PageHeader icon="clock"
-      title="Timesheets"
-      subtitle="Calendário 21→20 + registos recentes"
-      actions={
-        <Button onClick={() => setModal({ name: 'add-time' })}>
-          <Icon name="plus" /> Adicionar
-        </Button>
-      }
-    />
-    <Card className="p-4">
-      <CycleCalendar timeEntries={visibleTimeEntries}
-        onDayClick={(iso) => setModal({ name: 'day-actions', dateISO: iso })}
-      />
-    </Card>
-
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold dark:text-slate-100">Registos recentes</h3>
-        <Button variant="secondary"
-          size="sm"
-          onClick={() => setModal({ name: 'ts-all' })}
-        >
-          Ver mais
-        </Button>
-      </div>
-      <TableSimple columns={['Data','Tipo','Projeto','Encarregado','Horas','Extra']}
-        rows={visibleTimeEntries
-          .map(t => [
-            t.date,
-            t.template,
-            t.project || '-',
-            t.supervisor || '-',
-            t.hours || 0,
-            t.overtime || 0
-          ])
-          .slice(0, 5)}
-      />
-    </div>
-  </section>
-);
-
-
-
+  const catalogMaps  = useMemo(() => buildCatalogMaps(catalog), [catalog]);
+  const uniqueFamilies = useMemo(
+    () => Array.from(new Set(catalog.map(c => String(c.family || '').trim()).filter(Boolean))).sort(),
+    [catalog]
+  );
 
   const peopleNames = useMemo(
     () => Array.from(new Set([
@@ -2784,306 +2753,65 @@ const TimesheetsView = () => (
     [projects]
   );
 
+  const { start: cycStart, end: cycEnd } = getCycle(0);
 
-  useEffect(()=>{ if (auth) setView(v => CAN[v]?.has(auth.role) ? v : defaultViewForRole(auth.role)); }, [auth]);
+  const registeredDays = useMemo(() => {
+    const s = new Set<string>();
+    (visibleTimeEntries || []).forEach(t => {
+      if (t.date) s.add(t.date);
+    });
+    return s.size;
+  }, [visibleTimeEntries, cycStart, cycEnd]);
 
-  const addToast=(msg)=>{const id=uid();setActivity(a=>[{id,ts:new Date(),text:msg},...a])};
+  const startWeek = startOfWeek(new Date());
+  const hoursByDay = useMemo(() => {
+    const map = new Map(
+      ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map(d => [d, 0])
+    );
+    (visibleTimeEntries || [])
+      .filter(t => t.date && new Date(t.date) >= startWeek)
+      .forEach(t => {
+        const d = new Date(t.date);
+        const idx = (d.getDay() + 6) % 7;
+        const label = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'][idx];
+        const cur = map.get(label) || 0;
+        map.set(label, cur + (Number(t.hours) || 0) + (Number(t.overtime) || 0));
+      });
+    return Array.from(map, ([label, value]) => ({ label, value }));
+  }, [visibleTimeEntries, startWeek]);
 
-  const addTimeEntry = entry => {
-    const withId = {id:uid(), ...entry};
-    setTimeEntries(prev => [withId, ...prev]);
-    if (withId.worker && !(withId.worker in (people||{}))) {
-  const base = prefs.defaultRate ?? DEFAULT_HOURLY_RATE;
-  const otm  = prefs.otMultiplier ?? DEFAULT_OT_MULTIPLIER;
-  setPeople(prev => ({
-    ...prev,
-    [withId.worker]: {
-      rates: {
-        normal: base,
-        extra: base * otm,
-        deslocada: base * 1.25,
-        fimSemana: base * 2
-      }
-    }
-  }));
-}
-    addToast('Registo criado.');
-  };
-  const updateTimeEntry=updated=>{setTimeEntries(prev=>prev.map(t=>t.id===updated.id?{...t,...updated}:t));addToast('Registo atualizado.')};
-  const duplicateTimeEntry=t=>{const copy={...t,id:uid()};setTimeEntries(prev=>[copy,...prev]);addToast('Registo duplicado.')};
-
-  const addOrder=(payload)=>{const order={id:uid(),requestedAt:todayISO(),status:'Pendente',notes:'',...payload};setOrders(prev=>[order,...prev]);addToast(`Pedido criado (${payload.project})`)};
-  const setOrderPatch=(id,patch)=>setOrders(prev=>prev.map(m=>m.id===id?{...m,...patch}:m));
-  const moveOrderStatus=(id,status)=>{setOrderPatch(id,{status});const it=orders.find(m=>m.id===id);if(it){addToast(`Pedido "${it.project}" → ${status}.`)}};  
-
-  const resetDemo=()=>{clearState();setTimeEntries(defaultTime);setOrders(defaultOrders);setProjects(defaultProjects);setActivity([{id:uid(),ts:new Date(),text:'Dados de demonstração repostos.'}]);setCatalog([])};
-
-  const setters = {
-  // setters diretos
-  setTimeEntries,
-  setOrders,            // não precisas do alias setOrders:setOrders
-  setProjects,
-  setActivity,
-  setPeople,
-  setPrefs,
-  setCatalog: (rows) => setCatalog(rows),
-
-  // NOVOS (expõe-os para o ImportCenter usar)
-  setVehicles,
-  setAgenda,
-  setSuppliers,
-
-  // snapshot para exportBackup()
-  get: () => ({
-    timeEntries, orders, projects, activity, theme, density,
-    catalog, people, prefs, vehicles, agenda, suppliers
-  }),
-
-  // repõe tudo (import JSON "replace")
-  setAll: ({
-    timeEntries,
-    orders: ord,
-    projects: projs,
-    activity,
-    theme: th,
-    density: de,
-    catalog: cat,
-    people: pp,
-    prefs: pf,
-    vehicles: vv,
-    agenda: ag,
-    suppliers: ss
-  }) => {
-    setTimeEntries(Array.isArray(timeEntries) ? timeEntries : []);
-    setOrders(Array.isArray(ord) ? ord : []);
-    setProjects(Array.isArray(projs) ? projs : []);
-    setActivity(Array.isArray(activity) ? activity : []);
-    if (th) setTheme(th);
-    if (de) setDensity(de);
-    if (Array.isArray(cat)) setCatalog(cat);
-    setPeople((typeof migratePeople === 'function') ? migratePeople(pp || {}) : (pp || {}));
-    setPrefs(pf || { defaultRate: DEFAULT_HOURLY_RATE, otMultiplier: DEFAULT_OT_MULTIPLIER });
-    setVehicles(Array.isArray(vv) ? vv : []);
-    setAgenda(Array.isArray(ag) ? ag : []);
-    setSuppliers(ss || {});
-  },
-};
-
-
-
-  const {start:cycStart,end:cycEnd}=getCycle(0);
-
- const registeredDays=useMemo(()=>{ /* igual ao teu código, mas varre visibleTimeEntries */
-   const s=new Set();
-   (visibleTimeEntries||[]).forEach(t=>{ /* ...mesma lógica... */ });
-   return s.size;
- },[visibleTimeEntries,cycStart,cycEnd]);
-
-  const startWeek=startOfWeek(new Date());
-
- const hoursByDay=useMemo(()=>{ /* mesma lógica, mas usa visibleTimeEntries */
-   const map=new Map(['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map(d=>[d,0]));
-   (visibleTimeEntries||[]).filter(t=>new Date(t.date)>=startWeek).forEach(t=>{ /* ... */ });
-   return Array.from(map,([label,value])=>({label,value}));
-},[visibleTimeEntries]);
-
-  const NavItem=({id,icon,label})=>(
-    <button onClick={()=>{setView(id);setSidebarOpen(false)}} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm hover:bg-slate-100 dark:hover:bg-slate-800 ${view===id?'bg-slate-900 text-white hover:bg-slate-900 dark:bg-slate-200 dark:text-slate-900':'text-slate-700 dark:text-slate-200'}`}><Icon name={icon}/><span>{label}</span></button>
+  const NavItem = ({id,icon,label}) => (
+    <button
+      onClick={() => { setView(id); setSidebarOpen(false); }}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm hover:bg-slate-100 dark:hover:bg-slate-800 ${
+        view===id
+          ? 'bg-slate-900 text-white hover:bg-slate-900 dark:bg-slate-200 dark:text-slate-900'
+          : 'text-slate-700 dark:text-slate-200'
+      }`}
+    >
+      <Icon name={icon}/><span>{label}</span>
+    </button>
   );
 
-  const MaterialsFlat=visibleOrders.flatMap(o=>o.items.map(it=>({requestedAt:o.requestedAt,project:o.project,item:it.name,qty:it.qty,requestedBy:o.requestedBy,status:o.status})));
-
-const DashboardView = () => (
-  <section className="space-y-4">
-    {/* --- Ações Rápidas --- */}
-    <Card className="p-5 bg-gradient-to-br from-slate-900 to-slate-800 text-white dark:from-slate-800 dark:to-slate-900">
-      <div className="text-base font-semibold mb-3">⚡ Ações Rápidas</div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-        <button
-          onClick={() =>
-            setModal({
-              name: 'add-time',
-              initial: { date: todayISO(), template: 'Trabalho Normal' },
-            })
-          }
-          className="rounded-2xl px-5 py-4 text-left text-white shadow-md hover:shadow-lg transition border border-white/10 bg-gradient-to-r from-blue-600 to-indigo-600"
-        >
-          <div className="flex items-center justify-between">
-            <div className="text-sm opacity-90">Registo Hoje</div>
-            <div className="p-2 rounded-lg bg-white/10">
-              <Icon name="clock" className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-2 text-lg font-semibold">Criar registo de horas</div>
-        </button>
-
-        <button
-          onClick={() => setModal({ name: 'add-order' })}
-          className="rounded-2xl px-5 py-4 text-left text-white shadow-md hover:shadow-lg transition border border-white/10 bg-gradient-to-r from-amber-600 to-orange-600"
-        >
-          <div className="flex items-center justify-between">
-            <div className="text-sm opacity-90">Pedir Material</div>
-            <div className="p-2 rounded-lg bg-white/10">
-              <Icon name="package" className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-2 text-lg font-semibold">Nova requisição</div>
-        </button>
-
-        <button
-          onClick={() => setModal({ name: 'import' })}
-          className="rounded-2xl px-5 py-4 text-left text-white shadow-md hover:shadow-lg transition border border-white/10 bg-gradient-to-r from-slate-600 to-slate-800"
-        >
-          <div className="flex items-center justify-between">
-            <div className="text-sm opacity-90">Importar Dados</div>
-            <div className="p-2 rounded-lg bg-white/10">
-              <Icon name="file" className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-2 text-lg font-semibold">CSV/JSON</div>
-        </button>
-      </div>
-    </Card>
-
-    {/* --- KPI Cards (substitui o cartão antigo) --- */}
-    {(() => {
-      const { start, end } = getCycle(0);
-      const uteis = countWeekdaysInclusive(start, end);
-      const reg = registeredDays;
-
-      const totalOrders = orders.length;
-      const delivered = orders.filter((o) => o.status === 'Entregue').length;
-      const eff = totalOrders ? Math.round((delivered / totalOrders) * 100) : 0;
-
-      const fleetTotal = vehicles.length || 0;
-      const fleetOk = fleetTotal; // se adicionares estados de avaria, ajusta aqui
-
-      return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <KpiCard
-  icon="calendar"
-  title="Visão Geral do Mês"
-  value={`${reg}/${uteis}`}
-  subtitle="dias registados/úteis"
-  onClick={() => setModal({ name: 'kpi-overview' })}
-/>
-          <KpiCard
-            icon="file"
-            title="Eficiência Material"
-            value={`${eff}%`}
-            subtitle={`${delivered}/${totalOrders} entregues`}
-            onClick={() => setModal({ name: 'kpi-logistics' })}
-          />
-          <KpiCard
-            icon="wrench"
-            title="Performance da Frota"
-            value={`${fleetTotal ? 100 : 0}%`}
-            subtitle={`${fleetOk}/${fleetTotal} operacionais`}
-            onClick={() => setModal({ name: 'kpi-fleet' })}
-          />
-        </div>
-      );
-    })()}
-
-    {/* --- Horas por dia (semana atual) --- */}
-    <Card className="p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="font-semibold dark:text-slate-100">Horas por dia (semana atual)</div>
-        <div className="text-xs text-slate-500 dark:text-slate-400">
-          {hoursByDay.reduce((s, d) => s + d.value, 0)} h
-        </div>
-      </div>
-
-      {(() => {
-        const data = hoursByDay;
-        const height = 220,
-          padding = 24;
-        const max = Math.max(1, ...data.map((d) => d.value || 0));
-        const barW = 28,
-          gap = 14;
-        const width = padding * 2 + data.length * barW + (data.length - 1) * gap;
-        const scaleY = (v) => (height - padding * 2) * (v / max);
-
-        return (
-          <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-56">
-            <g transform={`translate(${padding}, ${padding})`}>
-              {data.map((d, i) => {
-                const h = Math.max(2, scaleY(d.value));
-                const x = i * (barW + gap);
-                const y = height - padding * 2 - h;
-                return (
-                  <g key={i} transform={`translate(${x},0)`}>
-                    <rect
-                      x={0}
-                      y={y}
-                      width={barW}
-                      height={h}
-                      rx={6}
-                      className="fill-slate-800 dark:fill-slate-200"
-                    />
-                    <text
-                      x={barW / 2}
-                      y={height - padding * 2 + 16}
-                      textAnchor="middle"
-                      className="fill-slate-500 dark:fill-slate-400 text-[10px]"
-                    >
-                      {d.label}
-                    </text>
-                    <text
-                      x={barW / 2}
-                      y={y - 6}
-                      textAnchor="middle"
-                      className="fill-slate-700 dark:fill-slate-300 text-[10px]"
-                    >
-                      {d.value}
-                    </text>
-                  </g>
-                );
-              })}
-            </g>
-          </svg>
-        );
-      })()}
-    </Card>
-
-    {/* --- Atividade --- */}
-    <Card className="p-4">
-      <div className="flex items-center gap-2 mb-3 dark:text-slate-100">
-        <Icon name="activity" />
-        <div className="font-semibold">Atividade</div>
-      </div>
-      <ul className="space-y-2 max-h-[340px] overflow-auto pr-1">
-        {activity.map((a) => (
-          <li key={a.id} className="flex items-start gap-3">
-            <div className="mt-1 w-2 h-2 rounded-full bg-slate-400" />
-            <div>
-              <div className="text-sm dark:text-slate-200">{a.text}</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">
-                {a.ts.toLocaleString()}
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </Card>
-  </section>
-);
-
-
-
-
-
-
-  const TableMaterials=()=>(<section className="space-y-4"><PageHeader icon="package" title="Materiais" actions={<Button onClick={()=>setModal({name:'add-order'})}><Icon name="plus"/> Novo Pedido</Button>}/><TableSimple columns={["Data","Projeto","Item","Qtd","Requisitante","Estado"]} rows={MaterialsFlat.map(m=>[m.requestedAt,m.project,m.item,m.qty,m.requestedBy,m.status])}/></section>);
-
-
-
+  const MaterialsFlat = visibleOrders.flatMap(o =>
+    o.items.map(it => ({
+      requestedAt: o.requestedAt,
+      project:     o.project,
+      item:        it.name,
+      qty:         it.qty,
+      requestedBy: o.requestedBy,
+      status:      o.status
+    }))
+  );
 
   const openReport = (p) => {
-    if (can('obraReport')) { setProjectFocus(p); setView('obra-report'); }
+    if (can('obraReport')) {
+      setProjectFocus(p);
+      setView('obra-report');
+    }
   };
 
-    // 🔐 Guard de autenticação: se não há auth, mostra Login
+  // 🔐 Guard de autenticação
   if (!auth) {
     return (
       <LoginView
@@ -3094,6 +2822,11 @@ const DashboardView = () => (
       />
     );
   }
+
+  // Daqui para baixo, o teu return normal (DashboardView, TimesheetsView, etc.)
+  // ...
+}
+
 
   return(
     <div className={`min-h-screen ${density==='compact'?'text-[15px]':''}`} data-density={density}>
