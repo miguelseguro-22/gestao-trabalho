@@ -2823,11 +2823,6 @@ function App() {
     );
   }
 
-  // Daqui para baixo, o teu return normal (DashboardView, TimesheetsView, etc.)
-  // ...
-}
-
-
   return(
     <div className={`min-h-screen ${density==='compact'?'text-[15px]':''}`} data-density={density}>
       {/* Header Mobile */}
@@ -3306,5 +3301,4 @@ function App() {
     </div>
   );    
 }
-
 export default App;
