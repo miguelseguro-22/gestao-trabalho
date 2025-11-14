@@ -1,15 +1,12 @@
-// src/main.tsx
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import './index.css';
 import { setupAuth } from './auth';
+import './index.css';
 
-// Inicializa o cliente Supabase e regista window.Auth
 setupAuth();
 
-const rootElement = document.getElementById('root') as HTMLElement;
-createRoot(rootElement).render(
+createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>
