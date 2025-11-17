@@ -33,6 +33,31 @@ case 'building':return<svg viewBox="0 0 24 24" className={className}><rect {...S
 };
 
 
+// ---------------------------------------------------------------
+// 🧭 COMPONENTE DE NAVEGAÇÃO
+// ---------------------------------------------------------------
+function NavItem({ 
+  id, 
+  icon, 
+  label, 
+  setView 
+}: { 
+  id: string; 
+  icon: string; 
+  label: string; 
+  setView: (v: any) => void; 
+}) {
+  return (
+    <button
+      onClick={() => setView(id)}
+      className="flex items-center gap-3 w-full px-3 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition"
+    >
+      <Icon name={icon} className="w-5 h-5" />
+      <span className="text-sm">{label}</span>
+    </button>
+  );
+}
+
 // ===== People: migração e util =====
 const migratePeople = (src) => {
   // src: { [name]: { rate?:number } | { rates?:{normal,extra,deslocada,fimSemana} } }
@@ -2503,6 +2528,25 @@ const CAN = {
   agenda: new Set(["encarregado", "diretor", "admin"]),
 };
 
+
+// ---------------------------------------------------------------
+// 🔐 FUNÇÃO AUXILIAR: VIEW PADRÃO POR ROLE
+// ---------------------------------------------------------------
+function defaultViewForRole(role: string): keyof typeof CAN | "timesheets" | "obra-report" {
+  switch (role) {
+    case "admin":
+      return "dashboard";
+    case "tecnico":
+    case "encarregado":
+      return "timesheets";
+    case "diretor":
+      return "obras";
+    case "logistica":
+      return "logistics";
+    default:
+      return "timesheets";
+  }
+}
 // ---------------------------------------------------------------
 // 🔐 LOGIN VIEW (Supabase) — UI igual ao login antigo
 // ---------------------------------------------------------------
@@ -2901,6 +2945,218 @@ function App() {
       />
     );
   }
+
+
+  // ---------------------------------------------------------------
+// 📝 FUNÇÕES DE MANIPULAÇÃO DE DADOS
+// ---------------------------------------------------------------
+const addTimeEntry = (entry: any) => {
+  setTimeEntries((prev) => [{ ...entry, id: entry.id || uid() }, ...prev]);
+  addToast("Timesheet registado com sucesso");
+};
+
+const updateTimeEntry = (entry: any) => {
+  setTimeEntries((prev) => prev.map((t) => (t.id === entry.id ? entry : t)));
+  addToast("Timesheet atualizado");
+};
+
+const duplicateTimeEntry = (entry: any) => {
+  const newEntry = { ...entry, id: uid() };
+  setTimeEntries((prev) => [newEntry, ...prev]);
+  addToast("Timesheet duplicado");
+};
+
+const addOrder = (payload: any) => {
+  const newOrder = {
+    id: uid(),
+    requestedAt: todayISO(),
+    status: "Pendente",
+    notes: "",
+    ...payload,
+  };
+  setOrders((prev) => [newOrder, ...prev]);
+  addToast("Pedido criado com sucesso");
+};
+
+const moveOrderStatus = (orderId: string, newStatus: string) => {
+  setOrders((prev) =>
+    prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+  );
+};
+
+const setOrderPatch = (orderId: string, patch: any) => {
+  setOrders((prev) =>
+    prev.map((o) => (o.id === orderId ? { ...o, ...patch } : o))
+  );
+};
+
+const addToast = (msg: string, type = "ok") => {
+  console.log(`[${type.toUpperCase()}] ${msg}`);
+  // Se quiseres toast visual, adiciona biblioteca tipo react-hot-toast
+};
+
+const setters = {
+  setTimeEntries,
+  setOrders,
+  setProjects,
+  setActivity,
+  setCatalog,
+  setPeople,
+  setPrefs,
+  setVehicles,
+  setAgenda,
+  setSuppliers,
+  setAll: (data: any) => {
+    setTimeEntries(data.timeEntries || []);
+    setOrders(data.orders || []);
+    setProjects(data.projects || []);
+    setActivity(data.activity || []);
+    setCatalog(data.catalog || []);
+    setPeople(data.people || {});
+    setPrefs(data.prefs || { defaultRate: DEFAULT_HOURLY_RATE, otMultiplier: DEFAULT_OT_MULTIPLIER });
+    setVehicles(data.vehicles || []);
+    setAgenda(data.agenda || []);
+    setSuppliers(data.suppliers || {});
+  },
+  get: () => ({
+    timeEntries,
+    orders,
+    projects,
+    activity,
+    catalog,
+    people,
+    prefs,
+    vehicles,
+    agenda,
+    suppliers,
+    theme,
+    density,
+  }),
+};
+
+// ---------------------------------------------------------------
+// 📊 DASHBOARD VIEW
+// ---------------------------------------------------------------
+function DashboardView() {
+  return (
+    <section className="space-y-4">
+      <PageHeader icon="activity" title="Dashboard" subtitle="Visão geral da operação" />
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <KpiCard
+          icon="clock"
+          title="Dias Registados"
+          value={registeredDays}
+          subtitle={`Este ciclo (${fmtDate(cycStart)} - ${fmtDate(cycEnd)})`}
+          onClick={() => setModal({ name: "kpi-overview" })}
+        />
+        
+        <KpiCard
+          icon="package"
+          title="Pedidos Ativos"
+          value={visibleOrders.filter((o) => o.status !== "Entregue").length}
+          subtitle="Pendentes + Aprovados"
+          onClick={() => setView("logistics")}
+        />
+        
+        <KpiCard
+          icon="wrench"
+          title="Obras Ativas"
+          value={projects.length}
+          subtitle="Projetos em curso"
+          onClick={() => setView("obras")}
+        />
+      </div>
+
+      <Card className="p-4">
+        <div className="font-semibold mb-3">Horas por Dia (Esta Semana)</div>
+        <div className="h-48 flex items-end gap-2">
+          {hoursByDay.map((d) => (
+            <div key={d.label} className="flex-1 flex flex-col items-center gap-1">
+              <div
+                className="w-full bg-indigo-600 rounded-t"
+                style={{ height: `${(d.value / 12) * 100}%` }}
+              />
+              <div className="text-xs text-slate-500">{d.label}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------
+// ⏰ TIMESHEETS VIEW
+// ---------------------------------------------------------------
+function TimesheetsView() {
+  return (
+    <section className="space-y-4">
+      <PageHeader
+        icon="clock"
+        title="Timesheets"
+        subtitle={`${visibleTimeEntries.length} registos`}
+        actions={
+          <Button onClick={() => setModal({ name: "add-time" })}>
+            <Icon name="plus" /> Novo Registo
+          </Button>
+        }
+      />
+
+      <CycleCalendar
+        timeEntries={visibleTimeEntries}
+        onDayClick={(iso) => setModal({ name: "day-actions", dateISO: iso })}
+      />
+
+      <Card className="p-4">
+        <TableSimple
+          columns={["Data", "Tipo", "Projeto", "Colaborador", "Horas", "Extra"]}
+          rows={visibleTimeEntries.slice(0, 20).map((t) => [
+            t.date || `${t.periodStart}→${t.periodEnd}`,
+            t.template,
+            t.project || "—",
+            t.worker || t.supervisor || "—",
+            t.hours || 0,
+            t.overtime || 0,
+          ])}
+        />
+      </Card>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------
+// 📦 MATERIAIS VIEW
+// ---------------------------------------------------------------
+function TableMaterials() {
+  return (
+    <section className="space-y-4">
+      <PageHeader
+        icon="package"
+        title="Pedidos de Material"
+        subtitle={`${visibleOrders.length} pedidos`}
+        actions={
+          <Button onClick={() => setModal({ name: "add-order" })}>
+            <Icon name="plus" /> Novo Pedido
+          </Button>
+        }
+      />
+
+      <Card className="p-4">
+        <TableSimple
+          columns={["Data", "Projeto", "Requisitante", "Estado", "Itens"]}
+          rows={visibleOrders.map((o) => [
+            fmtDate(o.requestedAt),
+            o.project,
+            o.requestedBy || "—",
+            o.status,
+            o.items.map((i) => `${i.name} (${i.qty})`).join(", "),
+          ])}
+        />
+      </Card>
+    </section>
+  );
+}
 
   // -------------------------------------------------------------
   // 🌍 RETURN PRINCIPAL — LAYOUT DA APP
