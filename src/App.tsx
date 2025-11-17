@@ -31,9 +31,7 @@ case 'building':return<svg viewBox="0 0 24 24" className={className}><rect {...S
     default:return null;
   }
 };
-// 💸 RH por colaborador
-const DEFAULT_HOURLY_RATE = 12.5;
-const DEFAULT_OT_MULTIPLIER = 1.5;
+
 
 // ===== People: migração e util =====
 const migratePeople = (src) => {
@@ -2401,109 +2399,6 @@ const TimesheetTemplateForm = ({
     </div>
   );
 };
-
-/* ---------- AUTH / LOGIN ---------- */
-const ROLE_LABELS = {
-  tecnico: 'Técnico',
-  encarregado: 'Encarregado',
-  diretor: 'Diretor de Obra',
-  logistica: 'Gestor de Logística',
-  admin: 'Administrador',
-} as const
-
-const CAN = {
-  dashboard:   new Set(['admin']),
-  timesheets:  new Set(['tecnico','encarregado','admin']),
-  materials:   new Set(['encarregado','diretor','admin']),
-  obras:       new Set(['diretor','admin']),
-  obraReport:  new Set(['diretor','admin']),
-  logistics:   new Set(['logistica','admin']),
-  people:      new Set(['diretor','admin']),
-  vehicles:    new Set(['diretor','admin']),
-  agenda:      new Set(['encarregado','diretor','admin']),
-}
-
-const defaultViewForRole = (role: string) =>
-  role === 'tecnico'     ? 'timesheets' :
-  role === 'encarregado' ? 'timesheets' :
-  role === 'diretor'     ? 'obras'      :
-  role === 'logistica'   ? 'logistics'  :
-  'dashboard'
-// LoginView real: pede email e password e usa Supabase
-// Login real: estética antiga + funcionalidade Supabase
-// Vista de login: cartão antigo com autenticação Supabase
-function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    const res = await window.Auth?.login(email, password);
-    setLoading(false);
-    if (res?.ok) {
-      onLogin(res.user);
-    } else {
-      setError(res?.error || 'Credenciais inválidas');
-    }
-  };
-
-   return (
-    <div className="min-h-screen grid place-items-center p-4 bg-slate-50 dark:bg-slate-950">
-      <Card className="max-w-md w-full p-5 space-y-4">
-        <div>
-          <div className="text-xs text-slate-500">Plataforma</div>
-          <h1 className="text-lg font-semibold">Gestão de Trabalho</h1>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <label className="text-sm block">
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              required
-            />
-          </label>
-
-          <label className="text-sm block">
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              required
-            />
-          </label>
-
-          {error && (
-            <div className="text-xs text-rose-600">
-              {error}
-            </div>
-          )}
-
-          <Button type="submit" disabled={loading} className="w-full justify-center">
-            {loading ? 'A entrar…' : 'Entrar'}
-          </Button>
-        </form>
-
-        {!window.Auth && (
-          <div className="text-[11px] text-amber-600">
-            Aviso: window.Auth não está definido — verifica se chamaste setupAuth() em main.tsx
-          </div>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-
 
 
 
