@@ -2550,6 +2550,9 @@ function defaultViewForRole(role: string): keyof typeof CAN | "timesheets" | "ob
 // ---------------------------------------------------------------
 // 🔐 LOGIN VIEW (Supabase) — UI igual ao login antigo
 // ---------------------------------------------------------------
+// ---------------------------------------------------------------
+// 🔐 LOGIN VIEW (Supabase) — COM DEBUG
+// ---------------------------------------------------------------
 function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -2568,11 +2571,21 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
     if (res?.ok) {
       const u = res.user;
 
+      // 🔍 DEBUG: Vê TODOS os campos do user
+      console.log("🔍 USER COMPLETO:", JSON.stringify(u, null, 2));
+      console.log("🔍 app_metadata:", u.app_metadata);
+      console.log("🔍 user_metadata:", u.user_metadata);
+      console.log("🔍 raw_user_meta_data:", u.raw_user_meta_data);
+
+      // 🔧 Tenta buscar role de TODAS as fontes possíveis
       const normRole = String(
         u.app_metadata?.role ||
         u.user_metadata?.role ||
-        "tecnico"
+        u.raw_user_meta_data?.role ||
+        "tecnico" // fallback
       ).trim().toLowerCase();
+
+      console.log("✅ ROLE FINAL:", normRole);
 
       onLogin({
         id: u.id,
@@ -2587,7 +2600,7 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
 
   return (
     <div className="min-h-screen grid place-items-center bg-slate-50 dark:bg-slate-950 p-4">
-       <div className="w-full max-w-md p-6 space-y-4 rounded-2xl bg-white shadow-sm dark:bg-slate-900 dark:border dark:border-slate-800">
+      <div className="w-full max-w-md p-6 space-y-4 rounded-2xl bg-white shadow-sm dark:bg-slate-900 dark:border dark:border-slate-800">
         <h2 className="text-xl font-semibold text-center">Entrar</h2>
 
         <form className="space-y-3" onSubmit={submit}>
@@ -2753,33 +2766,45 @@ function App() {
   // -------------------------------------------------------------
   // 🔄 REFRESH SUPABASE AO INICIAR
   // -------------------------------------------------------------
-  useEffect(() => {
-    let cancelled = false;
+// -------------------------------------------------------------
+// 🔄 REFRESH SUPABASE AO INICIAR
+// -------------------------------------------------------------
+useEffect(() => {
+  let cancelled = false;
 
-    (async () => {
-      const u = await (window as any).Auth?.refresh?.();
+  (async () => {
+    const u = await (window as any).Auth?.refresh?.();
 
-      if (!cancelled) {
-        if (u) {
-          setAuth({
-            id: u.id,
-            email: u.email,
-            role:
-              u.app_metadata?.role ||
-              u.user_metadata?.role ||
-              "tecnico",
-            name: u.user_metadata?.name || u.email,
-          });
-        } else {
-          setAuth(null);
-        }
+    if (!cancelled) {
+      if (u) {
+        // 🔍 DEBUG
+        console.log("🔄 REFRESH USER:", u);
+        
+        const normRole = String(
+          u.app_metadata?.role ||
+          u.user_metadata?.role ||
+          u.raw_user_meta_data?.role ||
+          "tecnico"
+        ).trim().toLowerCase();
+
+        console.log("✅ ROLE APÓS REFRESH:", normRole);
+
+        setAuth({
+          id: u.id,
+          email: u.email,
+          role: normRole,
+          name: u.user_metadata?.name || u.email,
+        });
+      } else {
+        setAuth(null);
       }
-    })();
+    }
+  })();
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  return () => {
+    cancelled = true;
+  };
+}, []);
 
   // -------------------------------------------------------------
   // 🔁 FALLBACK AUTOMÁTICO DE VIEW
