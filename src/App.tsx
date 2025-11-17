@@ -2553,6 +2553,9 @@ function defaultViewForRole(role: string): keyof typeof CAN | "timesheets" | "ob
 // ---------------------------------------------------------------
 // 🔐 LOGIN VIEW (Supabase) — COM DEBUG
 // ---------------------------------------------------------------
+// ---------------------------------------------------------------
+// 🔐 LOGIN VIEW (Supabase) — VERSÃO CORRIGIDA
+// ---------------------------------------------------------------
 function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -2564,34 +2567,23 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
     setLoading(true);
     setError(null);
 
-    const res = await (window as any).Auth?.login?.(email, password);
+    // ✅ Usa o Auth.login() que já busca da tabela profiles!
+    const res = await window.Auth?.login?.(email, password);
 
     setLoading(false);
 
     if (res?.ok) {
       const u = res.user;
 
-      // 🔍 DEBUG: Vê TODOS os campos do user
-      console.log("🔍 USER COMPLETO:", JSON.stringify(u, null, 2));
-      console.log("🔍 app_metadata:", u.app_metadata);
-      console.log("🔍 user_metadata:", u.user_metadata);
-      console.log("🔍 raw_user_meta_data:", u.raw_user_meta_data);
+      console.log("✅ LOGIN SUCESSO:", u);
+      console.log("✅ ROLE:", u.role);
 
-      // 🔧 Tenta buscar role de TODAS as fontes possíveis
-      const normRole = String(
-        u.app_metadata?.role ||
-        u.user_metadata?.role ||
-        u.raw_user_meta_data?.role ||
-        "tecnico" // fallback
-      ).trim().toLowerCase();
-
-      console.log("✅ ROLE FINAL:", normRole);
-
+      // ✅ O user já vem com role da BD!
       onLogin({
         id: u.id,
         email: u.email,
-        role: normRole,
-        name: u.user_metadata?.name || u.email,
+        role: u.role, // ⬅️ já validado no auth.tsx
+        name: u.name,
       });
     } else {
       setError(res?.error || "Credenciais inválidas.");
@@ -2769,31 +2761,26 @@ function App() {
 // -------------------------------------------------------------
 // 🔄 REFRESH SUPABASE AO INICIAR
 // -------------------------------------------------------------
+// -------------------------------------------------------------
+// 🔄 REFRESH SUPABASE AO INICIAR
+// -------------------------------------------------------------
 useEffect(() => {
   let cancelled = false;
 
   (async () => {
-    const u = await (window as any).Auth?.refresh?.();
+    // ✅ Agora usa o Auth.refresh() que já existe!
+    const u = await window.Auth?.refresh?.();
 
     if (!cancelled) {
       if (u) {
-        // 🔍 DEBUG
         console.log("🔄 REFRESH USER:", u);
-        
-        const normRole = String(
-          u.app_metadata?.role ||
-          u.user_metadata?.role ||
-          u.raw_user_meta_data?.role ||
-          "tecnico"
-        ).trim().toLowerCase();
-
-        console.log("✅ ROLE APÓS REFRESH:", normRole);
+        console.log("✅ ROLE:", u.role); // já vem da tabela profiles!
 
         setAuth({
           id: u.id,
           email: u.email,
-          role: normRole,
-          name: u.user_metadata?.name || u.email,
+          role: u.role, // ⬅️ já vem normalizado e validado
+          name: u.name,
         });
       } else {
         setAuth(null);
