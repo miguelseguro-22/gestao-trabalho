@@ -1,5 +1,4 @@
 ﻿import React, { useState, useEffect, useMemo } from "react";
-import Card from "./components/Card";
 import Button from "./components/Button";
 import Icon from "./components/Icon";
 import Modal from "./components/Modal";
@@ -100,7 +99,7 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
 
   return (
     <div className="min-h-screen grid place-items-center bg-slate-50 dark:bg-slate-950 p-4">
-      <Card className="w-full max-w-md p-6 space-y-4">
+       <div className="w-full max-w-md p-6 space-y-4 rounded-2xl bg-white shadow-sm dark:bg-slate-900 dark:border dark:border-slate-800">
         <h2 className="text-xl font-semibold text-center">Entrar</h2>
 
         <form className="space-y-3" onSubmit={submit}>
@@ -792,10 +791,340 @@ function App() {
         />
       </Modal>
 
-      {/* ... TODOS OS TEUS OUTROS MODAIS ... */}
+      {/* Modais */}
+      <Modal open={modal?.name==='add-time'} title="Registar Tempo" onClose={()=>setModal(null)} wide>
+        <TimesheetTemplateForm
+          initial={modal?.initial}
+          peopleNames={peopleNames}
+          projectNames={projectNames}
+          supervisorNames={supervisorNames}
+          onSubmit={data => { data.id ? updateTimeEntry(data) : addTimeEntry(data); setModal(null); }}
+        />
+      </Modal>
 
+      {/* Escolha rápida: registar horas / agendar (apenas hoje+futuro) */}
+<Modal open={modal?.name==='day-actions'} title={`Ações — ${fmtDate(modal?.dateISO||todayISO())}`} onClose={()=>setModal(null)}>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <button className="rounded-2xl border p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
+      onClick={()=>setModal({name:'add-time', initial:{ date: modal?.dateISO, template:'Trabalho Normal' }})}
+    >
+      <div className="text-sm text-slate-500">Registar</div>
+      <div className="mt-1 font-semibold">Registar horas</div>
+      <div className="text-xs text-slate-400 mt-1">Criar timesheet para este dia</div>
+    </button>
+
+    <button className="rounded-2xl border p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
+      onClick={()=>setModal({name:'agenda-add', initial:{ date: modal?.dateISO, time:'08:00', jobType:'Instalação' }})}
+    >
+      <div className="text-sm text-slate-500">Agendar</div>
+      <div className="mt-1 font-semibold">Agendar trabalho</div>
+      <div className="text-xs text-slate-400 mt-1">Obra, hora e tipo</div>
+    </button>
+  </div>
+</Modal>
+
+
+{/* Agendamento rápido (formulário compacto) */}
+<Modal open={modal?.name==='agenda-add'} title="Agendar Trabalho" onClose={()=>setModal(null)}>
+  <AgendaQuickForm initial={modal?.initial}
+    setAgenda={setAgenda}
+    onClose={()=>setModal(null)}
+    peopleNames={peopleNames}
+    projectNames={projectNames}
+  />
+</Modal>
+
+
+<Modal
+  open={modal?.name === 'kpi-overview'}
+  title="Visão Geral do Mês"
+  onClose={() => setModal(null)}
+  wide
+>
+  {(() => {
+    const { start, end } = getCycle(0);
+    const inRange = (iso) => {
+      if (!iso) return false;
+      const d = new Date(iso); d.setHours(0,0,0,0);
+      const a = new Date(start), b = new Date(end);
+      a.setHours(0,0,0,0); b.setHours(0,0,0,0);
+      return d >= a && d <= b;
+    };
+
+    const uteis = countWeekdaysInclusive(start, end);
+
+    // dias registados (qualquer tipo) dentro do ciclo
+    const diasReg = (() => {
+      const s = new Set();
+      for (const t of timeEntries) {
+        if (t.template === 'Férias' || t.template === 'Baixa') {
+          const a = new Date(t.periodStart || t.date);
+          const b = new Date(t.periodEnd   || t.date);
+          a.setHours(0,0,0,0); b.setHours(0,0,0,0);
+          for (let d = new Date(a); d <= b; d.setDate(d.getDate()+1)) {
+            if (d >= start && d <= end) s.add(d.toISOString().slice(0,10));
+          }
+        } else if (inRange(t.date)) {
+          s.add(new Date(t.date).toISOString().slice(0,10));
+        }
+      }
+      return s.size;
+    })();
+
+    // horas extra no ciclo (apenas Trabalho Normal)
+    const totalOT = timeEntries
+      .filter(t => t.template === 'Trabalho Normal' && inRange(t.date))
+      .reduce((s,t) => s + (Number(t.overtime) || 0), 0);
+
+    // dias de trabalho ao fim-de-semana
+    const fimSemana = (() => {
+      const w = new Set();
+      for (const t of timeEntries) {
+        if (t.template !== 'Trabalho Normal' || !inRange(t.date)) continue;
+        const d = new Date(t.date).getDay(); // 0 dom, 6 sáb
+        if (d === 0 || d === 6) w.add(t.date);
+      }
+      return w.size;
+    })();
+
+    // contagem em dias de Férias / Baixa / Falta no ciclo
+    const countDaysOf = (tipo) => {
+      let c = 0;
+      for (const t of timeEntries) {
+        if (t.template !== tipo) continue;
+        if (tipo === 'Férias' || tipo === 'Baixa') {
+          const a = new Date(t.periodStart || t.date);
+          const b = new Date(t.periodEnd   || t.date);
+          a.setHours(0,0,0,0); b.setHours(0,0,0,0);
+          for (let d = new Date(a); d <= b; d.setDate(d.getDate()+1)) {
+            if (d >= start && d <= end) c++;
+          }
+        } else if (inRange(t.date)) {
+          c++;
+        }
+      }
+      return c;
+    };
+
+    const ferias = countDaysOf('Férias');
+    const baixas = countDaysOf('Baixa');
+    const faltas = countDaysOf('Falta');
+
+    const fmt = (d) => new Date(d).toLocaleDateString('pt-PT');
+
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="rounded-2xl p-5 bg-slate-900 text-white dark:bg-slate-800">
+            <div className="text-sm opacity-80">Dias Registados</div>
+            <div className="mt-1 text-4xl font-semibold">{diasReg}</div>
+            <div className="mt-1 text-sm opacity-80">de {uteis} dias úteis</div>
+          </div>
+
+          <div className="rounded-2xl p-5 bg-emerald-900 text-white dark:bg-emerald-800">
+            <div className="flex items-center gap-2 text-sm opacity-90">
+              <Icon name="clock" /> Horas Extras
+            </div>
+            <div className="mt-1 text-4xl font-semibold">{totalOT.toFixed(1)}h</div>
+            <div className="mt-1 text-sm opacity-80">trabalho adicional</div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl p-5 bg-violet-900/70 text-white">
+          <div className="text-sm opacity-90">Trabalho Fim de Semana</div>
+          <div className="mt-1 text-3xl font-semibold">{fimSemana} dias</div>
+          <div className="mt-1 text-sm opacity-80">trabalho em sábados/domingos</div>
+        </div>
+
+        <div className="rounded-2xl p-5 bg-slate-900 text-white dark:bg-slate-900 border border-amber-500/40">
+          <div className="text-sm font-semibold">Férias/Baixas/Faltas</div>
+          <div className="mt-3 grid grid-cols-3 gap-3 text-center">
+            <div>
+              <div className="text-3xl font-semibold">{ferias}</div>
+              <div className="text-sm opacity-80">Férias</div>
+            </div>
+            <div>
+              <div className="text-3xl font-semibold">{baixas}</div>
+              <div className="text-sm opacity-80">Baixas</div>
+            </div>
+            <div>
+              <div className="text-3xl font-semibold">{faltas}</div>
+              <div className="text-sm opacity-80">Faltas</div>
+            </div>
+          </div>
+        </div>
+
+        <Card className="p-4">
+          <div className="text-sm text-slate-500 dark:text-slate-300">
+            Período de Análise: <b>{fmt(start)}</b> até <b>{fmt(end)}</b>
+          </div>
+        </Card>
+
+        <div className="flex justify-end">
+          <Button onClick={() => printTimesheetCycleReport(visibleTimeEntries)}>
+  Exportar Relatório de Horas
+</Button>
+        </div>
+      </div>
+    );
+  })()}
+</Modal>
+
+
+
+<Modal open={modal?.name==='kpi-logistics'} title="Eficiência Material" onClose={()=>setModal(null)} wide>
+  {/* conteúdo do anexo 3: barras + lista de pedidos recentes */}
+</Modal>
+
+<Modal open={modal?.name==='kpi-fleet'} title="Performance da Frota" onClose={()=>setModal(null)} wide>
+  {/* conteúdo do anexo 4: disponibilidade + estado dos veículos */}
+</Modal>
+
+
+
+
+      <SupplierImportModal
+  open={modal?.name==='supplier-import'}
+  onClose={()=>setModal(null)}
+  suppliers={suppliers}
+  setSuppliers={setSuppliers}
+/>
+
+<PriceCompareModal
+  open={modal?.name==='price-compare'}
+  onClose={()=>setModal(null)}
+  suppliers={suppliers}
+/>
+
+
+      <Modal open={modal?.name==='add-order'} title="Pedido de Material" onClose={()=>setModal(null)} wide>
+        <MaterialForm onSubmit={(payload)=>{addOrder(payload);setModal(null)}} catalogMaps={catalogMaps} projects={projects}/>
+      </Modal>
+
+      <Modal open={modal?.name==='day-details'} title="Dia no calendário" onClose={()=>setModal(null)}>
+        <DayDetails dateISO={modal?.dateISO} timeEntries={timeEntries} onNew={iso=>setModal({name:'add-time',initial:{date:iso,template:'Trabalho Normal'}})} onEdit={t=>setModal({name:'add-time',initial:t})} onDuplicate={t=>{duplicateTimeEntry({...t,date:modal?.dateISO});setModal(null)}}/>
+      </Modal>
+
+<Modal open={modal?.name==='order-detail'} title="Detalhe do Pedido" onClose={()=>setModal(null)} wide>
+  {modal?.order && (() => {
+    const o = modal.order;
+
+    const famOf = new Map(projects.map(p => [p.name, normText(p.family || '')]));
+    const fam   = famOf.get(o.project) || '';
+
+    const priceOf = (name) => {
+      const base   = normText(cleanDesignation(name));
+      const keyFam = `${base}||${fam}`;
+      const keyGen = `${base}||`;
+      if (catalogMaps.byNameFamily.has(keyFam)) return catalogMaps.byNameFamily.get(keyFam);
+      if (catalogMaps.byNameFamily.has(keyGen)) return catalogMaps.byNameFamily.get(keyGen);
+      const prefix = `${base}||`;
+      for (const [k, v] of catalogMaps.byNameFamily) { if (k.startsWith(prefix)) return v; }
+      return 0;
+    };
+
+    const total = o.items.reduce((s, i) => s + priceOf(i.name) * (Number(i.qty) || 0), 0);
+
+    const setStatus = (s) => {
+      setOrderPatch(o.id, { status: s });
+      setModal({ ...modal, order: { ...o, status: s } });
+    };
+    const updateNotes = (v) => {
+      setOrderPatch(o.id, { notes: v });
+      setModal({ ...modal, order: { ...o, notes: v } });
+    };
+
+    // código do item a partir do catálogo (nome + família)
+    const infoMap = catalogMaps?.infoByNameFamily || new Map();
+    const codeOf = (name, projectName) => {
+      const famKey = normText(famOf.get(projectName) || '');
+      const base   = normText(cleanDesignation(name));
+      const keyFam = `${base}||${famKey}`;
+      const keyGen = `${base}||`;
+      if (infoMap.has(keyFam)) return infoMap.get(keyFam).code || '';
+      if (infoMap.has(keyGen)) return infoMap.get(keyGen).code || '';
+      for (const [k, v] of infoMap) { if (k.startsWith(`${base}||`)) return v.code || ''; }
+      return '';
+    };
+
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="rounded-2xl border p-3 dark:border-slate-800">
+            <div className="text-xs text-slate-500">Obra</div>
+            <div className="font-semibold">{o.project}</div>
+          </div>
+          <div className="rounded-2xl border p-3 dark:border-slate-800">
+            <div className="text-xs text-slate-500">Encarregado</div>
+            <div className="font-semibold">{o.requestedBy || '—'}</div>
+          </div>
+          <div className="rounded-2xl border p-3 dark:border-slate-800">
+            <div className="text-xs text-slate-500">Família</div>
+            <div className="font-semibold">{projects.find(p => p.name === o.project)?.family || '—'}</div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border dark:border-slate-800 p-3">
+          <div className="flex items-center justify-between">
+            <div className="font-semibold">Itens</div>
+            <div className="text-sm">Total do pedido: <b>{currency(total)}</b></div>
+          </div>
+
+          <div className="mt-2 space-y-2">
+            {o.items.map((it, idx) => (
+              <div key={idx} className="rounded-xl border dark:border-slate-800 p-3">
+                <div className="font-semibold">{it.name}</div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  Qtd.: <b>{it.qty}</b> · Preço: <b>{currency(priceOf(it.name))}</b> ·
+                  Subtotal: <b>{currency(priceOf(it.name) * (Number(it.qty) || 0))}</b>
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  Código: <b>{codeOf(it.name, o.project) || '—'}</b>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 justify-end">
+  <Button variant="secondary" onClick={()=>{
+    const txt = orderToEmailText(o, priceOf, codeOf);
+    navigator.clipboard.writeText(txt);
+    addToast?.('Texto de email copiado.');
+  }}>Copiar Email</Button>
+
+  <Button variant="secondary" onClick={()=>{
+    printOrder(o, priceOf, codeOf);
+  }}>Exportar PDF</Button>
+
+  <Button variant="secondary" onClick={() => setStatus('Rejeitado')}>Rejeitar</Button>
+  <Button variant="secondary" onClick={() => setStatus('Aprovado')}>Aprovar</Button>
+  <Button onClick={() => setStatus('Entregue')}>Marcar Entregue</Button>
+</div>
+
+        <div>
+          <div className="text-sm text-slate-600 dark:text-slate-300 mb-1">Notas / Observações</div>
+          <textarea
+            className="mt-1 w-full rounded-2xl border p-2 min-h-[100px] dark:bg-slate-900 dark:border-slate-700"
+            value={o.notes || ''}
+            onChange={(e) => updateNotes(e.target.value)}
+            placeholder="Ex.: Entregar em obra, urgente..."
+          />
+        </div>
+      </div>
+    );
+  })()}
+</Modal>
+
+      <Modal open={modal?.name==='ts-all'} title="Todos os Timesheets" onClose={()=>setModal(null)} wide>
+        <TableSimple columns={["Data/Período","Tipo","Projeto","Encarregado","Horas","Extra"]} rows={visibleTimeEntries.map(t=>[t.template==='Trabalho Normal'?t.date:`${t.periodStart}→${t.periodEnd}`,t.template,t.project||'-',t.supervisor||'-',t.hours||0,t.overtime||0])}/>
+      </Modal>
+
+      <Modal open={modal?.name==='import'} title="Importar / Exportar Dados" onClose={()=>setModal(null)} wide>
+        <ImportCenter onClose={()=>setModal(null)} setters={setters} addToast={()=>{}} log={(m)=>addToast(m)}/>
+      </Modal>
     </div>
-  );
+  );     
 }
 
 // ---------------------------------------------------------------
