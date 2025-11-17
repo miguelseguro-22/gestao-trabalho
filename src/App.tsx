@@ -134,7 +134,7 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
             {loading ? "A entrar..." : "Entrar"}
           </Button>
         </form>
-      </Card>
+      </div>
     </div>
   );
 }
