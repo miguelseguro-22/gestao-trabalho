@@ -3675,17 +3675,7 @@ function App() {
     </div>
   );     
 }
-
-// ---------------------------------------------------------------
-// 🧭 FUNÇÃO DE VISTA PADRÃO
-// ---------------------------------------------------------------
-function defaultViewForRole(role: string): keyof typeof CAN {
-  if (!role) return "timesheets";
-  for (const key of Object.keys(CAN) as (keyof typeof CAN)[]) {
-    if (CAN[key].has(role)) return key;
-  }
-  return "timesheets";
-}
+    
 
 // ---------------------------------------------------------------
 export default App;
