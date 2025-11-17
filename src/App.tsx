@@ -1,21 +1,4 @@
 ﻿import React, { useState, useEffect, useMemo } from "react";
-import Button from "./components/Button";
-import Icon from "./components/Icon";
-import Modal from "./components/Modal";
-import TimesheetTemplateForm from "./components/TimesheetTemplateForm";
-import TableSimple from "./components/TableSimple";
-import CycleCalendar from "./components/CycleCalendar";
-import ImportCenter from "./components/ImportCenter";
-import ObrasView from "./components/ObrasView";
-import PeopleView from "./components/PeopleView";
-import VehiclesView from "./components/VehiclesView";
-import AgendaView from "./components/AgendaView";
-import LogisticsView from "./components/LogisticsView";
-import ProjectReportView from "./components/ProjectReportView";
-import MaterialForm from "./components/MaterialForm";
-import SupplierImportModal from "./components/SupplierImportModal";
-import PriceCompareModal from "./components/PriceCompareModal";
-import DayDetails from "./components/DayDetails";
 
 import {
   uid,
