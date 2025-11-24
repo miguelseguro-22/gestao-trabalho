@@ -618,7 +618,7 @@ const CalendarLegend = () => {
 const TYPE_FILL_BG = { 'Trabalho Normal':'bg-emerald-600','Férias':'bg-violet-600','Baixa':'bg-rose-600','Falta':'bg-amber-600' };
 const TYPE_COLORS = TYPE_FILL_BG;
 const countWeekdaysInclusive=(start,end)=>{const cur=new Date(start);cur.setHours(0,0,0,0);const last=new Date(end);last.setHours(0,0,0,0);let c=0;while(cur<=last){const d=cur.getDay();if(d!==0&&d!==6)c++;cur.setDate(cur.getDate()+1)}return c}
-const CycleCalendar = ({ timeEntries, onDayClick }) => {
+const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
   const [offset, setOffset] = useState(0);
   const { start, end } = useMemo(()=>getCycle(offset),[offset]);
   const dayTypes = useMemo(()=>{
@@ -661,20 +661,20 @@ const CycleCalendar = ({ timeEntries, onDayClick }) => {
       <Icon name="chev-right" />
     </Button>
 
-    {/* ✅ NOVO BOTÃO */}
-    <Button 
-      variant="secondary"
-      onClick={() => {
-        const html = generatePersonalTimesheetReport({
-          worker: auth?.name,
-          timeEntries: visibleTimeEntries,
-          cycle: { start, end }
-        });
-        openPrintWindow(html);
-      }}
-    >
-      <Icon name="download" /> Relatório
-    </Button>
+    {/* ✅ BOTÃO CORRIGIDO */}
+<Button 
+  variant="secondary"
+  onClick={() => {
+    const html = generatePersonalTimesheetReport({
+      worker: auth?.name,
+      timeEntries: timeEntries, // ⬅️ USA timeEntries (que já vem como prop)
+      cycle: { start, end }
+    });
+    openPrintWindow(html);
+  }}
+>
+  <Icon name="download" /> Relatório
+</Button>
   </div>
 </div>
 
@@ -3698,9 +3698,10 @@ function TimesheetsView() {
       />
 
       <CycleCalendar
-        timeEntries={visibleTimeEntries}
-        onDayClick={(iso) => setModal({ name: "day-actions", dateISO: iso })}
-      />
+  timeEntries={visibleTimeEntries}
+  onDayClick={(iso) => setModal({ name: "day-actions", dateISO: iso })}
+  auth={auth} // ⬅️ ADICIONA ISTO!
+/>
 
       <Card className="p-4">
         <TableSimple
