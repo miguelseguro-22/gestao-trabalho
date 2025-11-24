@@ -2204,7 +2204,7 @@ const ProjectReportView = ({
 };
 
 // ---------------------------------------------------------------
-// 🎨 DROPDOWN PERSONALIZADO (melhor estética)
+// 🎨 DROPDOWN PERSONALIZADO
 // ---------------------------------------------------------------
 const CustomSelect = ({ 
   value, 
@@ -2274,7 +2274,9 @@ const CustomSelect = ({
   );
 };
 
-/* ---------- Form de Timesheet ---------- */
+// ---------------------------------------------------------------
+// 📝 FORM DE TIMESHEET (CORRIGIDO)
+// ---------------------------------------------------------------
 const TimesheetTemplateForm = ({
   onSubmit,
   initial,
@@ -2303,39 +2305,66 @@ const TimesheetTemplateForm = ({
   const next = () => setStep(2);
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  // ✅ DEPOIS
-const validate = t => {
-  const e = {};
-  if (t.template === 'Trabalho Normal' || t.template === 'Falta') {
-    if (!t.date) e.date = 'Data é obrigatória.';
-    // worker será preenchido automaticamente, não precisa validar!
-  }
-  if (t.template === 'Trabalho Normal') {
-    if (!t.project) e.project = 'Projeto/Obra é obrigatório.';
-    if (!t.supervisor) e.supervisor = 'Encarregado é obrigatório.';
-    if (t.hours < 0) e.hours = 'Horas inválidas.';
-    if (t.overtime < 0) e.overtime = 'Extra inválido.';
-  }
-  if (t.template === 'Férias' || t.template === 'Baixa') {
-    if (!t.periodStart) e.periodStart = 'Início obrigatório.';
-    if (!t.periodEnd) e.periodEnd = 'Fim obrigatório.';
-    if (t.periodStart && t.periodEnd && new Date(t.periodStart) > new Date(t.periodEnd))
-      e.periodEnd = 'Fim anterior ao início.';
-  }
-  return e;
-};
+  const validate = t => {
+    const e = {};
+    
+    // Trabalho Normal: precisa data, projeto, supervisor, horas válidas
+    if (t.template === 'Trabalho Normal') {
+      if (!t.date) e.date = 'Data é obrigatória.';
+      if (!t.project) e.project = 'Projeto/Obra é obrigatório.';
+      if (!t.supervisor) e.supervisor = 'Encarregado é obrigatório.';
+      if (t.hours < 0) e.hours = 'Horas inválidas.';
+      if (t.overtime < 0) e.overtime = 'Extra inválido.';
+    }
+    
+    // Férias e Baixa: só precisam do período
+    if (t.template === 'Férias' || t.template === 'Baixa') {
+      if (!t.periodStart) e.periodStart = 'Início obrigatório.';
+      if (!t.periodEnd) e.periodEnd = 'Fim obrigatório.';
+      if (t.periodStart && t.periodEnd && new Date(t.periodStart) > new Date(t.periodEnd))
+        e.periodEnd = 'Fim anterior ao início.';
+    }
+    
+    // Falta: só precisa da data
+    if (t.template === 'Falta') {
+      if (!t.date) e.date = 'Data é obrigatória.';
+    }
+    
+    return e;
+  };
 
   const submit = () => {
     const adjusted = { ...form };
     
-    // ✅ Preencher worker automaticamente se não estiver preenchido
+    // Preencher worker automaticamente com o user logado
     if (!adjusted.worker && auth?.name) {
       adjusted.worker = auth.name;
     }
     
-    if (template !== 'Trabalho Normal') { 
-      adjusted.hours = 0; 
-      adjusted.overtime = 0; 
+    // Limpar campos desnecessários conforme o template
+    if (template === 'Férias') {
+      adjusted.hours = 0;
+      adjusted.overtime = 0;
+      adjusted.project = '';
+      adjusted.supervisor = '';
+      adjusted.date = adjusted.periodStart; // usar início como data
+    }
+    
+    if (template === 'Baixa') {
+      adjusted.hours = 0;
+      adjusted.overtime = 0;
+      adjusted.project = '';
+      adjusted.supervisor = '';
+      adjusted.date = adjusted.periodStart;
+    }
+    
+    if (template === 'Falta') {
+      adjusted.hours = 0;
+      adjusted.overtime = 0;
+      adjusted.project = '';
+      adjusted.supervisor = '';
+      adjusted.periodStart = '';
+      adjusted.periodEnd = '';
     }
     
     const payload = { ...adjusted, template };
@@ -2343,8 +2372,6 @@ const validate = t => {
     setErrors(e);
     if (Object.keys(e).length === 0) onSubmit(payload);
   };
-
-  // ... resto do return continua igual
 
   return (
     <div className="space-y-4">
@@ -2360,10 +2387,10 @@ const validate = t => {
               >
                 <div className="font-medium">{t}</div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  {t==='Trabalho Normal'&&'Data + Obra + Encarregado + Horas (+ Extra)'}
-                  {t==='Férias'&&'Período (início/fim)'}
-                  {t==='Baixa'&&'Período (início/fim) + Notas'}
-                  {t==='Falta'&&'Data + Observação'}
+                  {t==='Trabalho Normal'&&'Obra + Encarregado + Horas'}
+                  {t==='Férias'&&'Período de férias'}
+                  {t==='Baixa'&&'Período de baixa médica'}
+                  {t==='Falta'&&'Data da falta'}
                 </div>
               </button>
             ))}
@@ -2374,7 +2401,9 @@ const validate = t => {
       {step === 2 && (
         <form onSubmit={(e)=>{ e.preventDefault(); submit(); }} className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {(template==='Trabalho Normal' || template==='Falta') && (
+            
+            {/* DATA (para Trabalho Normal e Falta) */}
+            {(template === 'Trabalho Normal' || template === 'Falta') && (
               <label className="text-sm">
                 Data
                 <input
@@ -2387,63 +2416,69 @@ const validate = t => {
               </label>
             )}
 
-            {/* ✅ DEPOIS */}
-<label className="text-sm">
-  Obra/Projeto
-  <div className="mt-1">
-    <CustomSelect
-      value={form.project}
-      onChange={(v) => update('project', v)}
-      options={projectNames}
-      placeholder="Ex.: Obra #204"
-      error={!!errors.project}
-    />
-  </div>
-  {errors.project && <div className="text-xs text-rose-600 mt-1">{errors.project}</div>}
-</label>
-
-            {/* ✅ DEPOIS */}
-<label className="text-sm">
-  Encarregado de Obra
-  <div className="mt-1">
-    <CustomSelect
-      value={form.supervisor}
-      onChange={(v) => update('supervisor', v)}
-      options={supervisorNames}
-      placeholder="Ex.: Paulo Silva"
-      error={!!errors.supervisor}
-    />
-  </div>
-  {errors.supervisor && <div className="text-xs text-rose-600 mt-1">{errors.supervisor}</div>}
-</label>
-
-            {(template==='Férias' || template==='Baixa') && (
+            {/* OBRA/PROJETO (só para Trabalho Normal) */}
+            {template === 'Trabalho Normal' && (
               <label className="text-sm">
-                Início
-                <input
-                  type="date"
-                  value={form.periodStart}
-                  onChange={e=>update('periodStart',e.target.value)}
-                  className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.periodStart?'border-rose-400':''}`}
-                />
-                {errors.periodStart && <div className="text-xs text-rose-600 mt-1">{errors.periodStart}</div>}
+                Obra/Projeto
+                <div className="mt-1">
+                  <CustomSelect
+                    value={form.project}
+                    onChange={(v) => update('project', v)}
+                    options={projectNames}
+                    placeholder="Ex.: Obra #204"
+                    error={!!errors.project}
+                  />
+                </div>
+                {errors.project && <div className="text-xs text-rose-600 mt-1">{errors.project}</div>}
               </label>
             )}
 
-            {(template==='Férias' || template==='Baixa') && (
+            {/* ENCARREGADO (só para Trabalho Normal) */}
+            {template === 'Trabalho Normal' && (
               <label className="text-sm">
-                Fim
-                <input
-                  type="date"
-                  value={form.periodEnd}
-                  onChange={e=>update('periodEnd',e.target.value)}
-                  className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.periodEnd?'border-rose-400':''}`}
-                />
-                {errors.periodEnd && <div className="text-xs text-rose-600 mt-1">{errors.periodEnd}</div>}
+                Encarregado de Obra
+                <div className="mt-1">
+                  <CustomSelect
+                    value={form.supervisor}
+                    onChange={(v) => update('supervisor', v)}
+                    options={supervisorNames}
+                    placeholder="Ex.: Paulo Silva"
+                    error={!!errors.supervisor}
+                  />
+                </div>
+                {errors.supervisor && <div className="text-xs text-rose-600 mt-1">{errors.supervisor}</div>}
               </label>
             )}
 
-            {template==='Trabalho Normal' && (
+            {/* PERÍODO (para Férias e Baixa) */}
+            {(template === 'Férias' || template === 'Baixa') && (
+              <>
+                <label className="text-sm">
+                  Início
+                  <input
+                    type="date"
+                    value={form.periodStart}
+                    onChange={e=>update('periodStart',e.target.value)}
+                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.periodStart?'border-rose-400':''}`}
+                  />
+                  {errors.periodStart && <div className="text-xs text-rose-600 mt-1">{errors.periodStart}</div>}
+                </label>
+
+                <label className="text-sm">
+                  Fim
+                  <input
+                    type="date"
+                    value={form.periodEnd}
+                    onChange={e=>update('periodEnd',e.target.value)}
+                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.periodEnd?'border-rose-400':''}`}
+                  />
+                  {errors.periodEnd && <div className="text-xs text-rose-600 mt-1">{errors.periodEnd}</div>}
+                </label>
+              </>
+            )}
+
+            {/* HORAS E EXTRA (só para Trabalho Normal) */}
+            {template === 'Trabalho Normal' && (
               <>
                 <label className="text-sm">
                   Horas
@@ -2466,13 +2501,14 @@ const validate = t => {
               </>
             )}
 
-            {(template==='Baixa' || template==='Falta') && (
+            {/* NOTAS (para Baixa e Falta) */}
+            {(template === 'Baixa' || template === 'Falta') && (
               <label className="text-sm md:col-span-2">
-                Observação
+                {template === 'Falta' ? 'Motivo da Falta' : 'Observações'}
                 <textarea
                   value={form.notes}
                   onChange={e=>update('notes',e.target.value)}
-                  placeholder={template==='Falta'?'Motivo da falta':'Observações'}
+                  placeholder={template === 'Falta' ? 'Descreve o motivo...' : 'Observações médicas...'}
                   className="mt-1 w-full rounded-xl border p-2 min-h-[80px] dark:bg-slate-900 dark:border-slate-700"
                 />
               </label>
@@ -2488,7 +2524,6 @@ const validate = t => {
     </div>
   );
 };
-
 
 
 const JOB_TYPES = ['Instalação','Manutenção','Visita Técnica','Reunião'];
