@@ -481,6 +481,31 @@ const KpiCard = ({ icon, title, value, subtitle, onClick }) => (
 );
 
 
+const CalendarLegend = () => {
+  const items = [
+    { color: 'bg-emerald-600', label: 'Trabalho Normal' },
+    { color: 'bg-violet-600', label: 'Férias' },
+    { color: 'bg-rose-600', label: 'Baixa' },
+    { color: 'bg-amber-600', label: 'Falta' },
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center gap-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border dark:border-slate-800">
+      <div className="text-xs font-medium text-slate-600 dark:text-slate-400">
+        Legenda:
+      </div>
+      {items.map((item) => (
+        <div key={item.label} className="flex items-center gap-2">
+          <div className={`w-4 h-4 rounded ${item.color}`} />
+          <span className="text-xs text-slate-700 dark:text-slate-300">
+            {item.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const TYPE_FILL_BG = { 'Trabalho Normal':'bg-emerald-600','Férias':'bg-violet-600','Baixa':'bg-rose-600','Falta':'bg-amber-600' };
 const TYPE_COLORS = TYPE_FILL_BG;
 const countWeekdaysInclusive=(start,end)=>{const cur=new Date(start);cur.setHours(0,0,0,0);const last=new Date(end);last.setHours(0,0,0,0);let c=0;while(cur<=last){const d=cur.getDay();if(d!==0&&d!==6)c++;cur.setDate(cur.getDate()+1)}return c}
@@ -523,6 +548,9 @@ const CycleCalendar = ({ timeEntries, onDayClick }) => {
           <Button variant="secondary" onClick={() => setOffset(o => o + 1)}><Icon name="chev-right" /></Button>
         </div>
       </div>
+
+        {/* ✅ ADICIONA ESTA LINHA */}
+    <CalendarLegend />
 
       <div className="grid grid-cols-7 text-xs text-slate-500 dark:text-slate-400 px-1">
         {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d => (<div key={d} className="py-1">{d}</div>))}
