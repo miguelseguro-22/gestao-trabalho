@@ -4383,8 +4383,13 @@ function TableMaterials() {
 
 
       <Modal open={modal?.name==='add-order'} title="Pedido de Material" onClose={()=>setModal(null)} wide>
-        <MaterialForm onSubmit={(payload)=>{addOrder(payload);setModal(null)}} catalogMaps={catalogMaps} projects={projects}auth={auth} // ⬅️ ADICIONA ISTO!/>
-      </Modal>
+  <MaterialForm 
+    onSubmit={(payload)=>{addOrder(payload);setModal(null)}} 
+    catalogMaps={catalogMaps} 
+    projects={projects}
+    auth={auth} // ⬅️ ADICIONA ISTO!
+  />
+</Modal>
 
       <Modal open={modal?.name==='day-details'} title="Dia no calendário" onClose={()=>setModal(null)}>
         <DayDetails dateISO={modal?.dateISO} timeEntries={timeEntries} onNew={iso=>setModal({name:'add-time',initial:{date:iso,template:'Trabalho Normal'}})} onEdit={t=>setModal({name:'add-time',initial:t})} onDuplicate={t=>{duplicateTimeEntry({...t,date:modal?.dateISO});setModal(null)}}/>
