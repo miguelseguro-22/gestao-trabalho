@@ -2203,6 +2203,77 @@ const ProjectReportView = ({
   );
 };
 
+// ---------------------------------------------------------------
+// 🎨 DROPDOWN PERSONALIZADO (melhor estética)
+// ---------------------------------------------------------------
+const CustomSelect = ({ 
+  value, 
+  onChange, 
+  options = [], 
+  placeholder = "Selecionar...",
+  className = "",
+  error = false
+}) => {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState(value || "");
+
+  const filtered = useMemo(() => {
+    if (!search) return options.slice(0, 8);
+    const s = normText(search);
+    return options
+      .filter(opt => normText(opt).includes(s))
+      .slice(0, 8);
+  }, [search, options]);
+
+  const selectOption = (opt) => {
+    setSearch(opt);
+    onChange(opt);
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          onChange(e.target.value);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        placeholder={placeholder}
+        className={`w-full rounded-xl border p-2.5 dark:bg-slate-900 dark:border-slate-700 transition
+          focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none
+          ${error ? 'border-rose-400 focus:ring-rose-400' : ''}
+          ${className}`}
+      />
+
+      {open && filtered.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full rounded-xl border shadow-lg 
+                        bg-white dark:bg-slate-900 dark:border-slate-700 
+                        max-h-64 overflow-auto">
+          {filtered.map((opt, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                selectOption(opt);
+              }}
+              className="block w-full text-left px-4 py-2.5 text-sm
+                         hover:bg-indigo-50 dark:hover:bg-slate-800 
+                         transition-colors first:rounded-t-xl last:rounded-b-xl"
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ---------- Form de Timesheet ---------- */
 const TimesheetTemplateForm = ({
   onSubmit,
@@ -2232,26 +2303,27 @@ const TimesheetTemplateForm = ({
   const next = () => setStep(2);
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const validate = t => {
-    const e = {};
-    if (t.template === 'Trabalho Normal' || t.template === 'Falta') {
-      if (!t.date) e.date = 'Data é obrigatória.';
-      if (!t.worker) e.worker = 'Colaborador é obrigatório.';
-    }
-    if (t.template === 'Trabalho Normal') {
-      if (!t.project) e.project = 'Projeto/Obra é obrigatório.';
-      if (!t.supervisor) e.supervisor = 'Encarregado é obrigatório.';
-      if (t.hours < 0) e.hours = 'Horas inválidas.';
-      if (t.overtime < 0) e.overtime = 'Extra inválido.';
-    }
-    if (t.template === 'Férias' || t.template === 'Baixa') {
-      if (!t.periodStart) e.periodStart = 'Início obrigatório.';
-      if (!t.periodEnd) e.periodEnd = 'Fim obrigatório.';
-      if (t.periodStart && t.periodEnd && new Date(t.periodStart) > new Date(t.periodEnd))
-        e.periodEnd = 'Fim anterior ao início.';
-    }
-    return e;
-  };
+  // ✅ DEPOIS
+const validate = t => {
+  const e = {};
+  if (t.template === 'Trabalho Normal' || t.template === 'Falta') {
+    if (!t.date) e.date = 'Data é obrigatória.';
+    // worker será preenchido automaticamente, não precisa validar!
+  }
+  if (t.template === 'Trabalho Normal') {
+    if (!t.project) e.project = 'Projeto/Obra é obrigatório.';
+    if (!t.supervisor) e.supervisor = 'Encarregado é obrigatório.';
+    if (t.hours < 0) e.hours = 'Horas inválidas.';
+    if (t.overtime < 0) e.overtime = 'Extra inválido.';
+  }
+  if (t.template === 'Férias' || t.template === 'Baixa') {
+    if (!t.periodStart) e.periodStart = 'Início obrigatório.';
+    if (!t.periodEnd) e.periodEnd = 'Fim obrigatório.';
+    if (t.periodStart && t.periodEnd && new Date(t.periodStart) > new Date(t.periodEnd))
+      e.periodEnd = 'Fim anterior ao início.';
+  }
+  return e;
+};
 
   const submit = () => {
     const adjusted = { ...form };
@@ -2315,56 +2387,35 @@ const TimesheetTemplateForm = ({
               </label>
             )}
 
-            {template==='Trabalho Normal' && (
-              <label className="text-sm">
-                Obra/Projeto
-                <input
-                  list="projects-suggest"
-                  value={form.project}
-                  onChange={e=>update('project',e.target.value)}
-                  placeholder="Ex.: Obra #204"
-                  className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.project?'border-rose-400':''}`}
-                />
-                <datalist id="projects-suggest">
-                  {projectNames.map(n => <option key={n} value={n} />)}
-                </datalist>
-                {errors.project && <div className="text-xs text-rose-600 mt-1">{errors.project}</div>}
-              </label>
-            )}
+            {/* ✅ DEPOIS */}
+<label className="text-sm">
+  Obra/Projeto
+  <div className="mt-1">
+    <CustomSelect
+      value={form.project}
+      onChange={(v) => update('project', v)}
+      options={projectNames}
+      placeholder="Ex.: Obra #204"
+      error={!!errors.project}
+    />
+  </div>
+  {errors.project && <div className="text-xs text-rose-600 mt-1">{errors.project}</div>}
+</label>
 
-            {template==='Trabalho Normal' && (
-              <label className="text-sm">
-                Encarregado de Obra
-                <input
-                  list="supervisors-suggest"
-                  value={form.supervisor}
-                  onChange={e=>update('supervisor',e.target.value)}
-                  className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.supervisor?'border-rose-400':''}`}
-                  placeholder="Ex.: Paulo Silva"
-                />
-                <datalist id="supervisors-suggest">
-                  {supervisorNames.map(n => <option key={n} value={n} />)}
-                </datalist>
-                {errors.supervisor && <div className="text-xs text-rose-600 mt-1">{errors.supervisor}</div>}
-              </label>
-            )}
-
-            {template==='Trabalho Normal' && (
-              <label className="text-sm">
-                Colaborador
-                <input
-                  list="people-suggest"
-                  value={form.worker}
-                  onChange={e=>update('worker',e.target.value)}
-                  className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.worker?'border-rose-400':''}`}
-                  placeholder="Quem executou o trabalho"
-                />
-                <datalist id="people-suggest">
-                  {peopleNames.map(n => <option key={n} value={n} />)}
-                </datalist>
-                {errors.worker && <div className="text-xs text-rose-600 mt-1">{errors.worker}</div>}
-              </label>
-            )}
+            {/* ✅ DEPOIS */}
+<label className="text-sm">
+  Encarregado de Obra
+  <div className="mt-1">
+    <CustomSelect
+      value={form.supervisor}
+      onChange={(v) => update('supervisor', v)}
+      options={supervisorNames}
+      placeholder="Ex.: Paulo Silva"
+      error={!!errors.supervisor}
+    />
+  </div>
+  {errors.supervisor && <div className="text-xs text-rose-600 mt-1">{errors.supervisor}</div>}
+</label>
 
             {(template==='Férias' || template==='Baixa') && (
               <label className="text-sm">
