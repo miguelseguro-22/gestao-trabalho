@@ -3683,6 +3683,9 @@ function DashboardView() {
 // ---------------------------------------------------------------
 // ⏰ TIMESHEETS VIEW
 // ---------------------------------------------------------------
+// ---------------------------------------------------------------
+// ⏰ TIMESHEETS VIEW (COM BOTÃO DE REMOVER)
+// ---------------------------------------------------------------
 function TimesheetsView() {
   return (
     <section className="space-y-4">
@@ -3698,23 +3701,100 @@ function TimesheetsView() {
       />
 
       <CycleCalendar
-  timeEntries={visibleTimeEntries}
-  onDayClick={(iso) => setModal({ name: "day-actions", dateISO: iso })}
-  auth={auth} // ⬅️ ADICIONA ISTO!
-/>
+        timeEntries={visibleTimeEntries}
+        onDayClick={(iso) => setModal({ name: "day-actions", dateISO: iso })}
+        auth={auth}
+      />
 
+      {/* ✅ TABELA COM COLUNA DE AÇÕES */}
       <Card className="p-4">
-        <TableSimple
-          columns={["Data", "Tipo", "Projeto", "Colaborador", "Horas", "Extra"]}
-          rows={visibleTimeEntries.slice(0, 20).map((t) => [
-            t.date || `${t.periodStart}→${t.periodEnd}`,
-            t.template,
-            t.project || "—",
-            t.worker || t.supervisor || "—",
-            t.hours || 0,
-            t.overtime || 0,
-          ])}
-        />
+        <div className="overflow-auto rounded-2xl border dark:border-slate-800">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-900/50">
+              <tr>
+                <th className="px-3 py-2 text-left">Data</th>
+                <th className="px-3 py-2 text-left">Tipo</th>
+                <th className="px-3 py-2 text-left">Projeto</th>
+                <th className="px-3 py-2 text-left">Colaborador</th>
+                <th className="px-3 py-2 text-right">Horas</th>
+                <th className="px-3 py-2 text-right">Extra</th>
+                <th className="px-3 py-2 text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleTimeEntries.length === 0 && (
+                <tr>
+                  <td colSpan="7" className="px-3 py-8 text-center text-slate-500">
+                    Sem registos
+                  </td>
+                </tr>
+              )}
+
+              {visibleTimeEntries.slice(0, 20).map((t) => (
+                <tr key={t.id} className="border-t dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <td className="px-3 py-2">
+                    {t.template === 'Trabalho Normal' || t.template === 'Falta'
+                      ? t.date
+                      : `${t.periodStart} → ${t.periodEnd}`}
+                  </td>
+                  <td className="px-3 py-2">
+                    <Badge
+                      tone={
+                        t.template === 'Trabalho Normal' ? 'emerald' :
+                        t.template === 'Férias' ? 'blue' :
+                        t.template === 'Baixa' ? 'rose' : 'amber'
+                      }
+                    >
+                      {t.template}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-2">{t.project || "—"}</td>
+                  <td className="px-3 py-2">{t.worker || t.supervisor || "—"}</td>
+                  <td className="px-3 py-2 text-right">{t.hours || 0}</td>
+                  <td className="px-3 py-2 text-right">{t.overtime || 0}</td>
+                  
+                  {/* ✅ COLUNA DE AÇÕES */}
+                  <td className="px-3 py-2 text-right">
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setModal({ name: "add-time", initial: t })}
+                      >
+                        Editar
+                      </Button>
+                      
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => {
+                          if (confirm(`Remover registo de ${t.template} em ${t.date || t.periodStart}?`)) {
+                            setTimeEntries(prev => prev.filter(entry => entry.id !== t.id));
+                            addToast("Registo removido com sucesso");
+                          }
+                        }}
+                      >
+                        Remover
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Botão para ver todos */}
+        {visibleTimeEntries.length > 20 && (
+          <div className="mt-3 text-center">
+            <Button
+              variant="secondary"
+              onClick={() => setModal({ name: "ts-all" })}
+            >
+              Ver todos os {visibleTimeEntries.length} registos
+            </Button>
+          </div>
+        )}
       </Card>
     </section>
   );
