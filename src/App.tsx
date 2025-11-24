@@ -285,6 +285,239 @@ function printTimesheetReportHTML({ worker, cycle, rows }) {
   </body></html>`;
 }
 
+// ---------------------------------------------------------------
+// 📊 GERAR RELATÓRIO PESSOAL DE TIMESHEETS
+// ---------------------------------------------------------------
+function generatePersonalTimesheetReport({ worker, timeEntries, cycle }) {
+  const { start, end } = cycle;
+  const rows = buildTimesheetCycleRows({ worker, timeEntries, cycle });
+
+  const fmt = (iso) => new Date(iso).toLocaleDateString('pt-PT');
+  
+  // Estatísticas
+  const totalExtras = rows.reduce((s, r) => s + (r.extras || 0), 0);
+  const uteis = rows.filter(r => !['Sábado', 'Domingo'].includes(r.dia)).length;
+  const fds = rows.filter(r => ['Sábado', 'Domingo'].includes(r.dia)).length;
+  const feriados = rows.filter(r => r.situ === 'Feriado').length;
+  const ferias = rows.filter(r => r.situ === 'Férias').length;
+  const baixas = rows.filter(r => r.situ === 'Baixa').length;
+  const semReg = rows.filter(r => r.situ === 'Sem Registo').length;
+
+  // Dias por preencher (só úteis)
+  const diasPorPreencher = rows.filter(r => 
+    r.situ === 'Sem Registo' && 
+    !['Sábado', 'Domingo'].includes(r.dia)
+  );
+
+  // HTML do detalhe diário
+  const detalheDiario = rows.map(r => {
+    const isUtilSemReg = r.situ === 'Sem Registo' && !['Sábado', 'Domingo'].includes(r.dia);
+    const bgColor = isUtilSemReg ? 'background: #fef3c7;' : ''; // amarelo claro
+    
+    return `
+      <tr style="${bgColor}">
+        <td style="padding:8px; border-bottom:1px solid #e5e7eb">${fmt(r.data)}</td>
+        <td style="padding:8px; border-bottom:1px solid #e5e7eb">${r.dia}</td>
+        <td style="padding:8px; border-bottom:1px solid #e5e7eb">${r.situ}</td>
+        <td style="padding:8px; border-bottom:1px solid #e5e7eb; text-align:right">${r.horas || '—'}</td>
+        <td style="padding:8px; border-bottom:1px solid #e5e7eb; text-align:right">${r.extras || '—'}</td>
+        <td style="padding:8px; border-bottom:1px solid #e5e7eb">${r.local}</td>
+      </tr>
+    `;
+  }).join('');
+
+  // HTML dos dias por preencher
+  const tabelaPorPreencher = diasPorPreencher.length > 0 ? `
+    <div style="margin-bottom: 24px; padding: 16px; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
+      <h2 style="margin: 0 0 12px 0; font-size: 16px; color: #92400e;">
+        POR PREENCHER — ${diasPorPreencher.length} dias
+      </h2>
+      <p style="margin: 0 0 12px 0; font-size: 14px; color: #78350f; font-weight: 600;">
+        Dias por preencher
+      </p>
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="background: #fbbf24; color: #78350f;">
+            <th style="padding: 8px; text-align: left; font-weight: 600; font-size: 12px;">Data</th>
+            <th style="padding: 8px; text-align: left; font-weight: 600; font-size: 12px;">Dia da Semana</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${diasPorPreencher.map(r => `
+            <tr>
+              <td style="padding: 6px 8px; font-size: 12px; color: #78350f;">${fmt(r.data)}</td>
+              <td style="padding: 6px 8px; font-size: 12px; color: #78350f;">${r.dia}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  ` : '';
+
+  const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Resumo do Registo — ${worker || 'Colaborador'}</title>
+  <style>
+    body { 
+      font-family: system-ui, -apple-system, Arial, sans-serif; 
+      padding: 40px; 
+      color: #0f172a;
+      max-width: 900px;
+      margin: 0 auto;
+      background: #f8fafc;
+    }
+    .container {
+      background: white;
+      padding: 32px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    h1 { 
+      margin: 0 0 8px 0; 
+      font-size: 24px;
+      color: #0f172a;
+    }
+    .subtitle {
+      color: #64748b;
+      font-size: 16px;
+      margin-bottom: 24px;
+    }
+    .greeting {
+      font-size: 14px;
+      color: #64748b;
+      margin-bottom: 32px;
+    }
+    h2 {
+      font-size: 18px;
+      margin: 32px 0 16px 0;
+      color: #1e293b;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 8px;
+    }
+    table { 
+      width: 100%; 
+      border-collapse: collapse; 
+      margin-top: 16px;
+      font-size: 13px;
+    }
+    th { 
+      text-align: left; 
+      background: #f1f5f9;
+      padding: 10px 8px;
+      font-weight: 600;
+      color: #475569;
+      border-bottom: 2px solid #cbd5e1;
+    }
+    td {
+      padding: 8px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .stat-box {
+      padding: 16px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .legend {
+      margin-top: 24px;
+      padding: 12px 16px;
+      background: #fef3c7;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #78350f;
+      border-left: 4px solid #f59e0b;
+    }
+    @media print {
+      body { padding: 20px; background: white; }
+      .container { box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Resumo do Registo</h1>
+    <div class="subtitle">${fmt(start)} - ${fmt(end)}</div>
+    <div class="greeting">Olá <strong>${worker || '—'}</strong>,</div>
+
+    ${tabelaPorPreencher}
+
+    <h2>Detalhe diário</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Dia da Semana</th>
+          <th>Situação Atual</th>
+          <th style="text-align:right">Horas</th>
+          <th style="text-align:right">Extras</th>
+          <th>Local de Trabalho</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${detalheDiario}
+      </tbody>
+    </table>
+
+    <h2>Resumo Estatístico</h2>
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-label">Total de dias úteis</div>
+        <div class="stat-value">${uteis}</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Dias de fim de semana</div>
+        <div class="stat-value">${fds}</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Feriados</div>
+        <div class="stat-value">${feriados}</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Baixas</div>
+        <div class="stat-value">${baixas}</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Férias</div>
+        <div class="stat-value">${ferias}</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Dias por preencher (úteis)</div>
+        <div class="stat-value">${semReg}</div>
+      </div>
+      <div class="stat-box" style="grid-column: span 3;">
+        <div class="stat-label">Total de horas extra (somadas)</div>
+        <div class="stat-value">${totalExtras}h</div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <strong>Legenda:</strong> linhas a amarelo = dias úteis sem registo.
+    </div>
+  </div>
+</body>
+</html>`;
+
+  return html;
+}
+
 // (opcional) CSV — renomeada para não colidir
 function exportTimesheetCycleCSV(entries = []) {
   const { start, end } = getCycle(0);
@@ -539,15 +772,35 @@ const CycleCalendar = ({ timeEntries, onDayClick }) => {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <div className="font-medium dark:text-slate-100">
-          Ciclo: {start.toLocaleDateString('pt-PT')} – {end.toLocaleDateString('pt-PT')} · {dayTypes.size}/{wd} dias úteis
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => setOffset(o => o - 1)}><Icon name="chev-left" /></Button>
-          <Button variant="secondary" onClick={() => setOffset(0)}>Hoje</Button>
-          <Button variant="secondary" onClick={() => setOffset(o => o + 1)}><Icon name="chev-right" /></Button>
-        </div>
-      </div>
+  <div className="font-medium dark:text-slate-100">
+    Ciclo: {start.toLocaleDateString('pt-PT')} – {end.toLocaleDateString('pt-PT')} · {dayTypes.size}/{wd} dias úteis
+  </div>
+  <div className="flex gap-2">
+    {/* Botões de navegação existentes */}
+    <Button variant="secondary" onClick={() => setOffset(o => o - 1)}>
+      <Icon name="chev-left" />
+    </Button>
+    <Button variant="secondary" onClick={() => setOffset(0)}>Hoje</Button>
+    <Button variant="secondary" onClick={() => setOffset(o => o + 1)}>
+      <Icon name="chev-right" />
+    </Button>
+
+    {/* ✅ NOVO BOTÃO */}
+    <Button 
+      variant="secondary"
+      onClick={() => {
+        const html = generatePersonalTimesheetReport({
+          worker: auth?.name,
+          timeEntries: visibleTimeEntries,
+          cycle: { start, end }
+        });
+        openPrintWindow(html);
+      }}
+    >
+      <Icon name="download" /> Relatório
+    </Button>
+  </div>
+</div>
 
         {/* ✅ ADICIONA ESTA LINHA */}
     <CalendarLegend />
@@ -3826,6 +4079,20 @@ function TableMaterials() {
           <Button onClick={() => printTimesheetCycleReport(visibleTimeEntries)}>
   Exportar Relatório de Horas
 </Button>
+        {/* ✅ NOVO BOTÃO */}
+          <Button 
+            variant="secondary"
+            onClick={() => {
+              const html = generatePersonalTimesheetReport({
+                worker: auth?.name,
+                timeEntries: visibleTimeEntries,
+                cycle: getCycle(0)
+              });
+              openPrintWindow(html);
+            }}
+          >
+            <Icon name="download" /> Meu Relatório Pessoal
+          </Button>
         </div>
       </div>
     );
