@@ -143,6 +143,233 @@ function printOrderHTML(o, priceOf, codeOf){
     </tr>`;
   }).join('');
 
+function printTimesheetReportHTML({ worker, cycle, rows }) {
+  const fmt = iso => new Date(iso).toLocaleDateString('pt-PT');
+  const totalExtras = rows.reduce((s,r)=>s+(r.extras||0),0);
+
+  const uteis  = rows.filter(r=>!['Sábado','Domingo'].includes(r.dia)).length;
+  const fds    = rows.length - uteis;
+  const ferias = rows.filter(r=>r.situ==='Férias').length;
+  const baixas = rows.filter(r=>r.situ==='Baixa').length;
+  const semReg = rows.filter(r=>r.situ==='Sem Registo').length;
+
+  const trs = rows.map(r=>`
+    <tr>
+      <td>${fmt(r.data)}</td>
+      <td>${r.dia}</td>
+      <td>${r.situ}</td>
+      <td style="text-align:right">${r.horas||'—'}</td>
+      <td style="text-align:right">${r.extras||'—'}</td>
+      <td>${r.local}</td>
+    </tr>
+  `).join('');
+
+  return `<!doctype html><html><head><meta charset="utf-8"/>
+  <title>Resumo do Registo — ${worker||'Colaborador'}</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; padding: 24px; color:#0f172a }
+    h1 { margin:0 0 12px 0; font-size:20px }
+    .muted{color:#64748b}
+    table{ width:100%; border-collapse:collapse; margin-top:16px }
+    th,td{ padding:8px 10px; border-bottom:1px solid #e2e8f0; font-size:12px }
+    th{text-align:left; background:#f8fafc}
+    .box{ margin-top:16px; padding:12px; border:1px solid #e2e8f0; border-radius:10px }
+    .grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px }
+  </style></head><body>
+    <h1>Resumo do Registo: ${fmt(cycle.start)} - ${fmt(cycle.end)}</h1>
+    <div class="muted">Olá ${worker||'—'}, segue abaixo o resumo do seu registo das horas.</div>
+
+    <table>
+      <tr><th>Data</th><th>Dia da Semana</th><th>Situação Atual</th><th>Horas</th><th>Extras</th><th>Local de Trabalho</th></tr>
+      ${trs}
+    </table>
+
+    <div class="box grid">
+      <div><b>Total de dias úteis:</b> ${uteis}</div>
+      <div><b>Dias de fim de semana:</b> ${fds}</div>
+      <div><b>Feriados:</b> 0</div>
+      <div><b>Baixas:</b> ${baixas}</div>
+      <div><b>Férias:</b> ${ferias}</div>
+      <div><b>Dias sem registo:</b> ${semReg}</div>
+      <div><b>Total de horas extras:</b> ${totalExtras}h</div>
+    </div>
+  </body></html>`;
+}
+
+  // ---------------------------------------------------------------
+// 📊 CONSTRUIR LINHAS DO RELATÓRIO POR DIA
+// ---------------------------------------------------------------
+function buildTimesheetCycleRows({ worker, timeEntries, cycle }) {
+  const { start, end } = cycle;
+  const rows = [];
+  const dayName = d => d.toLocaleDateString('pt-PT', { weekday: 'long' });
+
+  const byDay = new Map();
+  for (const t of timeEntries) {
+    if (worker && t.worker && t.worker !== worker) continue;
+    
+    const dates = (t.template === 'Férias' || t.template === 'Baixa')
+      ? (() => {
+          const a = new Date(t.periodStart || t.date);
+          const b = new Date(t.periodEnd || t.date);
+          a.setHours(0, 0, 0, 0);
+          b.setHours(0, 0, 0, 0);
+          const out = [];
+          for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
+            out.push(d.toISOString().slice(0, 10));
+          }
+          return out;
+        })()
+      : [new Date(t.date).toISOString().slice(0, 10)];
+
+    for (const iso of dates) {
+      if (!byDay.has(iso)) byDay.set(iso, []);
+      byDay.get(iso).push(t);
+    }
+  }
+
+  const cur = new Date(start);
+  cur.setHours(0, 0, 0, 0);
+  const last = new Date(end);
+  last.setHours(0, 0, 0, 0);
+  
+  while (cur <= last) {
+    const iso = cur.toISOString().slice(0, 10);
+    const dow = cur.getDay();
+    const weekend = (dow === 0 || dow === 6);
+
+    let situ = weekend ? 'Fim de Semana' : 'Sem Registo';
+    let horas = 0, extras = 0, local = '—';
+
+    const reg = byDay.get(iso) || [];
+    if (reg.length) {
+      const t = reg[0];
+      if (t.template === 'Trabalho Normal') {
+        situ = 'Trabalho - Horário Normal';
+        horas = Number(t.hours || 0);
+        extras = Number(t.overtime || 0);
+        local = t.project || '—';
+      } else if (t.template === 'Férias') {
+        situ = 'Férias';
+      } else if (t.template === 'Baixa') {
+        situ = 'Baixa';
+      } else if (t.template === 'Falta') {
+        situ = 'Falta';
+      }
+    }
+
+    const diaFormatado = dayName(cur);
+    rows.push({
+      data: iso,
+      dia: diaFormatado.charAt(0).toUpperCase() + diaFormatado.slice(1),
+      situ,
+      horas,
+      extras,
+      local
+    });
+
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  return rows;
+}
+
+// ---------------------------------------------------------------
+// 📊 GERAR RELATÓRIO PESSOAL EM HTML
+// ---------------------------------------------------------------
+function generatePersonalTimesheetReport({ worker, timeEntries, cycle }) {
+  const { start, end } = cycle;
+  const rows = buildTimesheetCycleRows({ worker, timeEntries, cycle });
+
+  const fmt = iso => new Date(iso).toLocaleDateString('pt-PT');
+  
+  const totalExtras = rows.reduce((s, r) => s + (r.extras || 0), 0);
+  const uteis = rows.filter(r => !['Sábado', 'Domingo'].includes(r.dia)).length;
+  const fds = rows.filter(r => ['Sábado', 'Domingo'].includes(r.dia)).length;
+  const feriados = rows.filter(r => r.situ === 'Feriado').length;
+  const ferias = rows.filter(r => r.situ === 'Férias').length;
+  const baixas = rows.filter(r => r.situ === 'Baixa').length;
+  const semReg = rows.filter(r => r.situ === 'Sem Registo' && !['Sábado', 'Domingo'].includes(r.dia)).length;
+
+  const diasPorPreencher = rows.filter(r => 
+    r.situ === 'Sem Registo' && 
+    !['Sábado', 'Domingo'].includes(r.dia)
+  );
+
+  const detalheDiario = rows.map(r => {
+    const isUtilSemReg = r.situ === 'Sem Registo' && !['Sábado', 'Domingo'].includes(r.dia);
+    const bgColor = isUtilSemReg ? 'background: #fef3c7;' : '';
+    return `<tr style="${bgColor}">
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb">${fmt(r.data)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb">${r.dia}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb">${r.situ}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">${r.horas || '—'}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">${r.extras || '—'}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb">${r.local}</td>
+    </tr>`;
+  }).join('');
+
+  const tabelaPorPreencher = diasPorPreencher.length > 0 ? `
+    <div style="margin-bottom:24px;padding:16px;background:#fef3c7;border-radius:8px;border-left:4px solid #f59e0b">
+      <h2 style="margin:0 0 12px 0;font-size:16px;color:#92400e">POR PREENCHER — ${diasPorPreencher.length} dias</h2>
+      <p style="margin:0 0 12px 0;font-size:14px;color:#78350f;font-weight:600">Dias por preencher</p>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#fbbf24;color:#78350f">
+          <th style="padding:8px;text-align:left;font-weight:600;font-size:12px">Data</th>
+          <th style="padding:8px;text-align:left;font-weight:600;font-size:12px">Dia da Semana</th>
+        </tr></thead>
+        <tbody>${diasPorPreencher.map(r => `
+          <tr>
+            <td style="padding:6px 8px;font-size:12px;color:#78350f">${fmt(r.data)}</td>
+            <td style="padding:6px 8px;font-size:12px;color:#78350f">${r.dia}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : '';
+
+  return `<!doctype html>
+<html><head><meta charset="utf-8"/><title>Resumo do Registo</title>
+<style>
+body{font-family:system-ui,Arial;padding:40px;color:#0f172a;max-width:900px;margin:0 auto;background:#f8fafc}
+.container{background:#fff;padding:32px;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+h1{margin:0 0 8px 0;font-size:24px}
+.subtitle{color:#64748b;font-size:16px;margin-bottom:24px}
+.greeting{font-size:14px;color:#64748b;margin-bottom:32px}
+h2{font-size:18px;margin:32px 0 16px 0;color:#1e293b;border-bottom:2px solid #e2e8f0;padding-bottom:8px}
+table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}
+th{text-align:left;background:#f1f5f9;padding:10px 8px;font-weight:600;color:#475569;border-bottom:2px solid #cbd5e1}
+td{padding:8px;border-bottom:1px solid #e5e7eb}
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:24px}
+.stat-box{padding:16px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0}
+.stat-label{font-size:12px;color:#64748b;margin-bottom:4px}
+.stat-value{font-size:24px;font-weight:700;color:#0f172a}
+.legend{margin-top:24px;padding:12px 16px;background:#fef3c7;border-radius:8px;font-size:12px;color:#78350f;border-left:4px solid #f59e0b}
+@media print{body{padding:20px;background:#fff}.container{box-shadow:none}}
+</style></head><body><div class="container">
+<h1>Resumo do Registo</h1>
+<div class="subtitle">${fmt(start)} - ${fmt(end)}</div>
+<div class="greeting">Olá <strong>${worker || '—'}</strong>,</div>
+${tabelaPorPreencher}
+<h2>Detalhe diário</h2>
+<table><thead><tr>
+<th>Data</th><th>Dia da Semana</th><th>Situação Atual</th>
+<th style="text-align:right">Horas</th><th style="text-align:right">Extras</th>
+<th>Local de Trabalho</th>
+</tr></thead><tbody>${detalheDiario}</tbody></table>
+<h2>Resumo Estatístico</h2>
+<div class="stats-grid">
+<div class="stat-box"><div class="stat-label">Total de dias úteis</div><div class="stat-value">${uteis}</div></div>
+<div class="stat-box"><div class="stat-label">Dias de fim de semana</div><div class="stat-value">${fds}</div></div>
+<div class="stat-box"><div class="stat-label">Feriados</div><div class="stat-value">${feriados}</div></div>
+<div class="stat-box"><div class="stat-label">Baixas</div><div class="stat-value">${baixas}</div></div>
+<div class="stat-box"><div class="stat-label">Férias</div><div class="stat-value">${ferias}</div></div>
+<div class="stat-box"><div class="stat-label">Dias por preencher</div><div class="stat-value">${semReg}</div></div>
+<div class="stat-box" style="grid-column:span 3"><div class="stat-label">Total de horas extra</div><div class="stat-value">${totalExtras}h</div></div>
+</div>
+<div class="legend"><strong>Legenda:</strong> linhas a amarelo = dias úteis sem registo.</div>
+</div></body></html>`;
+}
+
 function openPrintWindow(html) {
   try {
     const w = window.open('', '_blank', 'noopener,noreferrer');
