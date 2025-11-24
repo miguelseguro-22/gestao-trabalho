@@ -1561,14 +1561,12 @@ const buildCatalogMaps = (catalog) => {
   };
 };
 
-const MaterialForm=({onSubmit,catalogMaps,projects})=>{
+const MaterialForm=({onSubmit,catalogMaps,projects,auth})=>{ // ⬅️ ADICIONA auth aqui
   const [project,setProject]=useState('');
-  const [requestedBy,setReqBy]=useState('');
   const [items,setItems]=useState([{name:'',qty:1}]);
   const [errors,setErrors]=useState({});
   const [openSuggestItem,setOpenSuggestItem]=useState(null);
   const [openSuggestProj,setOpenSuggestProj]=useState(false);
-  const [openSuggestReq,setOpenSuggestReq]=useState(false);
 
   const addRow=()=>setItems(a=>[...a,{name:'',qty:1}]);
   const updateRow=(i,k,v)=>setItems(a=>a.map((r,idx)=>idx===i?{...r,[k]:v}:r));
@@ -1612,10 +1610,6 @@ const MaterialForm=({onSubmit,catalogMaps,projects})=>{
     }
     return out;
   };
-  const suggestRequesters=(q)=>{
-    const s=normText(q);
-    return REQUESTER_SUGGESTIONS.filter(n=>normText(n).startsWith(s)).slice(0,8);
-  };
 
   const onTypeItem = (i, raw) => {
     updateRow(i, 'name', raw);
@@ -1625,10 +1619,16 @@ const MaterialForm=({onSubmit,catalogMaps,projects})=>{
     const e={};
     const valid=items.map(r=>({name:cleanDesignation(r.name),qty:Number(r.qty||0)})).filter(r=>r.name&&r.qty>0);
     if(!project.trim())e.project='Obra/Projeto é obrigatório.';
-    if(!requestedBy.trim())e.requestedBy='Requisitante é obrigatório.';
     if(valid.length===0)e.items='Adiciona pelo menos um item.';
-    setErrors(e); if(Object.keys(e).length) return;
-    onSubmit({ project:project.trim(), requestedBy:requestedBy.trim(), items:valid });
+    setErrors(e); 
+    if(Object.keys(e).length) return;
+    
+    // ✅ Preenche automaticamente com o utilizador logado
+    onSubmit({ 
+      project: project.trim(), 
+      requestedBy: auth?.name || 'Desconhecido', // ⬅️ PREENCHE AUTOMATICAMENTE
+      items: valid 
+    });
   };
 
   return(
@@ -1684,6 +1684,7 @@ const MaterialForm=({onSubmit,catalogMaps,projects})=>{
           {errors.items&&<div className="text-xs text-rose-600 mt-1">{errors.items}</div>}
         </div>
 
+        {/* ✅ APENAS O CAMPO OBRA/PROJETO */}
         <div className="space-y-3">
           <label className="text-sm">Obra/Projeto
             <input
@@ -1707,31 +1708,16 @@ const MaterialForm=({onSubmit,catalogMaps,projects})=>{
                 ))}
               </div>
             )}
+            {errors.project && <div className="text-xs text-rose-600 mt-1">{errors.project}</div>}
           </label>
 
-          <label className="text-sm">Requisitante
-            <input
-              className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.requestedBy?'border-rose-400':''}`}
-              placeholder="Nome do encarregado"
-              value={requestedBy}
-              onFocus={()=>setOpenSuggestReq(true)}
-              onBlur={()=>setTimeout(()=>setOpenSuggestReq(false),100)}
-              onChange={e=>setReqBy(e.target.value)}
-            />
-            {openSuggestReq&&(
-              <div className="mt-1 rounded-xl border bg-white dark:bg-slate-900 dark:border-slate-700 shadow max-h-44 overflow-auto">
-                {suggestRequesters(requestedBy).map(n=>(
-                  <button
-                    key={n}
-                    className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
-                    onMouseDown={(e)=>{e.preventDefault();setReqBy(n);}}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            )}
-          </label>
+          {/* ✅ MOSTRA QUEM ESTÁ A PEDIR (READ-ONLY) */}
+          <div className="text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border dark:border-slate-700">
+            <div className="text-xs mb-1">Requisitante:</div>
+            <div className="font-medium text-slate-700 dark:text-slate-200">
+              {auth?.name || 'Desconhecido'}
+            </div>
+          </div>
         </div>
       </div>
       <div className="pt-2 flex justify-end"><Button onClick={submit}>Submeter Pedido</Button></div>
@@ -4397,7 +4383,7 @@ function TableMaterials() {
 
 
       <Modal open={modal?.name==='add-order'} title="Pedido de Material" onClose={()=>setModal(null)} wide>
-        <MaterialForm onSubmit={(payload)=>{addOrder(payload);setModal(null)}} catalogMaps={catalogMaps} projects={projects}/>
+        <MaterialForm onSubmit={(payload)=>{addOrder(payload);setModal(null)}} catalogMaps={catalogMaps} projects={projects}auth={auth} // ⬅️ ADICIONA ISTO!/>
       </Modal>
 
       <Modal open={modal?.name==='day-details'} title="Dia no calendário" onClose={()=>setModal(null)}>
