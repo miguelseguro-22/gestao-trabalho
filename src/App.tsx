@@ -2209,7 +2209,8 @@ const TimesheetTemplateForm = ({
   initial,
   peopleNames = [],
   projectNames = [],
-  supervisorNames = []
+  supervisorNames = [],
+  auth
 }) => {
   const isEdit = Boolean(initial?.id);
   const [step, setStep] = useState(initial?.template ? 2 : 1);
@@ -2254,12 +2255,24 @@ const TimesheetTemplateForm = ({
 
   const submit = () => {
     const adjusted = { ...form };
-    if (template !== 'Trabalho Normal') { adjusted.hours = 0; adjusted.overtime = 0; }
+    
+    // ✅ Preencher worker automaticamente se não estiver preenchido
+    if (!adjusted.worker && auth?.name) {
+      adjusted.worker = auth.name;
+    }
+    
+    if (template !== 'Trabalho Normal') { 
+      adjusted.hours = 0; 
+      adjusted.overtime = 0; 
+    }
+    
     const payload = { ...adjusted, template };
     const e = validate(payload);
     setErrors(e);
     if (Object.keys(e).length === 0) onSubmit(payload);
   };
+
+  // ... resto do return continua igual
 
   return (
     <div className="space-y-4">
@@ -2839,14 +2852,27 @@ useEffect(() => {
   // -------------------------------------------------------------
   // 🔍 MEMOS E DERIVADOS
   // -------------------------------------------------------------
-  const visibleTimeEntries = useMemo(() => {
-    if (auth?.role === "tecnico" || auth?.role === "encarregado") {
-      return (timeEntries || []).filter(
-        (t) => t.worker === auth?.name || t.supervisor === auth?.name
-      );
-    }
+  // ✅ DEPOIS
+// ---------------------------------------------------------------
+// 🔍 FILTRO DE VISIBILIDADE DE TIMESHEETS
+// ---------------------------------------------------------------
+const visibleTimeEntries = useMemo(() => {
+  // Admin, Diretor e Logística veem TUDO
+  if (auth?.role === "admin" || auth?.role === "diretor" || auth?.role === "logistica") {
     return timeEntries;
-  }, [auth?.role, auth?.name, timeEntries]);
+  }
+  
+  // Técnico e Encarregado veem APENAS os seus próprios registos
+  if (auth?.role === "tecnico" || auth?.role === "encarregado") {
+    return (timeEntries || []).filter((t) => {
+      // Registos onde o user é o worker
+      return t.worker === auth?.name;
+    });
+  }
+  
+  // Fallback seguro (não deve acontecer)
+  return [];
+}, [auth?.role, auth?.name, timeEntries]);
 
   const visibleOrders = useMemo(() => {
     if (auth?.role === "logistica" || auth?.role === "admin") {
@@ -3504,15 +3530,25 @@ function TableMaterials() {
       </Modal>
 
       {/* Modais */}
-      <Modal open={modal?.name==='add-time'} title="Registar Tempo" onClose={()=>setModal(null)} wide>
-        <TimesheetTemplateForm
-          initial={modal?.initial}
-          peopleNames={peopleNames}
-          projectNames={projectNames}
-          supervisorNames={supervisorNames}
-          onSubmit={data => { data.id ? updateTimeEntry(data) : addTimeEntry(data); setModal(null); }}
-        />
-      </Modal>
+      // ✅ DEPOIS
+<Modal 
+  open={modal?.name === "add-time"} 
+  title="Registar Tempo" 
+  onClose={() => setModal(null)} 
+  wide
+>
+  <TimesheetTemplateForm
+    initial={modal?.initial}
+    peopleNames={peopleNames}
+    projectNames={projectNames}
+    supervisorNames={supervisorNames}
+    auth={auth} // ⬅️ ADICIONA ISTO!
+    onSubmit={(data) => {
+      data.id ? updateTimeEntry(data) : addTimeEntry(data);
+      setModal(null);
+    }}
+  />
+</Modal>
 
       {/* Escolha rápida: registar horas / agendar (apenas hoje+futuro) */}
 <Modal open={modal?.name==='day-actions'} title={`Ações — ${fmtDate(modal?.dateISO||todayISO())}`} onClose={()=>setModal(null)}>
