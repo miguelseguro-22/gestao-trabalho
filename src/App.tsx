@@ -2277,13 +2277,10 @@ if (!byWorker.has(worker)) {
           }
         }
       } else if (entry.template === 'Falta') {
-  absenceDays++;
-  } else if (entry.template === 'Falta') {
-  data.absences++;
-  // Contar horas de falta
-  const horasFalta = Number(entry.hours) || 8; // Default: dia completo
-  data.totalAbsenceHours = (data.totalAbsenceHours || 0) + horasFalta;
-}
+        data.absences++;
+        const horasFalta = Number(entry.hours) || 8;
+        data.totalAbsenceHours = (data.totalAbsenceHours || 0) + horasFalta;
+      }
     });
 
     // Converter para array e calcular presença
@@ -2579,6 +2576,7 @@ const ProfileView = ({ timeEntries, auth, people }) => {
 
   // Calcular estatísticas
 // Calcular estatísticas
+  // Calcular estatísticas
   const stats = useMemo(() => {
     let totalHours = 0;
     let totalOvertime = 0;
@@ -2588,7 +2586,6 @@ const ProfileView = ({ timeEntries, auth, people }) => {
     let absenceDays = 0;
     const projectHours = new Map();
     
-    // ⬇️ ARRAYS PARA GUARDAR ENTRADAS
     const holidayEntries = [];
     const sickEntries = [];
     const absenceEntries = [];
@@ -2599,7 +2596,6 @@ const ProfileView = ({ timeEntries, auth, people }) => {
         totalOvertime += Number(entry.overtime) || 0;
         daysWorked.add(entry.date);
 
-        // Agrupar por projeto
         const project = entry.project || 'Sem projeto';
         const hours = (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
         projectHours.set(project, (projectHours.get(project) || 0) + hours);
@@ -2654,7 +2650,6 @@ const ProfileView = ({ timeEntries, auth, people }) => {
       }
     });
 
-    // Converter projectHours para array e ordenar
     const projectsArray = Array.from(projectHours.entries())
       .map(([name, hours]) => ({ name, hours }))
       .sort((a, b) => b.hours - a.hours)
@@ -2965,7 +2960,7 @@ const ProfileView = ({ timeEntries, auth, people }) => {
             </tbody>
           </table>
         </div>
-      </Card
+      </Card>
 
       {/* Modal de Detalhes */}
       {detailModal && (
