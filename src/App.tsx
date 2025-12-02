@@ -2674,10 +2674,10 @@ const ProfileView = ({ timeEntries, auth, people }) => {
         </Card>
 
         <Card className="p-5 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
-          <div className="text-sm opacity-90">Horas Totais</div>
-          <div className="text-4xl font-bold mt-2">{stats.totalHours}h</div>
-          <div className="text-sm opacity-80 mt-1">+{stats.totalOvertime}h extra</div>
-        </Card>
+  <div className="text-sm opacity-90">Horas Totais</div>
+  <div className="text-4xl font-bold mt-2">{stats.totalHours}h</div>
+  <div className="text-sm opacity-80 mt-1">horas trabalhadas</div>
+</Card>
 
         <Card className="p-5 bg-gradient-to-br from-violet-500 to-violet-600 text-white">
           <div className="text-sm opacity-90">Férias Gozadas</div>
