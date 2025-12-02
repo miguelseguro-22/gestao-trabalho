@@ -4042,6 +4042,20 @@ function TimesheetsView() {
         title="Timesheets"
         subtitle={`${visibleTimeEntries.length} registos`}
         actions={
+        <Button
+        variant="secondary"
+        onClick={() => {
+          console.log('🔍 DEBUG:', {
+            auth,
+            totalEntries: timeEntries.length,
+            visibleEntries: visibleTimeEntries.length,
+            allWorkers: [...new Set(timeEntries.map(t => t.worker))],
+            allSupervisors: [...new Set(timeEntries.map(t => t.supervisor))],
+          });
+        }}
+      >
+        Debug
+      </Button>
           <Button onClick={() => setModal({ name: "add-time" })}>
             <Icon name="plus" /> Novo Registo
           </Button>
