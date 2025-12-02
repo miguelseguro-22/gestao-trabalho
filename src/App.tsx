@@ -2179,6 +2179,337 @@ const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
 };
 
 
+// ============================================================
+// 📊 RELATÓRIO MENSAL DE COLABORADORES (ADMIN)
+// ============================================================
+const MonthlyReportView = ({ timeEntries, people }) => {
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [selectedWorker, setSelectedWorker] = useState(null);
+
+  // Calcular estatísticas por colaborador
+  const stats = useMemo(() => {
+    const [year, month] = selectedMonth.split('-').map(Number);
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+    endDate.setHours(23, 59, 59, 999);
+
+    // Contar dias úteis do mês
+    const workDays = countWeekdaysInclusive(startDate, endDate);
+
+    // Filtrar entradas do mês
+    const entriesInMonth = timeEntries.filter((t) => {
+      if (t.template === 'Férias' || t.template === 'Baixa') {
+        const start = new Date(t.periodStart || t.date);
+        const end = new Date(t.periodEnd || t.date);
+        return !(end < startDate || start > endDate);
+      }
+      const d = new Date(t.date);
+      return d >= startDate && d <= endDate;
+    });
+
+    // Agrupar por colaborador
+    const byWorker = new Map();
+
+    entriesInMonth.forEach((entry) => {
+      const worker = entry.worker || entry.supervisor || 'Desconhecido';
+      if (!byWorker.has(worker)) {
+        byWorker.set(worker, {
+          name: worker,
+          daysWorked: new Set(),
+          totalHours: 0,
+          totalOvertime: 0,
+          totalOvertimeWeekend: 0,
+          holidays: 0,
+          sickLeave: 0,
+          absences: 0,
+          entries: [],
+        });
+      }
+
+      const data = byWorker.get(worker);
+      data.entries.push(entry);
+
+      if (entry.template === 'Trabalho Normal') {
+        data.daysWorked.add(entry.date);
+        data.totalHours += Number(entry.hours) || 0;
+        data.totalOvertime += Number(entry.overtime) || 0;
+
+        // Verificar se é fim de semana
+        const date = new Date(entry.date);
+        const dayOfWeek = date.getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
+          data.totalOvertimeWeekend += (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
+        }
+      } else if (entry.template === 'Férias') {
+        const start = new Date(entry.periodStart || entry.date);
+        const end = new Date(entry.periodEnd || entry.date);
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          if (d >= startDate && d <= endDate) {
+            const dow = d.getDay();
+            if (dow !== 0 && dow !== 6) data.holidays++;
+          }
+        }
+      } else if (entry.template === 'Baixa') {
+        const start = new Date(entry.periodStart || entry.date);
+        const end = new Date(entry.periodEnd || entry.date);
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          if (d >= startDate && d <= endDate) {
+            const dow = d.getDay();
+            if (dow !== 0 && dow !== 6) data.sickLeave++;
+          }
+        }
+      } else if (entry.template === 'Falta') {
+        data.absences++;
+      }
+    });
+
+    // Converter para array e calcular presença
+    return Array.from(byWorker.values())
+      .map((worker) => {
+        const daysWorked = worker.daysWorked.size;
+        const presence = workDays > 0 ? Math.round((daysWorked / workDays) * 100) : 0;
+
+        return {
+          ...worker,
+          workDays,
+          daysWorked,
+          presence: `${presence}%`,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [timeEntries, selectedMonth]);
+
+  // Detalhe do colaborador selecionado
+  const workerDetail = useMemo(() => {
+    if (!selectedWorker) return null;
+    return stats.find((s) => s.name === selectedWorker);
+  }, [selectedWorker, stats]);
+
+  // Exportar CSV
+  const exportCSV = () => {
+    const headers = [
+      'Colaborador',
+      'Dias Úteis',
+      'Dias Trabalhados',
+      'Faltas',
+      'Férias',
+      'Baixa',
+      'Horas Extra (h)',
+      'FDS (h)',
+      'Presença',
+    ];
+
+    const rows = stats.map((s) => [
+      s.name,
+      s.workDays,
+      s.daysWorked,
+      s.absences || 0,
+      s.holidays || 0,
+      s.sickLeave || 0,
+      s.totalOvertime || 0,
+      s.totalOvertimeWeekend || 0,
+      s.presence,
+    ]);
+
+    const csv = toCSV(headers, rows);
+    download(`relatorio_mensal_${selectedMonth}.csv`, csv);
+  };
+
+  return (
+    <section className="space-y-4">
+      <PageHeader
+        icon="calendar"
+        title="Relatório Mensal de Colaboradores"
+        subtitle="Visão detalhada de presença e horas trabalhadas"
+        actions={
+          <div className="flex gap-2">
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="rounded-xl border p-2 text-sm dark:bg-slate-900 dark:border-slate-700"
+            />
+            <Button variant="secondary" onClick={exportCSV}>
+              <Icon name="download" /> Exportar CSV
+            </Button>
+          </div>
+        }
+      />
+
+      {/* Tabela Principal */}
+      <Card className="p-4">
+        <div className="overflow-auto rounded-xl border dark:border-slate-800">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-900/50">
+              <tr>
+                <th className="px-3 py-2 text-left">Colaborador</th>
+                <th className="px-3 py-2 text-center">Dias Úteis</th>
+                <th className="px-3 py-2 text-center">Dias trabalhados</th>
+                <th className="px-3 py-2 text-center">Faltas</th>
+                <th className="px-3 py-2 text-center">Férias</th>
+                <th className="px-3 py-2 text-center">Baixa</th>
+                <th className="px-3 py-2 text-center">Horas Extra (h)</th>
+                <th className="px-3 py-2 text-center">FDS (h)</th>
+                <th className="px-3 py-2 text-center">Feriado (h)</th>
+                <th className="px-3 py-2 text-center">Horas deslocadas (h)</th>
+                <th className="px-3 py-2 text-center">Presença</th>
+                <th className="px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.length === 0 && (
+                <tr>
+                  <td colSpan="12" className="px-3 py-8 text-center text-slate-500">
+                    Sem registos para este mês
+                  </td>
+                </tr>
+              )}
+
+              {stats.map((worker) => (
+                <tr
+                  key={worker.name}
+                  className="border-t dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                >
+                  <td className="px-3 py-2 font-medium">{worker.name}</td>
+                  <td className="px-3 py-2 text-center">{worker.workDays}</td>
+                  <td className="px-3 py-2 text-center">{worker.daysWorked}</td>
+                  <td className="px-3 py-2 text-center">{worker.absences || '—'}</td>
+                  <td className="px-3 py-2 text-center">{worker.holidays || '—'}</td>
+                  <td className="px-3 py-2 text-center">{worker.sickLeave || '—'}</td>
+                  <td className="px-3 py-2 text-center">{worker.totalOvertime || '—'}</td>
+                  <td className="px-3 py-2 text-center">{worker.totalOvertimeWeekend || '—'}</td>
+                  <td className="px-3 py-2 text-center">—</td>
+                  <td className="px-3 py-2 text-center">—</td>
+                  <td className="px-3 py-2 text-center">
+                    <Badge
+                      tone={
+                        parseInt(worker.presence) >= 95
+                          ? 'emerald'
+                          : parseInt(worker.presence) >= 80
+                          ? 'amber'
+                          : 'rose'
+                      }
+                    >
+                      {worker.presence}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <Button variant="secondary" size="sm" onClick={() => setSelectedWorker(worker.name)}>
+                      Ver Detalhes
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Modal de Detalhe do Colaborador */}
+      <Modal
+        open={!!selectedWorker}
+        title={`Registos de ${selectedWorker} — ${new Date(selectedMonth + '-01').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' })}`}
+        onClose={() => setSelectedWorker(null)}
+        wide
+      >
+        {workerDetail && (
+          <div className="space-y-4">
+            {/* Resumo */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="rounded-xl border p-3 dark:border-slate-800">
+                <div className="text-xs text-slate-500">Dias Trabalhados</div>
+                <div className="text-2xl font-semibold mt-1">{workerDetail.daysWorked}</div>
+              </div>
+              <div className="rounded-xl border p-3 dark:border-slate-800">
+                <div className="text-xs text-slate-500">Horas Totais</div>
+                <div className="text-2xl font-semibold mt-1">{workerDetail.totalHours}h</div>
+              </div>
+              <div className="rounded-xl border p-3 dark:border-slate-800">
+                <div className="text-xs text-slate-500">Horas Extra</div>
+                <div className="text-2xl font-semibold mt-1">{workerDetail.totalOvertime}h</div>
+              </div>
+              <div className="rounded-xl border p-3 dark:border-slate-800">
+                <div className="text-xs text-slate-500">Presença</div>
+                <div className="text-2xl font-semibold mt-1">{workerDetail.presence}</div>
+              </div>
+            </div>
+
+            {/* Tabela de Registos */}
+            <div className="overflow-auto rounded-xl border dark:border-slate-800">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-900/50">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Data</th>
+                    <th className="px-3 py-2 text-left">Tipo</th>
+                    <th className="px-3 py-2 text-left">Projeto</th>
+                    <th className="px-3 py-2 text-right">Horas</th>
+                    <th className="px-3 py-2 text-right">Extra</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workerDetail.entries
+                    .sort((a, b) => (b.date || b.periodStart || '').localeCompare(a.date || a.periodStart || ''))
+                    .map((entry) => (
+                      <tr key={entry.id} className="border-t dark:border-slate-800">
+                        <td className="px-3 py-2">
+                          {entry.template === 'Trabalho Normal' || entry.template === 'Falta'
+                            ? fmtDate(entry.date)
+                            : `${fmtDate(entry.periodStart)} → ${fmtDate(entry.periodEnd)}`}
+                        </td>
+                        <td className="px-3 py-2">
+                          <Badge
+                            tone={
+                              entry.template === 'Trabalho Normal'
+                                ? 'emerald'
+                                : entry.template === 'Férias'
+                                ? 'blue'
+                                : entry.template === 'Baixa'
+                                ? 'rose'
+                                : 'amber'
+                            }
+                          >
+                            {entry.template}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2">{entry.project || '—'}</td>
+                        <td className="px-3 py-2 text-right">{entry.hours || '—'}</td>
+                        <td className="px-3 py-2 text-right">{entry.overtime || '—'}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Botão de Exportar */}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const [year, month] = selectedMonth.split('-').map(Number);
+                  const html = generatePersonalTimesheetReport({
+                    worker: selectedWorker,
+                    timeEntries: workerDetail.entries,
+                    cycle: {
+                      start: new Date(year, month - 1, 1),
+                      end: new Date(year, month, 0),
+                    },
+                  });
+                  openPrintWindow(html);
+                }}
+              >
+                <Icon name="download" /> Exportar Relatório PDF
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </section>
+  );
+};
+
 /* ---------- Relatório de Obra ---------- */
 const ProjectReportView = ({
   project, orders, timeEntries, catalogMaps, projects,
@@ -2774,10 +3105,10 @@ const CAN = {
 // ---------------------------------------------------------------
 // 🔐 FUNÇÃO AUXILIAR: VIEW PADRÃO POR ROLE
 // ---------------------------------------------------------------
-function defaultViewForRole(role: string): keyof typeof CAN | "timesheets" | "obra-report" {
+function defaultViewForRole(role: string): string {
   switch (role) {
     case "admin":
-      return "dashboard";
+      return "monthly-report"; // ⬅️ ADMIN VÊ RELATÓRIO POR DEFEITO
     case "tecnico":
     case "encarregado":
       return "timesheets";
@@ -3921,6 +4252,18 @@ function TableMaterials() {
                 setView={setView}
               />
             )}
+            {can("dashboard") && (
+  <NavItem id="dashboard" icon="activity" label="Dashboard" setView={setView} />
+)}
+
+{/* ⬇️ ADICIONA ISTO ⬇️ */}
+{auth?.role === "admin" && (
+  <NavItem id="monthly-report" icon="calendar" label="Relatório Mensal" setView={setView} />
+)}
+
+{can("timesheets") && (
+  <NavItem id="timesheets" icon="clock" label="Timesheets" setView={setView} />
+)}
             {can("timesheets") && (
               <NavItem
                 id="timesheets"
@@ -4071,6 +4414,10 @@ function TableMaterials() {
 
           {/* ROUTER INTERNO */}
           {view === "dashboard" && <DashboardView />}
+          {/* ROUTER INTERNO */}
+{view === "monthly-report" && auth?.role === "admin" && (
+  <MonthlyReportView timeEntries={timeEntries} people={people} />
+)}
           {view === "timesheets" && <TimesheetsView />}
           {view === "materials" && <TableMaterials />}
           {view === "logistics" && (
