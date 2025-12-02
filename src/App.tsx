@@ -2277,7 +2277,13 @@ if (!byWorker.has(worker)) {
           }
         }
       } else if (entry.template === 'Falta') {
-  data.absences++;
+  absenceDays++;
+  // ⬇️ GUARDA A ENTRADA
+  absenceEntries.push({
+    date: entry.date,
+    notes: entry.notes || '',
+  });
+}
   // Contar horas de falta
   const horasFalta = Number(entry.hours) || 8; // Default: dia completo
   data.totalAbsenceHours = (data.totalAbsenceHours || 0) + horasFalta;
@@ -2566,7 +2572,7 @@ if (!byWorker.has(worker)) {
 // ============================================================
 const ProfileView = ({ timeEntries, auth, people }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-
+  const [detailModal, setDetailModal] = useState(null); // ⬅️ ADICIONA ISTO
   // Filtrar registos do ano do colaborador
   const myEntries = useMemo(() => {
     return timeEntries.filter((t) => {
@@ -2596,22 +2602,43 @@ const ProfileView = ({ timeEntries, auth, people }) => {
         const hours = (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
         projectHours.set(project, (projectHours.get(project) || 0) + hours);
       } else if (entry.template === 'Férias') {
-        const start = new Date(entry.periodStart || entry.date);
-        const end = new Date(entry.periodEnd || entry.date);
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dow = d.getDay();
-          if (dow !== 0 && dow !== 6) holidayDays++;
-        }
+  const start = new Date(entry.periodStart || entry.date);
+  const end = new Date(entry.periodEnd || entry.date);
+  let days = 0;
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) {
+      holidayDays++;
+      days++;
+    }
+  }
+  // ⬇️ GUARDA A ENTRADA
+  holidayEntries.push({
+    start: entry.periodStart || entry.date,
+    end: entry.periodEnd || entry.date,
+    days,
+    notes: entry.notes || '',
+  });
+}
       } else if (entry.template === 'Baixa') {
-        const start = new Date(entry.periodStart || entry.date);
-        const end = new Date(entry.periodEnd || entry.date);
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dow = d.getDay();
-          if (dow !== 0 && dow !== 6) sickDays++;
-        }
-      } else if (entry.template === 'Falta') {
-        absenceDays++;
-      }
+  const start = new Date(entry.periodStart || entry.date);
+  const end = new Date(entry.periodEnd || entry.date);
+  let days = 0;
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) {
+      sickDays++;
+      days++;
+    }
+  }
+  // ⬇️ GUARDA A ENTRADA
+  sickEntries.push({
+    start: entry.periodStart || entry.date,
+    end: entry.periodEnd || entry.date,
+    days,
+    notes: entry.notes || '',
+  });
+}
     });
 
     // Converter projectHours para array e ordenar
@@ -2621,14 +2648,18 @@ const ProfileView = ({ timeEntries, auth, people }) => {
       .slice(0, 5); // Top 5 projetos
 
     return {
-      totalHours,
-      totalOvertime,
-      daysWorked: daysWorked.size,
-      holidayDays,
-      sickDays,
-      absenceDays,
-      projects: projectsArray,
-    };
+  totalHours,
+  totalOvertime,
+  daysWorked: daysWorked.size,
+  holidayDays,
+  sickDays,
+  absenceDays,
+  projects: projectsArray,
+  // ⬇️ ADICIONA ESTES
+  holidayEntries,
+  sickEntries,
+  absenceEntries,
+};
   }, [myEntries]);
 
   // Cores para o gráfico (paleta moderna)
@@ -2819,27 +2850,53 @@ const ProfileView = ({ timeEntries, auth, people }) => {
                 </div>
               </div>
 
-              <div className="rounded-xl border p-4 dark:border-slate-800">
-                <div className="text-xs text-slate-500">Dias Disponíveis</div>
-                <div className="text-2xl font-bold text-emerald-600 mt-1">
-                  {Math.max(22 - stats.holidayDays, 0)}
-                </div>
-              </div>
+              <div className="grid grid-cols-2 gap-3 mt-6">
+  {/* Férias - CLICÁVEL */}
+  <button
+    onClick={() => setDetailModal({ type: 'Férias', entries: stats.holidayEntries })}
+    className="rounded-xl border p-4 dark:border-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors text-left"
+  >
+    <div className="text-xs text-slate-500">Férias Gozadas</div>
+    <div className="text-2xl font-bold text-blue-600 mt-1">
+      {stats.holidayDays}
+    </div>
+    <div className="text-xs text-blue-600 mt-1">👁️ Ver detalhes</div>
+  </button>
 
-              <div className="rounded-xl border p-4 dark:border-slate-800">
-                <div className="text-xs text-slate-500">Baixas</div>
-                <div className="text-2xl font-bold text-rose-600 mt-1">
-                  {stats.sickDays}
-                </div>
-              </div>
+  {/* Dias Disponíveis */}
+  <div className="rounded-xl border p-4 dark:border-slate-800">
+    <div className="text-xs text-slate-500">Dias Disponíveis</div>
+    <div className="text-2xl font-bold text-emerald-600 mt-1">
+      {Math.max(22 - stats.holidayDays, 0)}
+    </div>
+  </div>
 
-              <div className="rounded-xl border p-4 dark:border-slate-800">
-                <div className="text-xs text-slate-500">Faltas</div>
-                <div className="text-2xl font-bold text-amber-600 mt-1">
-                  {stats.absenceDays}
-                </div>
-              </div>
-            </div>
+  {/* Baixas - CLICÁVEL */}
+  <button
+    onClick={() => setDetailModal({ type: 'Baixa', entries: stats.sickEntries })}
+    className="rounded-xl border p-4 dark:border-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/10 transition-colors text-left"
+  >
+    <div className="text-xs text-slate-500">Baixas</div>
+    <div className="text-2xl font-bold text-rose-600 mt-1">
+      {stats.sickDays}
+    </div>
+    <div className="text-xs text-rose-600 mt-1">👁️ Ver detalhes</div>
+  </button>
+
+  {/* Faltas - CLICÁVEL */}
+  <button
+    onClick={() => setDetailModal({ type: 'Falta', entries: stats.absenceEntries })}
+    className="rounded-xl border p-4 dark:border-slate-800 hover:bg-amber-50 dark:hover:bg-amber-900/10 transition-colors text-left"
+  >
+    <div className="text-xs text-slate-500">Faltas</div>
+    <div className="text-2xl font-bold text-amber-600 mt-1">
+      {stats.absenceDays}
+    </div>
+    <div className="text-xs text-amber-600 mt-1">👁️ Ver detalhes</div>
+  </button>
+</div>
+
+              
 
             {/* Alertas */}
             {stats.holidayDays < 5 && (
@@ -2909,7 +2966,76 @@ const ProfileView = ({ timeEntries, auth, people }) => {
             </tbody>
           </table>
         </div>
-      </Card>
+      </Card
+
+      {/* Modal de Detalhes */}
+      {detailModal && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setDetailModal(null)}
+        >
+          <Card 
+            className="max-w-2xl w-full max-h-[80vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold">
+                  Detalhes: {detailModal.type} em {selectedYear}
+                </h3>
+                <button
+                  onClick={() => setDetailModal(null)}
+                  className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                >
+                  <Icon name="x" />
+                </button>
+              </div>
+
+              {detailModal.entries.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  Sem registos de {detailModal.type.toLowerCase()} em {selectedYear}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {detailModal.type === 'Falta' ? (
+                    // FALTAS (uma linha por dia)
+                    detailModal.entries.map((entry, i) => (
+                      <div key={i} className="rounded-lg border p-4 dark:border-slate-800">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-semibold">{fmtDate(entry.date)}</div>
+                            {entry.notes && (
+                              <div className="text-sm text-slate-500 mt-1">{entry.notes}</div>
+                            )}
+                          </div>
+                          <Badge tone="amber">1 dia</Badge>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    // FÉRIAS E BAIXAS (períodos)
+                    detailModal.entries.map((entry, i) => (
+                      <div key={i} className="rounded-lg border p-4 dark:border-slate-800">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-semibold">
+                            {fmtDate(entry.start)} → {fmtDate(entry.end)}
+                          </div>
+                          <Badge tone={detailModal.type === 'Férias' ? 'blue' : 'rose'}>
+                            {entry.days} {entry.days === 1 ? 'dia' : 'dias'}
+                          </Badge>
+                        </div>
+                        {entry.notes && (
+                          <div className="text-sm text-slate-500">{entry.notes}</div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
     </section>
   );
 };
