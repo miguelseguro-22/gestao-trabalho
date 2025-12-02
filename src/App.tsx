@@ -2214,20 +2214,34 @@ const MonthlyReportView = ({ timeEntries, people }) => {
     const byWorker = new Map();
 
     entriesInMonth.forEach((entry) => {
-      const worker = entry.worker || entry.supervisor || 'Desconhecido';
-      if (!byWorker.has(worker)) {
-        byWorker.set(worker, {
-          name: worker,
-          daysWorked: new Set(),
-          totalHours: 0,
-          totalOvertime: 0,
-          totalOvertimeWeekend: 0,
-          holidays: 0,
-          sickLeave: 0,
-          absences: 0,
-          entries: [],
-        });
-      }
+      // ⬇️ VALIDAÇÕES MÚLTIPLAS PARA ENCONTRAR O COLABORADOR
+const worker = 
+  entry.worker || 
+  entry.supervisor || 
+  'Desconhecido';
+
+// Debug: logar registos sem worker
+if (!entry.worker && !entry.supervisor) {
+  console.warn('⚠️ Registo sem worker/supervisor:', {
+    id: entry.id,
+    date: entry.date,
+    template: entry.template,
+  });
+}
+
+if (!byWorker.has(worker)) {
+  byWorker.set(worker, {
+    name: worker,
+    daysWorked: new Set(),
+    totalHours: 0,
+    totalOvertime: 0,
+    totalOvertimeWeekend: 0,
+    holidays: 0,
+    sickLeave: 0,
+    absences: 0,
+    entries: [],
+  });
+}
 
       const data = byWorker.get(worker);
       data.entries.push(entry);
@@ -2321,23 +2335,43 @@ const MonthlyReportView = ({ timeEntries, people }) => {
   return (
     <section className="space-y-4">
       <PageHeader
-        icon="calendar"
-        title="Relatório Mensal de Colaboradores"
-        subtitle="Visão detalhada de presença e horas trabalhadas"
-        actions={
-          <div className="flex gap-2">
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="rounded-xl border p-2 text-sm dark:bg-slate-900 dark:border-slate-700"
-            />
-            <Button variant="secondary" onClick={exportCSV}>
-              <Icon name="download" /> Exportar CSV
-            </Button>
-          </div>
-        }
+  icon="calendar"
+  title="Relatório Mensal de Colaboradores"
+  subtitle="Visão detalhada de presença e horas trabalhadas"
+  actions={
+    <div className="flex gap-2">
+      {/* ⬇️ BOTÃO TEMPORÁRIO DE MIGRAÇÃO */}
+      <Button
+        variant="secondary"
+        onClick={() => {
+          // Corrigir registos sem worker
+          const fixed = timeEntries.map((entry) => {
+            if (!entry.worker && !entry.supervisor) {
+              // Tentar descobrir pelo auth atual ou deixar pendente
+              return { ...entry, worker: 'Pendente de atribuição' };
+            }
+            return entry;
+          });
+
+          setTimeEntries(fixed);
+          addToast(`${fixed.length} registos verificados`, 'ok');
+        }}
+      >
+        Verificar Registos
+      </Button>
+
+      <input
+        type="month"
+        value={selectedMonth}
+        onChange={(e) => setSelectedMonth(e.target.value)}
+        className="rounded-xl border p-2 text-sm dark:bg-slate-900 dark:border-slate-700"
       />
+      <Button variant="secondary" onClick={exportCSV}>
+        <Icon name="download" /> Exportar CSV
+      </Button>
+    </div>
+  }
+/>
 
       {/* Tabela Principal */}
       <Card className="p-4">
@@ -2808,12 +2842,17 @@ const TimesheetTemplateForm = ({
   };
 
   const submit = () => {
-    const adjusted = { ...form };
-    
-    // Preencher worker automaticamente com o user logado
-    if (!adjusted.worker && auth?.name) {
-      adjusted.worker = auth.name;
-    }
+  const adjusted = { ...form };
+  
+  // ⬇️ SEMPRE PREENCHER WORKER (CRÍTICO!)
+  adjusted.worker = auth?.name || adjusted.worker || 'Desconhecido';
+  
+  console.log('📝 Submetendo timesheet:', {
+    worker: adjusted.worker,
+    authName: auth?.name,
+    date: adjusted.date,
+    template,
+  });
     
     // Limpar campos desnecessários conforme o template
     if (template === 'Férias') {
@@ -3416,12 +3455,30 @@ useEffect(() => {
 // ---------------------------------------------------------------
 // 🔍 FILTRO DE VISIBILIDADE DE TIMESHEETS
 // ---------------------------------------------------------------
+
+// ============================================================
+// 🔍 DEBUG: Auditoria de Timesheets
+// ============================================================
+useEffect(() => {
+  console.log('🔍 Auditoria de Timesheets:', {
+    total: timeEntries.length,
+    comWorker: timeEntries.filter(t => t.worker).length,
+    comSupervisor: timeEntries.filter(t => t.supervisor).length,
+    semAmbos: timeEntries.filter(t => !t.worker && !t.supervisor).length,
+    workers: [...new Set(timeEntries.map(t => t.worker).filter(Boolean))],
+    supervisors: [...new Set(timeEntries.map(t => t.supervisor).filter(Boolean))],
+  });
+}, [timeEntries]);
+
+// ⬇️ O useMemo do visibleTimeEntries continua aqui
 const visibleTimeEntries = useMemo(() => {
   console.log('🔍 Filtrando timesheets:', {
     role: auth?.role,
     name: auth?.name,
     totalEntries: timeEntries?.length,
   });
+  // ... resto do código
+
 
   // Admin, Diretor e Logística veem TUDO
   if (auth?.role === "admin" || auth?.role === "diretor" || auth?.role === "logistica") {
@@ -3571,14 +3628,19 @@ const visibleTimeEntries = useMemo(() => {
 // 📝 FUNÇÕES DE MANIPULAÇÃO DE DADOS
 // ---------------------------------------------------------------
 const addTimeEntry = (entry: any) => {
-  // ⬇️ GARANTIR QUE O WORKER É PREENCHIDO
+  // ⬇️ GARANTIR QUE WORKER É SEMPRE PREENCHIDO
   const completeEntry = {
     ...entry,
     id: entry.id || uid(),
-    worker: entry.worker || auth?.name, // ⬅️ PREENCHE AUTOMATICAMENTE
+    worker: entry.worker || auth?.name || 'Desconhecido',
   };
 
-  console.log('➕ Criando timesheet:', completeEntry);
+  console.log('✅ Timesheet criado:', {
+    id: completeEntry.id,
+    worker: completeEntry.worker,
+    date: completeEntry.date,
+    template: completeEntry.template,
+  });
 
   setTimeEntries((prev) => [completeEntry, ...prev]);
   addToast("Timesheet registado com sucesso");
