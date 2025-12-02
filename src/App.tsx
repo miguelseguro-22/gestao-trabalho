@@ -4038,11 +4038,13 @@ function TimesheetsView() {
   return (
     <section className="space-y-4">
       <PageHeader
-        icon="clock"
-        title="Timesheets"
-        subtitle={`${visibleTimeEntries.length} registos`}
-        actions={
-        <Button
+  icon="clock"
+  title="Timesheets"
+  subtitle={`${visibleTimeEntries.length} registos`}
+  actions={
+    <>
+      {/* ⬇️ BOTÃO DE DEBUG TEMPORÁRIO */}
+      <Button
         variant="secondary"
         onClick={() => {
           console.log('🔍 DEBUG:', {
@@ -4056,11 +4058,13 @@ function TimesheetsView() {
       >
         Debug
       </Button>
-          <Button onClick={() => setModal({ name: "add-time" })}>
-            <Icon name="plus" /> Novo Registo
-          </Button>
-        }
-      />
+
+      <Button onClick={() => setModal({ name: "add-time" })}>
+        <Icon name="plus" /> Novo Registo
+      </Button>
+    </>
+  }
+/>
 
       <CycleCalendar
         timeEntries={visibleTimeEntries}
