@@ -2231,16 +2231,17 @@ if (!entry.worker && !entry.supervisor) {
 
 if (!byWorker.has(worker)) {
   byWorker.set(worker, {
-    name: worker,
-    daysWorked: new Set(),
-    totalHours: 0,
-    totalOvertime: 0,
-    totalOvertimeWeekend: 0,
-    holidays: 0,
-    sickLeave: 0,
-    absences: 0,
-    entries: [],
-  });
+  name: worker,
+  daysWorked: new Set(),
+  totalHours: 0,
+  totalOvertime: 0,
+  totalOvertimeWeekend: 0,
+  totalAbsenceHours: 0, // ⬅️ ADICIONA ISTO
+  holidays: 0,
+  sickLeave: 0,
+  absences: 0,
+  entries: [],
+});
 }
 
       const data = byWorker.get(worker);
@@ -2276,8 +2277,11 @@ if (!byWorker.has(worker)) {
           }
         }
       } else if (entry.template === 'Falta') {
-        data.absences++;
-      }
+  data.absences++;
+  // Contar horas de falta
+  const horasFalta = Number(entry.hours) || 8; // Default: dia completo
+  data.totalAbsenceHours = (data.totalAbsenceHours || 0) + horasFalta;
+}
     });
 
     // Converter para array e calcular presença
@@ -2410,7 +2414,16 @@ if (!byWorker.has(worker)) {
                   <td className="px-3 py-2 font-medium">{worker.name}</td>
                   <td className="px-3 py-2 text-center">{worker.workDays}</td>
                   <td className="px-3 py-2 text-center">{worker.daysWorked}</td>
-                  <td className="px-3 py-2 text-center">{worker.absences || '—'}</td>
+                  <td className="px-3 py-2 text-center">
+  {worker.absences > 0 ? (
+    <div>
+      <div>{worker.absences} dia{worker.absences > 1 ? 's' : ''}</div>
+      <div className="text-xs text-slate-500">
+        ({worker.totalAbsenceHours || 0}h)
+      </div>
+    </div>
+  ) : '—'}
+</td>
                   <td className="px-3 py-2 text-center">{worker.holidays || '—'}</td>
                   <td className="px-3 py-2 text-center">{worker.sickLeave || '—'}</td>
                   <td className="px-3 py-2 text-center">{worker.totalOvertime || '—'}</td>
@@ -2509,8 +2522,12 @@ if (!byWorker.has(worker)) {
                           </Badge>
                         </td>
                         <td className="px-3 py-2">{entry.project || '—'}</td>
-                        <td className="px-3 py-2 text-right">{entry.hours || '—'}</td>
-                        <td className="px-3 py-2 text-right">{entry.overtime || '—'}</td>
+                        <td className="px-3 py-2 text-right">
+  {entry.template === 'Falta' 
+    ? `${entry.hours || 8}h (falta)` 
+    : entry.hours || '—'}
+</td>
+<td className="px-3 py-2 text-right">{entry.overtime || '—'}</td>
                       </tr>
                     ))}
                 </tbody>
@@ -2872,13 +2889,16 @@ const TimesheetTemplateForm = ({
     }
     
     if (template === 'Falta') {
-      adjusted.hours = 0;
-      adjusted.overtime = 0;
-      adjusted.project = '';
-      adjusted.supervisor = '';
-      adjusted.periodStart = '';
-      adjusted.periodEnd = '';
-    }
+  // Se não especificar horas, assume dia completo (8h)
+  if (!adjusted.hours || adjusted.hours === 0) {
+    adjusted.hours = 8;
+  }
+  adjusted.overtime = 0;
+  adjusted.project = '';
+  adjusted.supervisor = '';
+  adjusted.periodStart = '';
+  adjusted.periodEnd = '';
+}
     
     const payload = { ...adjusted, template };
     const e = validate(payload);
@@ -3015,17 +3035,50 @@ const TimesheetTemplateForm = ({
             )}
 
             {/* NOTAS (para Baixa e Falta) */}
-            {(template === 'Baixa' || template === 'Falta') && (
-              <label className="text-sm md:col-span-2">
-                {template === 'Falta' ? 'Motivo da Falta' : 'Observações'}
-                <textarea
-                  value={form.notes}
-                  onChange={e=>update('notes',e.target.value)}
-                  placeholder={template === 'Falta' ? 'Descreve o motivo...' : 'Observações médicas...'}
-                  className="mt-1 w-full rounded-xl border p-2 min-h-[80px] dark:bg-slate-900 dark:border-slate-700"
-                />
-              </label>
-            )}
+            {/* HORAS DE FALTA (OPCIONAL) */}
+{template === 'Falta' && (
+  <>
+    <label className="text-sm">
+      Horas de Falta (opcional)
+      <input
+        type="number"
+        min={0}
+        max={8}
+        step={0.5}
+        value={form.hours || ''}
+        onChange={e=>update('hours',parseFloat(e.target.value) || 0)}
+        placeholder="Ex: 4 (se faltou meio-dia)"
+        className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+      />
+      <div className="text-xs text-slate-500 mt-1">
+        Deixa vazio se faltou o dia todo (8h)
+      </div>
+    </label>
+
+    <label className="text-sm md:col-span-2">
+      Motivo da Falta
+      <textarea
+        value={form.notes}
+        onChange={e=>update('notes',e.target.value)}
+        placeholder="Descreve o motivo..."
+        className="mt-1 w-full rounded-xl border p-2 min-h-[80px] dark:bg-slate-900 dark:border-slate-700"
+      />
+    </label>
+  </>
+)}
+
+{/* NOTAS (para Baixa) */}
+{template === 'Baixa' && (
+  <label className="text-sm md:col-span-2">
+    Observações
+    <textarea
+      value={form.notes}
+      onChange={e=>update('notes',e.target.value)}
+      placeholder="Observações médicas..."
+      className="mt-1 w-full rounded-xl border p-2 min-h-[80px] dark:bg-slate-900 dark:border-slate-700"
+    />
+  </label>
+)}
           </div>
 
           <div className="pt-2 flex justify-between gap-2">
