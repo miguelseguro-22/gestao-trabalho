@@ -3417,20 +3417,42 @@ useEffect(() => {
 // 🔍 FILTRO DE VISIBILIDADE DE TIMESHEETS
 // ---------------------------------------------------------------
 const visibleTimeEntries = useMemo(() => {
+  console.log('🔍 Filtrando timesheets:', {
+    role: auth?.role,
+    name: auth?.name,
+    totalEntries: timeEntries?.length,
+  });
+
   // Admin, Diretor e Logística veem TUDO
   if (auth?.role === "admin" || auth?.role === "diretor" || auth?.role === "logistica") {
-    return timeEntries;
+    console.log('✅ Admin/Diretor/Logística - mostrar TODOS os registos');
+    return timeEntries || [];
   }
   
   // Técnico e Encarregado veem APENAS os seus próprios registos
   if (auth?.role === "tecnico" || auth?.role === "encarregado") {
-    return (timeEntries || []).filter((t) => {
-      // Registos onde o user é o worker
-      return t.worker === auth?.name;
+    const filtered = (timeEntries || []).filter((t) => {
+      // ⬇️ CORRIGIDO: verifica worker OU supervisor
+      const match = t.worker === auth?.name || t.supervisor === auth?.name;
+      
+      if (match) {
+        console.log('✅ Match encontrado:', {
+          date: t.date,
+          worker: t.worker,
+          supervisor: t.supervisor,
+          authName: auth?.name,
+        });
+      }
+      
+      return match;
     });
+
+    console.log(`📊 Técnico/Encarregado - ${filtered.length} registos filtrados`);
+    return filtered;
   }
   
-  // Fallback seguro (não deve acontecer)
+  // Fallback seguro
+  console.warn('⚠️ Role desconhecido:', auth?.role);
   return [];
 }, [auth?.role, auth?.name, timeEntries]);
 
@@ -3549,7 +3571,16 @@ const visibleTimeEntries = useMemo(() => {
 // 📝 FUNÇÕES DE MANIPULAÇÃO DE DADOS
 // ---------------------------------------------------------------
 const addTimeEntry = (entry: any) => {
-  setTimeEntries((prev) => [{ ...entry, id: entry.id || uid() }, ...prev]);
+  // ⬇️ GARANTIR QUE O WORKER É PREENCHIDO
+  const completeEntry = {
+    ...entry,
+    id: entry.id || uid(),
+    worker: entry.worker || auth?.name, // ⬅️ PREENCHE AUTOMATICAMENTE
+  };
+
+  console.log('➕ Criando timesheet:', completeEntry);
+
+  setTimeEntries((prev) => [completeEntry, ...prev]);
   addToast("Timesheet registado com sucesso");
 };
 
@@ -4244,83 +4275,44 @@ function TableMaterials() {
 
           {/* NAV ITEMS */}
           <div className="mt-2 space-y-1">
-            {can("dashboard") && (
-              <NavItem
-                id="dashboard"
-                icon="activity"
-                label="Dashboard"
-                setView={setView}
-              />
-            )}
-            {can("dashboard") && (
-  <NavItem id="dashboard" icon="activity" label="Dashboard" setView={setView} />
-)}
+  {/* Admin vê o relatório mensal */}
+  {auth?.role === "admin" && (
+    <NavItem id="monthly-report" icon="calendar" label="Relatório Mensal" setView={setView} />
+  )}
 
-{/* ⬇️ ADICIONA ISTO ⬇️ */}
-{auth?.role === "admin" && (
-  <NavItem id="monthly-report" icon="calendar" label="Relatório Mensal" setView={setView} />
-)}
-
-{can("timesheets") && (
+  {/* Timesheets - TODOS veem (técnico, encarregado, admin) */}
   <NavItem id="timesheets" icon="clock" label="Timesheets" setView={setView} />
-)}
-            {can("timesheets") && (
-              <NavItem
-                id="timesheets"
-                icon="clock"
-                label="Timesheets"
-                setView={setView}
-              />
-            )}
-            {can("materials") && (
-              <NavItem
-                id="materials"
-                icon="package"
-                label="Materiais"
-                setView={setView}
-              />
-            )}
-            {can("logistics") && (
-              <NavItem
-                id="logistics"
-                icon="package"
-                label="Logística (Direção)"
-                setView={setView}
-              />
-            )}
-            {can("obras") && (
-              <NavItem
-                id="obras"
-                icon="wrench"
-                label="Obras"
-                setView={setView}
-              />
-            )}
-            {can("people") && (
-              <NavItem
-                id="people"
-                icon="user"
-                label="Colaboradores"
-                setView={setView}
-              />
-            )}
-            {can("vehicles") && (
-              <NavItem
-                id="vehicles"
-                icon="building"
-                label="Veículos"
-                setView={setView}
-              />
-            )}
-            {can("agenda") && (
-              <NavItem
-                id="agenda"
-                icon="calendar"
-                label="Agenda"
-                setView={setView}
-              />
-            )}
-          </div>
+
+  {/* Materiais - Encarregado, Diretor, Admin */}
+  {can("materials") && (
+    <NavItem id="materials" icon="package" label="Materiais" setView={setView} />
+  )}
+  
+  {/* Logística - Logística e Admin */}
+  {can("logistics") && (
+    <NavItem id="logistics" icon="package" label="Logística (Direção)" setView={setView} />
+  )}
+  
+  {/* Obras - Diretor e Admin */}
+  {can("obras") && (
+    <NavItem id="obras" icon="wrench" label="Obras" setView={setView} />
+  )}
+  
+  {/* Colaboradores - Diretor e Admin */}
+  {can("people") && (
+    <NavItem id="people" icon="user" label="Colaboradores" setView={setView} />
+  )}
+  
+  {/* Veículos - Diretor e Admin */}
+  {can("vehicles") && (
+    <NavItem id="vehicles" icon="building" label="Veículos" setView={setView} />
+  )}
+  
+  {/* Agenda - Encarregado, Diretor, Admin */}
+  {can("agenda") && (
+    <NavItem id="agenda" icon="calendar" label="Agenda" setView={setView} />
+  )}
+</div>
 
           {/* PREFERÊNCIAS */}
           <div className="mt-4 p-2 rounded-xl bg-slate-50 dark:bg-slate-900 border dark:border-slate-800">
