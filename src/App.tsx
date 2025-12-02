@@ -2561,6 +2561,359 @@ if (!byWorker.has(worker)) {
   );
 };
 
+// ============================================================
+// 👤 PERFIL DO COLABORADOR (TÉCNICO/ENCARREGADO/DIRETOR)
+// ============================================================
+const ProfileView = ({ timeEntries, auth, people }) => {
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  // Filtrar registos do ano do colaborador
+  const myEntries = useMemo(() => {
+    return timeEntries.filter((t) => {
+      const year = new Date(t.date || t.periodStart).getFullYear();
+      return year === selectedYear && (t.worker === auth?.name || t.supervisor === auth?.name);
+    });
+  }, [timeEntries, selectedYear, auth?.name]);
+
+  // Calcular estatísticas
+  const stats = useMemo(() => {
+    let totalHours = 0;
+    let totalOvertime = 0;
+    let daysWorked = new Set();
+    let holidayDays = 0;
+    let sickDays = 0;
+    let absenceDays = 0;
+    const projectHours = new Map();
+
+    myEntries.forEach((entry) => {
+      if (entry.template === 'Trabalho Normal') {
+        totalHours += Number(entry.hours) || 0;
+        totalOvertime += Number(entry.overtime) || 0;
+        daysWorked.add(entry.date);
+
+        // Agrupar por projeto
+        const project = entry.project || 'Sem projeto';
+        const hours = (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
+        projectHours.set(project, (projectHours.get(project) || 0) + hours);
+      } else if (entry.template === 'Férias') {
+        const start = new Date(entry.periodStart || entry.date);
+        const end = new Date(entry.periodEnd || entry.date);
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const dow = d.getDay();
+          if (dow !== 0 && dow !== 6) holidayDays++;
+        }
+      } else if (entry.template === 'Baixa') {
+        const start = new Date(entry.periodStart || entry.date);
+        const end = new Date(entry.periodEnd || entry.date);
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const dow = d.getDay();
+          if (dow !== 0 && dow !== 6) sickDays++;
+        }
+      } else if (entry.template === 'Falta') {
+        absenceDays++;
+      }
+    });
+
+    // Converter projectHours para array e ordenar
+    const projectsArray = Array.from(projectHours.entries())
+      .map(([name, hours]) => ({ name, hours }))
+      .sort((a, b) => b.hours - a.hours)
+      .slice(0, 5); // Top 5 projetos
+
+    return {
+      totalHours,
+      totalOvertime,
+      daysWorked: daysWorked.size,
+      holidayDays,
+      sickDays,
+      absenceDays,
+      projects: projectsArray,
+    };
+  }, [myEntries]);
+
+  // Cores para o gráfico (paleta moderna)
+  const colors = [
+    '#3b82f6', // blue-500
+    '#8b5cf6', // violet-500
+    '#ec4899', // pink-500
+    '#f59e0b', // amber-500
+    '#10b981', // emerald-500
+  ];
+
+  // Calcular percentagens para o gráfico
+  const total = stats.projects.reduce((sum, p) => sum + p.hours, 0);
+  let currentAngle = 0;
+
+  return (
+    <section className="space-y-4">
+      <PageHeader
+        icon="user"
+        title={`Perfil de ${auth?.name || 'Colaborador'}`}
+        subtitle="Estatísticas pessoais e análise de desempenho"
+        actions={
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="rounded-xl border p-2 text-sm dark:bg-slate-900 dark:border-slate-700"
+          >
+            {[2025, 2024, 2023].map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        }
+      />
+
+      {/* KPIs Principais */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="p-5 bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+          <div className="text-sm opacity-90">Dias Trabalhados</div>
+          <div className="text-4xl font-bold mt-2">{stats.daysWorked}</div>
+          <div className="text-sm opacity-80 mt-1">dias em {selectedYear}</div>
+        </Card>
+
+        <Card className="p-5 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
+          <div className="text-sm opacity-90">Horas Totais</div>
+          <div className="text-4xl font-bold mt-2">{stats.totalHours}h</div>
+          <div className="text-sm opacity-80 mt-1">+{stats.totalOvertime}h extra</div>
+        </Card>
+
+        <Card className="p-5 bg-gradient-to-br from-violet-500 to-violet-600 text-white">
+          <div className="text-sm opacity-90">Férias Gozadas</div>
+          <div className="text-4xl font-bold mt-2">{stats.holidayDays}</div>
+          <div className="text-sm opacity-80 mt-1">dias de férias</div>
+        </Card>
+
+        <Card className="p-5 bg-gradient-to-br from-amber-500 to-amber-600 text-white">
+          <div className="text-sm opacity-90">Baixas/Faltas</div>
+          <div className="text-4xl font-bold mt-2">{stats.sickDays + stats.absenceDays}</div>
+          <div className="text-sm opacity-80 mt-1">
+            {stats.sickDays}b · {stats.absenceDays}f
+          </div>
+        </Card>
+      </div>
+
+      {/* Grid: Gráfico + Detalhe */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Gráfico de Pizza (Obras) */}
+        <Card className="p-6">
+          <h3 className="font-semibold text-lg mb-4">Distribuição por Obra</h3>
+
+          {stats.projects.length === 0 ? (
+            <div className="text-center py-12 text-slate-500">
+              Sem registos de trabalho em {selectedYear}
+            </div>
+          ) : (
+            <>
+              {/* SVG Gráfico Circular */}
+              <div className="flex justify-center mb-6">
+                <svg width="240" height="240" viewBox="0 0 240 240">
+                  {/* Círculo de fundo */}
+                  <circle cx="120" cy="120" r="100" fill="#f1f5f9" className="dark:fill-slate-800" />
+
+                  {/* Fatias do gráfico */}
+                  {stats.projects.map((project, index) => {
+                    const percentage = (project.hours / total) * 100;
+                    const angle = (percentage / 100) * 360;
+
+                    const startX = 120 + 100 * Math.cos((currentAngle - 90) * (Math.PI / 180));
+                    const startY = 120 + 100 * Math.sin((currentAngle - 90) * (Math.PI / 180));
+
+                    currentAngle += angle;
+
+                    const endX = 120 + 100 * Math.cos((currentAngle - 90) * (Math.PI / 180));
+                    const endY = 120 + 100 * Math.sin((currentAngle - 90) * (Math.PI / 180));
+
+                    const largeArc = angle > 180 ? 1 : 0;
+
+                    const path = [
+                      `M 120 120`,
+                      `L ${startX} ${startY}`,
+                      `A 100 100 0 ${largeArc} 1 ${endX} ${endY}`,
+                      `Z`,
+                    ].join(' ');
+
+                    return <path key={index} d={path} fill={colors[index]} />;
+                  })}
+
+                  {/* Círculo central (donut) */}
+                  <circle cx="120" cy="120" r="60" fill="white" className="dark:fill-slate-900" />
+
+                  {/* Texto central */}
+                  <text
+                    x="120"
+                    y="115"
+                    textAnchor="middle"
+                    className="text-2xl font-bold fill-slate-800 dark:fill-slate-200"
+                  >
+                    {stats.totalHours}h
+                  </text>
+                  <text
+                    x="120"
+                    y="135"
+                    textAnchor="middle"
+                    className="text-sm fill-slate-500 dark:fill-slate-400"
+                  >
+                    Total
+                  </text>
+                </svg>
+              </div>
+
+              {/* Legenda */}
+              <div className="space-y-2">
+                {stats.projects.map((project, index) => {
+                  const percentage = ((project.hours / total) * 100).toFixed(1);
+                  return (
+                    <div key={index} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-4 h-4 rounded"
+                          style={{ backgroundColor: colors[index] }}
+                        />
+                        <span className="text-sm font-medium truncate max-w-[200px]">
+                          {project.name}
+                        </span>
+                      </div>
+                      <div className="text-sm text-slate-500">
+                        {project.hours}h · {percentage}%
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </Card>
+
+        {/* Card de Férias */}
+        <Card className="p-6">
+          <h3 className="font-semibold text-lg mb-4">Resumo de Férias {selectedYear}</h3>
+
+          <div className="space-y-4">
+            {/* Barra de Progresso */}
+            <div>
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-slate-600 dark:text-slate-300">Dias Gozados</span>
+                <span className="font-semibold">
+                  {stats.holidayDays} / 22 dias
+                </span>
+              </div>
+              <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-500 to-violet-500 transition-all duration-500"
+                  style={{ width: `${Math.min((stats.holidayDays / 22) * 100, 100)}%` }}
+                />
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                Restam {Math.max(22 - stats.holidayDays, 0)} dias disponíveis
+              </div>
+            </div>
+
+            {/* Estatísticas */}
+            <div className="grid grid-cols-2 gap-3 mt-6">
+              <div className="rounded-xl border p-4 dark:border-slate-800">
+                <div className="text-xs text-slate-500">Férias Gozadas</div>
+                <div className="text-2xl font-bold text-blue-600 mt-1">
+                  {stats.holidayDays}
+                </div>
+              </div>
+
+              <div className="rounded-xl border p-4 dark:border-slate-800">
+                <div className="text-xs text-slate-500">Dias Disponíveis</div>
+                <div className="text-2xl font-bold text-emerald-600 mt-1">
+                  {Math.max(22 - stats.holidayDays, 0)}
+                </div>
+              </div>
+
+              <div className="rounded-xl border p-4 dark:border-slate-800">
+                <div className="text-xs text-slate-500">Baixas</div>
+                <div className="text-2xl font-bold text-rose-600 mt-1">
+                  {stats.sickDays}
+                </div>
+              </div>
+
+              <div className="rounded-xl border p-4 dark:border-slate-800">
+                <div className="text-xs text-slate-500">Faltas</div>
+                <div className="text-2xl font-bold text-amber-600 mt-1">
+                  {stats.absenceDays}
+                </div>
+              </div>
+            </div>
+
+            {/* Alertas */}
+            {stats.holidayDays < 5 && (
+              <div className="mt-4 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                <div className="text-sm text-blue-800 dark:text-blue-200">
+                  💡 <b>Dica:</b> Ainda tens {22 - stats.holidayDays} dias de férias disponíveis!
+                </div>
+              </div>
+            )}
+
+            {stats.holidayDays >= 22 && (
+              <div className="mt-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                <div className="text-sm text-emerald-800 dark:text-emerald-200">
+                  ✅ <b>Parabéns!</b> Gozaste todas as tuas férias em {selectedYear}.
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Tabela de Registos Recentes */}
+      <Card className="p-4">
+        <h3 className="font-semibold text-lg mb-3">Últimos 10 Registos</h3>
+        <div className="overflow-auto rounded-xl border dark:border-slate-800">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-900/50">
+              <tr>
+                <th className="px-3 py-2 text-left">Data</th>
+                <th className="px-3 py-2 text-left">Tipo</th>
+                <th className="px-3 py-2 text-left">Projeto</th>
+                <th className="px-3 py-2 text-right">Horas</th>
+                <th className="px-3 py-2 text-right">Extra</th>
+              </tr>
+            </thead>
+            <tbody>
+              {myEntries
+                .slice(0, 10)
+                .sort((a, b) => (b.date || b.periodStart || '').localeCompare(a.date || a.periodStart || ''))
+                .map((entry) => (
+                  <tr key={entry.id} className="border-t dark:border-slate-800">
+                    <td className="px-3 py-2">
+                      {entry.template === 'Trabalho Normal' || entry.template === 'Falta'
+                        ? fmtDate(entry.date)
+                        : `${fmtDate(entry.periodStart)} → ${fmtDate(entry.periodEnd)}`}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge
+                        tone={
+                          entry.template === 'Trabalho Normal'
+                            ? 'emerald'
+                            : entry.template === 'Férias'
+                            ? 'blue'
+                            : entry.template === 'Baixa'
+                            ? 'rose'
+                            : 'amber'
+                        }
+                      >
+                        {entry.template}
+                      </Badge>
+                    </td>
+                    <td className="px-3 py-2">{entry.project || '—'}</td>
+                    <td className="px-3 py-2 text-right">{entry.hours || '—'}</td>
+                    <td className="px-3 py-2 text-right">{entry.overtime || '—'}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </section>
+  );
+};
+
 /* ---------- Relatório de Obra ---------- */
 const ProjectReportView = ({
   project, orders, timeEntries, catalogMaps, projects,
@@ -3200,16 +3553,15 @@ const CAN = {
 function defaultViewForRole(role: string): string {
   switch (role) {
     case "admin":
-      return "monthly-report"; // ⬅️ ADMIN VÊ RELATÓRIO POR DEFEITO
+      return "monthly-report";
     case "tecnico":
     case "encarregado":
-      return "timesheets";
     case "diretor":
-      return "obras";
+      return "profile"; // ⬅️ TÉCNICOS/ENCARREGADOS VÊM PERFIL POR DEFEITO
     case "logistica":
       return "logistics";
     default:
-      return "timesheets";
+      return "profile";
   }
 }
 // ---------------------------------------------------------------
@@ -4407,13 +4759,16 @@ function TableMaterials() {
           </div>
 
           {/* NAV ITEMS */}
-          <div className="mt-2 space-y-1">
+<div className="mt-2 space-y-1">
+  {/* ⬇️ PERFIL - TODOS VEEM (NO TOPO) */}
+  <NavItem id="profile" icon="user" label="Meu Perfil" setView={setView} />
+
   {/* Admin vê o relatório mensal */}
   {auth?.role === "admin" && (
     <NavItem id="monthly-report" icon="calendar" label="Relatório Mensal" setView={setView} />
   )}
 
-  {/* Timesheets - TODOS veem (técnico, encarregado, admin) */}
+  {/* Timesheets - TODOS veem */}
   <NavItem id="timesheets" icon="clock" label="Timesheets" setView={setView} />
 
   {/* Materiais - Encarregado, Diretor, Admin */}
@@ -4540,10 +4895,15 @@ function TableMaterials() {
           {/* ROUTER INTERNO */}
           {view === "dashboard" && <DashboardView />}
           {/* ROUTER INTERNO */}
+{view === "profile" && (
+  <ProfileView timeEntries={timeEntries} auth={auth} people={people} />
+)}
+
 {view === "monthly-report" && auth?.role === "admin" && (
   <MonthlyReportView timeEntries={timeEntries} people={people} />
 )}
-          {view === "timesheets" && <TimesheetsView />}
+
+{view === "timesheets" && <TimesheetsView />}
           {view === "materials" && <TableMaterials />}
           {view === "logistics" && (
             <LogisticsView
