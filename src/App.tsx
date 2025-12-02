@@ -2278,12 +2278,8 @@ if (!byWorker.has(worker)) {
         }
       } else if (entry.template === 'Falta') {
   absenceDays++;
-  // ⬇️ GUARDA A ENTRADA
-  absenceEntries.push({
-    date: entry.date,
-    notes: entry.notes || '',
-  });
-}
+  } else if (entry.template === 'Falta') {
+  data.absences++;
   // Contar horas de falta
   const horasFalta = Number(entry.hours) || 8; // Default: dia completo
   data.totalAbsenceHours = (data.totalAbsenceHours || 0) + horasFalta;
