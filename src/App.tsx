@@ -1221,8 +1221,8 @@ const handleCatalog = (file) => {
       template = 'Feriado';
     }
     const worker = val('worker');
-    const rawDate = val('date');
-    
+    const rawDate = val('date') || val('weekendStart') || val('overtimeStart') || val('holidayStart') || val('sickStart');
+
     // ✅ NORMALIZAR DATA
     const date = normalizeDate(rawDate);
     
@@ -1232,8 +1232,11 @@ const handleCatalog = (file) => {
     let overtime = 0;
     let periodStart = '';
     let periodEnd = '';
-    const feriadoFlag = norm(val('holidayFlag') || '');
-    const isFeriadoFlag = !!feriadoFlag && !['0', 'nao', 'não', 'no'].includes(feriadoFlag);
+    const feriadoFlagRaw = val('holidayFlag');
+    const feriadoFlag = norm(feriadoFlagRaw || '');
+    const feriadoFalse = new Set(['', '0', 'nao', 'não', 'no', 'false', 'n', 'f']);
+    const feriadoTrue = ['1', 'sim', 's', 'yes', 'y', 'feriado', 'feriad', 'fer', 'feri', 'holiday'];
+    const isFeriadoFlag = feriadoFlag && !feriadoFalse.has(feriadoFlag) && feriadoTrue.some(t => feriadoFlag === t || feriadoFlag.includes(t));
 
     // ✅ LÓGICA INTELIGENTE POR TIPO DE TEMPLATE
     const projectFromAC = val('projectNormal');
