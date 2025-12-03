@@ -37,6 +37,10 @@ function storeUser(user: AppUser | null) {
 const VALID_ROLES: AppRole[] = ['tecnico', 'encarregado', 'diretor', 'logistica', 'admin']
 
 async function fetchUserProfile(userId: string, emailFallback: string): Promise<AppUser> {
+  if (!supabase) {
+    throw new Error('Supabase não configurado')
+  }
+
   const { data, error } = await supabase
     .from('profiles')
     .select('name, role')
@@ -69,6 +73,10 @@ async function login(
   email: string,
   password: string
 ): Promise<{ ok: true; user: AppUser } | { ok: false; error: string }> {
+  if (!supabase) {
+    return { ok: false, error: 'Supabase não está configurado' }
+  }
+
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error || !data?.user) {
@@ -88,13 +96,18 @@ async function login(
 
 async function logout(): Promise<void> {
   try {
-    await supabase.auth.signOut()
+    await supabase?.auth.signOut()
   } finally {
     storeUser(null)
   }
 }
 
 async function refresh(): Promise<AppUser | null> {
+  if (!supabase) {
+    storeUser(null)
+    return null
+  }
+
   const { data, error } = await supabase.auth.getSession()
   if (error) {
     console.error('Erro ao obter sessão:', error)

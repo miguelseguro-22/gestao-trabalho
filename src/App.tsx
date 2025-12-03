@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import supabase from './lib/supabaseClient'
 /* ---------- Helpers ---------- */
 const Icon=({name,className='w-5 h-5'})=>{
   const S={stroke:'currentColor',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'};
@@ -128,6 +129,36 @@ const LS_KEY='wm_platform_import_v1';
 const loadState=()=>{try{const raw=localStorage.getItem(LS_KEY);if(!raw)return null;const s=JSON.parse(raw);if(Array.isArray(s.activity))s.activity=s.activity.map(a=>({...a,ts:new Date(a.ts)}));return s}catch{return null}};
 const saveState=(state)=>{try{localStorage.setItem(LS_KEY,JSON.stringify(state))}catch{}};
 const clearState=()=>{try{localStorage.removeItem(LS_KEY)}catch{}};
+
+const CLOUD_STATE_TABLE='app_state'
+const CLOUD_ROW_ID='shared'
+const fetchCloudState=async()=>{
+  if(!supabase)return null
+  try{
+    const {data,error}=await supabase
+      .from(CLOUD_STATE_TABLE)
+      .select('payload,updated_at')
+      .eq('id',CLOUD_ROW_ID)
+      .single()
+    if(error){
+      console.warn('Falha a carregar estado da cloud',error)
+      return null
+    }
+    return {payload:data?.payload||null,updatedAt:data?.updated_at||null}
+  }catch(err){
+    console.warn('Erro inesperado ao carregar estado da cloud',err)
+    return null
+  }
+}
+const saveCloudState=async(payload)=>{
+  if(!supabase)return
+  try{
+    const updatedAt=payload?.updatedAt||new Date().toISOString()
+    await supabase.from(CLOUD_STATE_TABLE).upsert({id:CLOUD_ROW_ID,payload,updated_at:updatedAt})
+  }catch(err){
+    console.warn('Falha ao gravar estado na cloud',err)
+  }
+}
 const toCSV=(headers,rows)=>{const esc=v=>`"${String(v??'').replace(/"/g,'""')}"`;return[headers.join(','),...rows.map(r=>r.map(esc).join(','))].join('\r\n')};
 const download=(filename,content,mime='text/csv')=>{const blob=new Blob([content],{type:mime});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url)};
 const guessDelimiter=line=>{const sc=(line.match(/;/g)||[]).length,cc=(line.match(/,/g)||[]).length;return sc>cc?';':','};
@@ -4425,6 +4456,8 @@ const DEFAULT_OT_MULTIPLIER = 1.5;
 // ---------------------------------------------------------------
 function App() {
   const persisted = loadState?.();
+  const [cloudStamp, setCloudStamp] = useState<string | null>(persisted?.updatedAt || null)
+  const [cloudReady, setCloudReady] = useState(false)
 
   // -------------------------------------------------------------
   // 🔐 AUTH E NAVEGAÇÃO
@@ -4439,6 +4472,7 @@ function App() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modal, setModal] = useState<any | null>(null);
+  const cloudSaveTimer = useRef<any>(null)
 
   // 👉 Função can() — PERMISSÕES
   const can = (section: keyof typeof CAN) => {
@@ -4530,12 +4564,58 @@ function App() {
   );
   const [catalog, setCatalog] = useState(persisted?.catalog || []);
 
+  const applySnapshot = (snap: any) => {
+    if (!snap) return
+
+    setTimeEntries(dedupTimeEntries(snap.timeEntries || []))
+    setOrders(snap.orders || [])
+    setProjects(snap.projects || [])
+    setActivity((snap.activity || []).map((a: any) => ({ ...a, ts: a?.ts ? new Date(a.ts) : new Date() })))
+    setTheme(snap.theme || 'light')
+    setDensity(snap.density || 'comfy')
+    setCatalog(snap.catalog || [])
+    setPeople(migratePeople(snap.people) || {})
+    setPrefs(
+      snap.prefs || {
+        defaultRate: DEFAULT_HOURLY_RATE,
+        otMultiplier: DEFAULT_OT_MULTIPLIER,
+      }
+    )
+    setVehicles(snap.vehicles || [])
+    setAgenda(snap.agenda || [])
+    setSuppliers(snap.suppliers || {})
+    setCloudStamp(snap.updatedAt || new Date().toISOString())
+  }
+
   // -------------------------------------------------------------
   // 🌙 Alterar tema
   // -------------------------------------------------------------
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
+
+  // -------------------------------------------------------------
+  // ☁️ CARREGAR ESTADO NA CLOUD (SE EXISTIR)
+  // -------------------------------------------------------------
+  useEffect(() => {
+    let cancelled=false
+
+    ;(async()=>{
+      const cloud = await fetchCloudState()
+      if(cancelled)return
+
+      const remoteTs = cloud?.updatedAt ? new Date(cloud.updatedAt).getTime() : 0
+      const localTs = cloudStamp ? new Date(cloudStamp).getTime() : 0
+
+      if(cloud?.payload && remoteTs>localTs){
+        applySnapshot({ ...cloud.payload, updatedAt: cloud.updatedAt })
+      }
+
+      setCloudReady(true)
+    })()
+
+    return ()=>{cancelled=true}
+  }, [])
 
   // -------------------------------------------------------------
   // 🔄 REFRESH SUPABASE AO INICIAR
@@ -4590,7 +4670,10 @@ useEffect(() => {
   // 💾 PERSISTÊNCIA LOCAL
   // -------------------------------------------------------------
   useEffect(() => {
-    saveState({
+    if (!cloudReady) return
+
+    const updatedAt = new Date().toISOString()
+    const snapshot = {
       timeEntries,
       orders,
       projects,
@@ -4603,7 +4686,16 @@ useEffect(() => {
       vehicles,
       agenda,
       suppliers,
-    });
+      updatedAt,
+    }
+
+    saveState(snapshot)
+    setCloudStamp(updatedAt)
+
+    if (cloudReady) {
+      if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current)
+      cloudSaveTimer.current = setTimeout(() => saveCloudState(snapshot), 400)
+    }
   }, [
     timeEntries,
     orders,
@@ -4617,6 +4709,7 @@ useEffect(() => {
     vehicles,
     agenda,
     suppliers,
+    cloudReady,
   ]);
 
   // -------------------------------------------------------------
