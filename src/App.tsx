@@ -2442,15 +2442,14 @@ const MonthlyReportView = ({ timeEntries, people }) => {
   // Calcular estatísticas por colaborador
   const stats = useMemo(() => {
     const [year, month] = selectedMonth.split('-').map(Number);
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0);
+    const startDate = new Date(year, month - 2, 21);
+    const endDate = new Date(year, month - 1, 20);
     endDate.setHours(23, 59, 59, 999);
 
-    // Contar dias úteis do mês
+    // Contar dias úteis no ciclo (21 do mês anterior a 20 do mês atual)
     const workDays = countWeekdaysInclusive(startDate, endDate);
 
-    // Filtrar entradas do mês
-    // Filtrar entradas do mês
+    // Filtrar entradas do ciclo
     const entriesInMonth = timeEntries.filter((t) => {
       if (t.template === 'Férias' || t.template === 'Baixa') {
         const start = new Date(t.periodStart || t.date);
@@ -2511,21 +2510,13 @@ if (!byWorker.has(worker)) {
 
       // ✅ ACEITAR QUALQUER VARIAÇÃO DE "TRABALHO NORMAL"
       if (isNormalWork(entry.template)) {
-  data.daysWorked.add(entry.date);
-  data.totalHours += Number(entry.hours) || 0;
-  
-  const date = new Date(entry.date);
-  const dayOfWeek = date.getDay();
-  if (dayOfWeek === 0 || dayOfWeek === 6) {
-    data.totalOvertimeWeekend += (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
-  }
-}
-        // Verificar se é fim de semana
+        data.daysWorked.add(entry.date);
+        data.totalHours += Number(entry.hours) || 0;
+
         const date = new Date(entry.date);
         const dayOfWeek = date.getDay();
         if (dayOfWeek === 0 || dayOfWeek === 6) {
           data.totalOvertimeWeekend += (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
-          }
         }
       } else if (entry.template === 'Férias') {
         const start = new Date(entry.periodStart || entry.date);
@@ -2812,8 +2803,8 @@ if (!byWorker.has(worker)) {
                     worker: selectedWorker,
                     timeEntries: workerDetail.entries,
                     cycle: {
-                      start: new Date(year, month - 1, 1),
-                      end: new Date(year, month, 0),
+                      start: new Date(year, month - 2, 21),
+                      end: new Date(year, month - 1, 20),
                     },
                   });
                   openPrintWindow(html);
