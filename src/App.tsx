@@ -179,7 +179,7 @@ function printOrderHTML(o, priceOf, codeOf){
 
   const total = o.items.reduce((s,it)=>s+priceOf(it.name)*(Number(it.qty)||0),0);
 
-  return `<!doctype html><html><head><meta charset="utf-8"/><title>Pedido ${o.id}</title><style>body{font-family:system-ui,Arial;padding:24px;color:#0f172a}h1{margin:0 0 12px 0;font-size:20px}.meta{margin-bottom:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #cbd5e1;padding:8px}th{text-align:left;background:#f8fafc}.right{text-align:right}</style></head><body><h1>Pedido de Material</h1><div class="meta"><div><b>Projeto:</b> ${o.project}</div><div><b>Requisitante:</b> ${o.requestedBy||'—'}</div><div><b>Data:</b> ${o.requestedAt}</div><div><b>ID:</b> ${o.id}</div>${o.notes?`<div style="grid-column:span 2"><b>Notas:</b> ${o.notes}</div>`:''}</div><table><tr><th>Item</th><th>Código</th><th class="right">Qtd</th><th class="right">Preço</th><th class="right">Subtotal</th></tr>${rows}<tr><th colspan="4" class="right">Total</th><th class="right">${total.toFixed(2)} €</th></tr></table></body></html>`;
+return `<!doctype html><html><head><meta charset="utf-8"/><title>Pedido ${o.id}</title><style>body{font-family:system-ui,Arial;padding:24px;color:#0f172a}h1{margin:0 0 12px 0;font-size:20px}.meta{margin-bottom:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #cbd5e1;padding:8px}th{text-align:left;background:#f8fafc}.right{text-align:right}</style></head><body><h1>Pedido de Material</h1><div class="meta"><div><b>Obra:</b> ${o.project}</div><div><b>Requisitante:</b> ${o.requestedBy||'—'}</div><div><b>Data:</b> ${o.requestedAt}</div><div><b>ID:</b> ${o.id}</div>${o.notes?`<div style="grid-column:span 2"><b>Notas:</b> ${o.notes}</div>`:''}</div><table><tr><th>Item</th><th>Código</th><th class="right">Qtd</th><th class="right">Preço</th><th class="right">Subtotal</th></tr>${rows}<tr><th colspan="4" class="right">Total</th><th class="right">${total.toFixed(2)} €</th></tr></table></body></html>`;
 }
 
 function printTimesheetReportHTML({ worker, cycle, rows }) {
@@ -400,7 +400,7 @@ function exportTimesheetCycleCSV(entries = []) {
   const rows = (entries||[])
     .filter(t => t.template === 'Trabalho Normal' && inRange(t.date))
     .map(t => [t.date, t.worker || t.supervisor || '', t.project || '', Number(t.hours)||0, Number(t.overtime)||0]);
-  const csv = toCSV(['Data','Colaborador','Projeto','Horas','Extra'], rows);
+  const csv = toCSV(['Data','Colaborador','Obra','Horas','Extra'], rows);
   download(`relatorio_timesheets_${todayISO()}.csv`, csv);
 }
 
@@ -452,7 +452,7 @@ function printTimesheetCycleReport(entries = []) {
     <div class="muted">${start.toLocaleDateString('pt-PT')} – ${end.toLocaleDateString('pt-PT')}</div>
     <table>
       <thead>
-        <tr><th>Data</th><th>Colaborador</th><th>Projeto</th><th class="right">Horas</th><th class="right">Extra</th><th>Obs.</th></tr>
+        <tr><th>Data</th><th>Colaborador</th><th>Obra</th><th class="right">Horas</th><th class="right">Extra</th><th>Obs.</th></tr>
       </thead>
       <tbody>${tr || '<tr><td colspan="6" style="text-align:center;color:#64748b">Sem registos no intervalo.</td></tr>'}</tbody>
       <tfoot>
@@ -591,7 +591,39 @@ const CalendarLegend = () => {
 
 const TYPE_FILL_BG = { 'Trabalho Normal':'bg-emerald-600','Férias':'bg-violet-600','Baixa':'bg-rose-600','Falta':'bg-amber-600' };
 const TYPE_COLORS = TYPE_FILL_BG;
-const countWeekdaysInclusive=(start,end)=>{const cur=new Date(start);cur.setHours(0,0,0,0);const last=new Date(end);last.setHours(0,0,0,0);let c=0;while(cur<=last){const d=cur.getDay();if(d!==0&&d!==6)c++;cur.setDate(cur.getDate()+1)}return c}
+const getHolidayDatesInRange = (entries = [], start, end) => {
+  if (!start || !end) return new Set();
+  const holidaySet = new Set();
+
+  const inRange = (iso) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    return d >= start && d <= end;
+  };
+
+  entries.forEach((t) => {
+    if (t.template !== 'Feriado') return;
+    const iso = t.date || t.periodStart || t.periodEnd;
+    if (inRange(iso)) holidaySet.add(new Date(iso).toISOString().slice(0, 10));
+  });
+
+  return holidaySet;
+};
+
+const countWeekdaysInclusive = (start, end, holidaySet = new Set()) => {
+  const cur = new Date(start);
+  cur.setHours(0, 0, 0, 0);
+  const last = new Date(end);
+  last.setHours(0, 0, 0, 0);
+  let c = 0;
+  while (cur <= last) {
+    const d = cur.getDay();
+    const iso = cur.toISOString().slice(0, 10);
+    if (d !== 0 && d !== 6 && !holidaySet.has(iso)) c++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return c;
+};
 const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
   const [offset, setOffset] = useState(0);
   const { start, end } = useMemo(()=>getCycle(offset),[offset]);
@@ -599,7 +631,7 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
     const m=new Map(); const push=(iso,t)=>{if(!m.has(iso))m.set(iso,new Set()); m.get(iso).add(t);};
     timeEntries.forEach(t=>{
       const inRange=d=>(d>=start&&d<=end);
-      
+
       if (t.template === 'Férias' || t.template === 'Baixa') { // ⬅️ JÁ VEM NORMALIZADO
         const s=new Date(t.periodStart||t.date),e=new Date(t.periodEnd||t.date);
         const cur=new Date(s);cur.setHours(0,0,0,0);const last=new Date(e);last.setHours(0,0,0,0);
@@ -616,7 +648,8 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
     const arr=[]; for(let d=new Date(first);d<=last;d.setDate(d.getDate()+1)) arr.push(new Date(d));
     return arr;
   },[start,end]);
-  const wd = countWeekdaysInclusive(start, end);
+  const holidays = useMemo(()=>getHolidayDatesInRange(timeEntries,start,end),[timeEntries,start,end]);
+  const wd = countWeekdaysInclusive(start, end, holidays);
   const isToday = (d) => { const t=new Date();t.setHours(0,0,0,0); const x=new Date(d);x.setHours(0,0,0,0); return t.getTime()===x.getTime(); };
   const click = (d) => { if (onDayClick && d >= start && d <= end) onDayClick(d.toISOString().slice(0,10)); };
 
@@ -726,7 +759,7 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate})=>{
             <div className="flex gap-2"><Button variant="secondary" size="sm" onClick={()=>onDuplicate(t)}>Duplicar</Button><Button size="sm" onClick={()=>onEdit(t)}>Editar</Button></div>
           </div>
           <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            {t.template==='Trabalho Normal'?<>Projeto: <span className="font-medium text-slate-700 dark:text-slate-200">{t.project||'-'}</span> · Encarregado: {t.supervisor||'-'} · Horas: {t.hours||0} (+{t.overtime||0})</> : t.template==='Falta'?<>Motivo: {t.notes||'-'}</> : <>Período: {t.periodStart} → {t.periodEnd}</>}
+            {t.template==='Trabalho Normal'?<>Obra: <span className="font-medium text-slate-700 dark:text-slate-200">{t.project||'-'}</span> · Encarregado: {t.supervisor||'-'} · Horas: {t.hours||0} (+{t.overtime||0})</> : t.template==='Falta'?<>Motivo: {t.notes||'-'}</> : <>Período: {t.periodStart} → {t.periodEnd}</>}
           </div>
         </div>
       ))}
@@ -781,7 +814,7 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     ],
     materials:[
       {k:'requestedAt',label:'data pedido'},
-      {k:'project',label:'projeto/obra'},
+      {k:'project',label:'Obra'},
       {k:'item',label:'item/material'},
       { k:'code',  label:'código (opcional)', opt:true },   // ⬅️ adicionar
       {k:'qty',label:'quantidade'},
@@ -825,7 +858,7 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     
     // Materials (mantém)
     requestedAt:['data','pedido','data pedido','request date'],
-    project:['projeto','project','obra','site'], 
+    project:['obra','projeto','project','site'],
     item:['item','material','produto'],
     qty:['quantidade','qty','qtd','quantity'], 
     requestedBy:['requisitante','solicitante','quem pediu','requested by'],
@@ -1134,6 +1167,8 @@ const handleCatalog = (file) => {
       template = 'Trabalho FDS';
     } else if (template.includes('Deslocad') || template.includes('deslocad')) {
       template = 'Trabalho Deslocado';
+    } else if (template.includes('Feriad') || template.includes('feriad')) {
+      template = 'Feriado';
     }
     const worker = val('worker');
     const rawDate = val('date');
@@ -1147,13 +1182,17 @@ const handleCatalog = (file) => {
     let overtime = 0;
     let periodStart = '';
     let periodEnd = '';
-    
+
     // ✅ LÓGICA INTELIGENTE POR TIPO DE TEMPLATE
+    const projectFromAC = val('projectNormal');
+    const projectFromAH = val('projectWeekend');
+    const projectFromAG = val('projectShifted');
+
     if (template.includes('Normal') || template.includes('normal')) {
       // TRABALHO NORMAL
-      project = val('projectNormal') || val('project');
+      project = projectFromAC || projectFromAH || val('project');
       supervisor = val('supervisorNormal') || val('supervisor');
-      
+
       const calcExtra = val('overtimeCalc');
       if (calcExtra) {
         overtime = toNumber(calcExtra);
@@ -1161,9 +1200,9 @@ const handleCatalog = (file) => {
       
     } else if (template.includes('Fim') || template.includes('FDS') || template.includes('semana')) {
       // FIM DE SEMANA
-      project = val('projectWeekend') || val('project');
+      project = projectFromAH || projectFromAC || val('project');
       supervisor = val('supervisorWeekend') || val('supervisor');
-      
+
       const calcHours = val('weekendCalc');
       if (calcHours) {
         hours = toNumber(calcHours);
@@ -1171,7 +1210,7 @@ const handleCatalog = (file) => {
       
     } else if (template.includes('Deslocad') || template.includes('deslocad')) {
       // TRABALHO DESLOCADO
-      project = val('projectShifted') || val('project');
+      project = projectFromAG || projectFromAH || projectFromAC || val('project');
       supervisor = val('supervisorShifted') || val('supervisorNormal') || val('supervisor');
       
     } else if (template.includes('Férias') || template.includes('ferias')) {
@@ -1187,7 +1226,11 @@ const handleCatalog = (file) => {
       periodEnd = normalizeDate(val('sickEnd'));
       hours = 0;
       overtime = 0;
-      
+
+    } else if (template === 'Feriado') {
+      hours = 0;
+      overtime = 0;
+
     } else if (template.includes('Falta') || template.includes('falta')) {
       // FALTA
       hours = toNumber(val('hours')) || 8;
@@ -1257,16 +1300,16 @@ const handleCatalog = (file) => {
       } else { 
         // Trabalho Normal, FDS, Deslocado
         if (!o.date) errs.push('data'); 
-        // ⬇️ Projeto e supervisor são opcionais (podem estar vazios)
-        // if (!o.project) errs.push('projeto'); 
-        // if (!o.supervisor) errs.push('encarregado'); 
+        // ⬇️ Obra e supervisor são opcionais (podem estar vazios)
+        // if (!o.project) errs.push('obra');
+        // if (!o.supervisor) errs.push('encarregado');
       }
-    } 
-    
-    if (section === 'materials') { 
-      if (!o.project) errs.push('projeto'); 
-      if (!o.item) errs.push('item'); 
-    } 
+    }
+
+    if (section === 'materials') {
+      if (!o.project) errs.push('obra');
+      if (!o.item) errs.push('item');
+    }
     
     return errs;
   };
@@ -1868,7 +1911,7 @@ const MaterialForm=({onSubmit,catalogMaps,projects,auth})=>{ // ⬅️ ADICIONA 
   const submit=()=>{
     const e={};
     const valid=items.map(r=>({name:cleanDesignation(r.name),qty:Number(r.qty||0)})).filter(r=>r.name&&r.qty>0);
-    if(!project.trim())e.project='Obra/Projeto é obrigatório.';
+    if(!project.trim())e.project='Obra é obrigatória.';
     if(valid.length===0)e.items='Adiciona pelo menos um item.';
     setErrors(e); 
     if(Object.keys(e).length) return;
@@ -1934,9 +1977,9 @@ const MaterialForm=({onSubmit,catalogMaps,projects,auth})=>{ // ⬅️ ADICIONA 
           {errors.items&&<div className="text-xs text-rose-600 mt-1">{errors.items}</div>}
         </div>
 
-        {/* ✅ APENAS O CAMPO OBRA/PROJETO */}
+        {/* ✅ APENAS O CAMPO OBRA */}
         <div className="space-y-3">
-          <label className="text-sm">Obra/Projeto
+          <label className="text-sm">Obra
             <input
               className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.project?'border-rose-400':''}`}
               placeholder="Escreve o nome da obra"
@@ -2073,7 +2116,7 @@ const LogisticsView = ({ orders, moveOrderStatus, setOrderPatch, setModal, downl
   );
 
   const exportCSV=()=> {
-    const headers=['ID','Data','Projeto','Requisitante','Estado','Total','Itens'];
+    const headers=['ID','Data','Obra','Requisitante','Estado','Total','Itens'];
     const rows=filtered.map(o=>[
       o.id,
       o.requestedAt,
@@ -2447,10 +2490,6 @@ const MonthlyReportView = ({ timeEntries, people }) => {
     endDate.setHours(23, 59, 59, 999);
 
     // Contar dias úteis do mês
-    const workDays = countWeekdaysInclusive(startDate, endDate);
-
-    // Filtrar entradas do mês
-    // Filtrar entradas do mês
     const entriesInMonth = timeEntries.filter((t) => {
       if (t.template === 'Férias' || t.template === 'Baixa') {
         const start = new Date(t.periodStart || t.date);
@@ -2460,6 +2499,9 @@ const MonthlyReportView = ({ timeEntries, people }) => {
       const d = new Date(t.date);
       return d >= startDate && d <= endDate;
     });
+
+    const holidaySet = getHolidayDatesInRange(entriesInMonth, startDate, endDate);
+    const workDays = countWeekdaysInclusive(startDate, endDate, holidaySet);
 
     // ✅ DEBUG: Mostrar templates encontrados
     console.log('📊 Templates no mês:', {
@@ -2753,7 +2795,7 @@ if (!byWorker.has(worker)) {
                   <tr>
                     <th className="px-3 py-2 text-left">Data</th>
                     <th className="px-3 py-2 text-left">Tipo</th>
-                    <th className="px-3 py-2 text-left">Projeto</th>
+                    <th className="px-3 py-2 text-left">Obra</th>
                     <th className="px-3 py-2 text-right">Horas</th>
                     <th className="px-3 py-2 text-right">Extra</th>
                   </tr>
@@ -2859,7 +2901,7 @@ const ProfileView = ({ timeEntries, auth, people }) => {
         totalOvertime += Number(entry.overtime) || 0;
         daysWorked.add(entry.date);
 
-        const project = entry.project || 'Sem projeto';
+        const project = entry.project || 'Sem obra';
         const hours = (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
         projectHours.set(project, (projectHours.get(project) || 0) + hours);
         
@@ -3184,7 +3226,7 @@ const ProfileView = ({ timeEntries, auth, people }) => {
               <tr>
                 <th className="px-3 py-2 text-left">Data</th>
                 <th className="px-3 py-2 text-left">Tipo</th>
-                <th className="px-3 py-2 text-left">Projeto</th>
+                <th className="px-3 py-2 text-left">Obra</th>
                 <th className="px-3 py-2 text-right">Horas</th>
                 <th className="px-3 py-2 text-right">Extra</th>
               </tr>
@@ -3571,10 +3613,10 @@ const TimesheetTemplateForm = ({
   const validate = t => {
     const e = {};
     
-    // Trabalho Normal: precisa data, projeto, supervisor, horas válidas
+    // Trabalho Normal: precisa data, obra, supervisor, horas válidas
     if (t.template === 'Trabalho Normal') {
       if (!t.date) e.date = 'Data é obrigatória.';
-      if (!t.project) e.project = 'Projeto/Obra é obrigatório.';
+      if (!t.project) e.project = 'Obra é obrigatória.';
       if (!t.supervisor) e.supervisor = 'Encarregado é obrigatório.';
       if (t.hours < 0) e.hours = 'Horas inválidas.';
       if (t.overtime < 0) e.overtime = 'Extra inválido.';
@@ -3687,10 +3729,10 @@ const TimesheetTemplateForm = ({
               </label>
             )}
 
-            {/* OBRA/PROJETO (só para Trabalho Normal) */}
+            {/* OBRA (só para Trabalho Normal) */}
             {template === 'Trabalho Normal' && (
               <label className="text-sm">
-                Obra/Projeto
+                Obra
                 <div className="mt-1">
                   <CustomSelect
                     value={form.project}
@@ -4857,7 +4899,7 @@ function DashboardView() {
           icon="wrench"
           title="Obras Ativas"
           value={projects.length}
-          subtitle="Projetos em curso"
+          subtitle="Obras em curso"
           onClick={() => setView("obras")}
         />
       </div>
@@ -4932,7 +4974,7 @@ function TimesheetsView() {
               <tr>
                 <th className="px-3 py-2 text-left">Data</th>
                 <th className="px-3 py-2 text-left">Tipo</th>
-                <th className="px-3 py-2 text-left">Projeto</th>
+                <th className="px-3 py-2 text-left">Obra</th>
                 <th className="px-3 py-2 text-left">Colaborador</th>
                 <th className="px-3 py-2 text-right">Horas</th>
                 <th className="px-3 py-2 text-right">Extra</th>
@@ -5037,7 +5079,7 @@ function TableMaterials() {
 
       <Card className="p-4">
         <TableSimple
-          columns={["Data", "Projeto", "Requisitante", "Estado", "Itens"]}
+          columns={["Data", "Obra", "Requisitante", "Estado", "Itens"]}
           rows={visibleOrders.map((o) => [
             fmtDate(o.requestedAt),
             o.project,
@@ -5439,7 +5481,8 @@ function TableMaterials() {
       return d >= a && d <= b;
     };
 
-    const uteis = countWeekdaysInclusive(start, end);
+    const holidaySet = getHolidayDatesInRange(timeEntries, start, end);
+    const uteis = countWeekdaysInclusive(start, end, holidaySet);
 
     // dias registados (qualquer tipo) dentro do ciclo
     const diasReg = (() => {
@@ -5724,7 +5767,7 @@ function TableMaterials() {
 </Modal>
 
       <Modal open={modal?.name==='ts-all'} title="Todos os Timesheets" onClose={()=>setModal(null)} wide>
-        <TableSimple columns={["Data/Período","Tipo","Projeto","Encarregado","Horas","Extra"]} rows={visibleTimeEntries.map(t=>[t.template==='Trabalho Normal'?t.date:`${t.periodStart}→${t.periodEnd}`,t.template,t.project||'-',t.supervisor||'-',t.hours||0,t.overtime||0])}/>
+        <TableSimple columns={["Data/Período","Tipo","Obra","Encarregado","Horas","Extra"]} rows={visibleTimeEntries.map(t=>[t.template==='Trabalho Normal'?t.date:`${t.periodStart}→${t.periodEnd}`,t.template,t.project||'-',t.supervisor||'-',t.hours||0,t.overtime||0])}/>
       </Modal>
 
       <Modal open={modal?.name==='import'} title="Importar / Exportar Dados" onClose={()=>setModal(null)} wide>
