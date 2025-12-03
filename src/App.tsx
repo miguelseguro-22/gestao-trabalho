@@ -2525,6 +2525,7 @@ if (!byWorker.has(worker)) {
         const dayOfWeek = date.getDay();
         if (dayOfWeek === 0 || dayOfWeek === 6) {
           data.totalOvertimeWeekend += (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
+          }
         }
       } else if (entry.template === 'Férias') {
         const start = new Date(entry.periodStart || entry.date);
