@@ -1,4 +1,5 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { supabase, supabaseReady } from './lib/supabaseClient'
 /* ---------- Helpers ---------- */
 const Icon=({name,className='w-5 h-5'})=>{
   const S={stroke:'currentColor',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'};
@@ -128,6 +129,36 @@ const LS_KEY='wm_platform_import_v1';
 const loadState=()=>{try{const raw=localStorage.getItem(LS_KEY);if(!raw)return null;const s=JSON.parse(raw);if(Array.isArray(s.activity))s.activity=s.activity.map(a=>({...a,ts:new Date(a.ts)}));return s}catch{return null}};
 const saveState=(state)=>{try{localStorage.setItem(LS_KEY,JSON.stringify(state))}catch{}};
 const clearState=()=>{try{localStorage.removeItem(LS_KEY)}catch{}};
+
+const CLOUD_STATE_TABLE='app_state'
+const CLOUD_ROW_ID=import.meta.env.VITE_CLOUD_ROW_ID||'shared'
+const fetchCloudState=async(rowId:string=CLOUD_ROW_ID)=>{
+  if(!supabaseReady||!supabase)return null
+  try{
+    const {data,error}=await supabase
+      .from(CLOUD_STATE_TABLE)
+      .select('payload,updated_at')
+      .eq('id',rowId)
+      .single()
+    if(error){
+      console.warn('Falha a carregar estado da cloud',error)
+      return null
+    }
+    return {payload:data?.payload||null,updatedAt:data?.updated_at||null}
+  }catch(err){
+    console.warn('Erro inesperado ao carregar estado da cloud',err)
+    return null
+  }
+}
+const saveCloudState=async(payload,rowId:string=CLOUD_ROW_ID)=>{
+  if(!supabaseReady||!supabase)return
+  try{
+    const updatedAt=payload?.updatedAt||new Date().toISOString()
+    await supabase.from(CLOUD_STATE_TABLE).upsert({id:rowId,payload,updated_at:updatedAt})
+  }catch(err){
+    console.warn('Falha ao gravar estado na cloud',err)
+  }
+}
 const toCSV=(headers,rows)=>{const esc=v=>`"${String(v??'').replace(/"/g,'""')}"`;return[headers.join(','),...rows.map(r=>r.map(esc).join(','))].join('\r\n')};
 const download=(filename,content,mime='text/csv')=>{const blob=new Blob([content],{type:mime});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url)};
 const guessDelimiter=line=>{const sc=(line.match(/;/g)||[]).length,cc=(line.match(/,/g)||[]).length;return sc>cc?';':','};
@@ -179,7 +210,7 @@ function printOrderHTML(o, priceOf, codeOf){
 
   const total = o.items.reduce((s,it)=>s+priceOf(it.name)*(Number(it.qty)||0),0);
 
-  return `<!doctype html><html><head><meta charset="utf-8"/><title>Pedido ${o.id}</title><style>body{font-family:system-ui,Arial;padding:24px;color:#0f172a}h1{margin:0 0 12px 0;font-size:20px}.meta{margin-bottom:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #cbd5e1;padding:8px}th{text-align:left;background:#f8fafc}.right{text-align:right}</style></head><body><h1>Pedido de Material</h1><div class="meta"><div><b>Projeto:</b> ${o.project}</div><div><b>Requisitante:</b> ${o.requestedBy||'—'}</div><div><b>Data:</b> ${o.requestedAt}</div><div><b>ID:</b> ${o.id}</div>${o.notes?`<div style="grid-column:span 2"><b>Notas:</b> ${o.notes}</div>`:''}</div><table><tr><th>Item</th><th>Código</th><th class="right">Qtd</th><th class="right">Preço</th><th class="right">Subtotal</th></tr>${rows}<tr><th colspan="4" class="right">Total</th><th class="right">${total.toFixed(2)} €</th></tr></table></body></html>`;
+return `<!doctype html><html><head><meta charset="utf-8"/><title>Pedido ${o.id}</title><style>body{font-family:system-ui,Arial;padding:24px;color:#0f172a}h1{margin:0 0 12px 0;font-size:20px}.meta{margin-bottom:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #cbd5e1;padding:8px}th{text-align:left;background:#f8fafc}.right{text-align:right}</style></head><body><h1>Pedido de Material</h1><div class="meta"><div><b>Obra:</b> ${o.project}</div><div><b>Requisitante:</b> ${o.requestedBy||'—'}</div><div><b>Data:</b> ${o.requestedAt}</div><div><b>ID:</b> ${o.id}</div>${o.notes?`<div style="grid-column:span 2"><b>Notas:</b> ${o.notes}</div>`:''}</div><table><tr><th>Item</th><th>Código</th><th class="right">Qtd</th><th class="right">Preço</th><th class="right">Subtotal</th></tr>${rows}<tr><th colspan="4" class="right">Total</th><th class="right">${total.toFixed(2)} €</th></tr></table></body></html>`;
 }
 
 function printTimesheetReportHTML({ worker, cycle, rows }) {
@@ -400,7 +431,7 @@ function exportTimesheetCycleCSV(entries = []) {
   const rows = (entries||[])
     .filter(t => t.template === 'Trabalho Normal' && inRange(t.date))
     .map(t => [t.date, t.worker || t.supervisor || '', t.project || '', Number(t.hours)||0, Number(t.overtime)||0]);
-  const csv = toCSV(['Data','Colaborador','Projeto','Horas','Extra'], rows);
+  const csv = toCSV(['Data','Colaborador','Obra','Horas','Extra'], rows);
   download(`relatorio_timesheets_${todayISO()}.csv`, csv);
 }
 
@@ -452,7 +483,7 @@ function printTimesheetCycleReport(entries = []) {
     <div class="muted">${start.toLocaleDateString('pt-PT')} – ${end.toLocaleDateString('pt-PT')}</div>
     <table>
       <thead>
-        <tr><th>Data</th><th>Colaborador</th><th>Projeto</th><th class="right">Horas</th><th class="right">Extra</th><th>Obs.</th></tr>
+        <tr><th>Data</th><th>Colaborador</th><th>Obra</th><th class="right">Horas</th><th class="right">Extra</th><th>Obs.</th></tr>
       </thead>
       <tbody>${tr || '<tr><td colspan="6" style="text-align:center;color:#64748b">Sem registos no intervalo.</td></tr>'}</tbody>
       <tfoot>
@@ -499,6 +530,51 @@ const cleanDesignation = s => String(s||'')
   .trim();
 const normText = s => String(s||'').trim().toLowerCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const normalizeISODate = (v) => {
+  const s = String(v || '').trim();
+  if (!s) return '';
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (m) {
+    let [_, d, mo, y] = m;
+    if (y.length === 2) y = '20' + y;
+    d = d.padStart(2, '0');
+    mo = mo.padStart(2, '0');
+    return `${y}-${mo}-${d}`;
+  }
+  const d = new Date(s);
+  if (!isNaN(d)) return d.toISOString().slice(0, 10);
+  return '';
+};
+const timeEntrySignature = (t) => {
+  const primaryDate = normalizeISODate(t.date || t.periodStart || '');
+  const endDate = normalizeISODate(t.periodEnd || t.date || '');
+  const hours = Math.round(((Number(t.hours) || 0) + Number.EPSILON) * 100) / 100;
+  const overtime = Math.round(((Number(t.overtime) || 0) + Number.EPSILON) * 100) / 100;
+
+  return [
+    normText(t.worker || t.supervisor || ''),
+    normText(t.template || ''),
+    normText(t.project || ''),
+    normText(t.supervisor || ''),
+    primaryDate,
+    endDate,
+    hours,
+    overtime,
+  ].join('||');
+};
+const dedupTimeEntries = (entries = []) => {
+  const seen = new Set();
+  const out = [];
+  for (const t of entries) {
+    const key = timeEntrySignature(t);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+};
 const parseEUPriceString = (s) => { if(!s) return NaN; const t=String(s).replace(/[^\d,.\-]/g,'').replace(/\.(?=.*\.)/g,'').replace(',', '.'); const n=parseFloat(t); return isNaN(n)?NaN:n; };
 const pickPriceFromColumns = (cols) => { let p = NaN; if(cols[3]!=null && cols[3]!==''){ p = parseEUPriceString(cols[3]); } if(!isFinite(p)){ p = parseEUPriceString(cols[2]); } if(!isFinite(p)) p = 0; return Math.round(p*10000)/10000; };
 
@@ -591,32 +667,108 @@ const CalendarLegend = () => {
 
 const TYPE_FILL_BG = { 'Trabalho Normal':'bg-emerald-600','Férias':'bg-violet-600','Baixa':'bg-rose-600','Falta':'bg-amber-600' };
 const TYPE_COLORS = TYPE_FILL_BG;
-const countWeekdaysInclusive=(start,end)=>{const cur=new Date(start);cur.setHours(0,0,0,0);const last=new Date(end);last.setHours(0,0,0,0);let c=0;while(cur<=last){const d=cur.getDay();if(d!==0&&d!==6)c++;cur.setDate(cur.getDate()+1)}return c}
+const isValidDateValue = (d) => d instanceof Date && !Number.isNaN(d.getTime());
+const getHolidayDatesInRange = (entries = [], start, end) => {
+  if (!start || !end) return new Set();
+  const holidaySet = new Set();
+
+  const normalizeISO = (raw) => {
+    if (!raw) return null;
+    const d = new Date(raw);
+    if (!isValidDateValue(d)) return null;
+    return d.toISOString().slice(0, 10);
+  };
+
+  const inRange = (iso) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    if (!isValidDateValue(d)) return false;
+    return d >= start && d <= end;
+  };
+
+  entries.forEach((t) => {
+    if (t.template !== 'Feriado') return;
+    const iso = normalizeISO(t.date || t.periodStart || t.periodEnd);
+    if (iso && inRange(iso)) holidaySet.add(iso);
+  });
+
+  return holidaySet;
+};
+
+const countWeekdaysInclusive = (start, end, holidaySet = new Set()) => {
+  const cur = new Date(start);
+  cur.setHours(0, 0, 0, 0);
+  const last = new Date(end);
+  last.setHours(0, 0, 0, 0);
+  let c = 0;
+  while (cur <= last) {
+    const d = cur.getDay();
+    const iso = cur.toISOString().slice(0, 10);
+    if (d !== 0 && d !== 6 && !holidaySet.has(iso)) c++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return c;
+};
 const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
   const [offset, setOffset] = useState(0);
   const { start, end } = useMemo(()=>getCycle(offset),[offset]);
   const dayTypes = useMemo(()=>{
     const m=new Map(); const push=(iso,t)=>{if(!m.has(iso))m.set(iso,new Set()); m.get(iso).add(t);};
+    const toDay = (val) => {
+      const d = new Date(val);
+      if (!isValidDateValue(d)) return null;
+      d.setHours(0,0,0,0);
+      return d;
+    };
     timeEntries.forEach(t=>{
       const inRange=d=>(d>=start&&d<=end);
-      
+
       if (t.template === 'Férias' || t.template === 'Baixa') { // ⬅️ JÁ VEM NORMALIZADO
-        const s=new Date(t.periodStart||t.date),e=new Date(t.periodEnd||t.date);
-        const cur=new Date(s);cur.setHours(0,0,0,0);const last=new Date(e);last.setHours(0,0,0,0);
+        const s = toDay(t.periodStart||t.date), e = toDay(t.periodEnd||t.date);
+        if (!s || !e) return;
+        const cur=new Date(s);const last=new Date(e);
         while(cur<=last){if(inRange(cur)) push(cur.toISOString().slice(0,10),t.template); cur.setDate(cur.getDate()+1);}
       }else{
-        const d=new Date(t.date); if(inRange(d)) push(d.toISOString().slice(0,10),t.template);
+        const d=toDay(t.date); if(!d) return; if(inRange(d)) push(d.toISOString().slice(0,10),t.template);
       }
     });
     return m;
   },[timeEntries,start,end]);
+  const dayInfo = useMemo(() => {
+    const m = new Map();
+    const add = (iso, project, overtime) => {
+      if (!m.has(iso)) m.set(iso, { projects: new Set(), overtime: 0 });
+      const cur = m.get(iso);
+      if (project) cur.projects.add(project);
+      const ot = Number(overtime) || 0;
+      if (ot) cur.overtime = Number((cur.overtime || 0) + ot);
+    };
+
+    const toDay = (val) => {
+      const d = new Date(val);
+      if (!isValidDateValue(d)) return null;
+      d.setHours(0,0,0,0);
+      return d;
+    };
+
+    timeEntries.forEach((t) => {
+      if (t.template !== 'Trabalho Normal') return;
+      const d = toDay(t.date);
+      if (!d || !(d >= start && d <= end)) return;
+      const iso = d.toISOString().slice(0, 10);
+      add(iso, t.project || t.projectNormal || '', t.overtime);
+    });
+
+    return m;
+  }, [timeEntries, start, end]);
   const days = useMemo(()=>{
     const first=(()=>{const d=new Date(start);const diff=mondayIndex(d);d.setDate(d.getDate()-diff);return d})();
     const last=(()=>{const d=new Date(end);const diff=6-mondayIndex(d);d.setDate(d.getDate()+diff);d.setHours(0,0,0,0);return d})();
     const arr=[]; for(let d=new Date(first);d<=last;d.setDate(d.getDate()+1)) arr.push(new Date(d));
     return arr;
   },[start,end]);
-  const wd = countWeekdaysInclusive(start, end);
+  const holidays = useMemo(()=>getHolidayDatesInRange(timeEntries,start,end),[timeEntries,start,end]);
+  const wd = countWeekdaysInclusive(start, end, holidays);
   const isToday = (d) => { const t=new Date();t.setHours(0,0,0,0); const x=new Date(d);x.setHours(0,0,0,0); return t.getTime()===x.getTime(); };
   const click = (d) => { if (onDayClick && d >= start && d <= end) onDayClick(d.toISOString().slice(0,10)); };
 
@@ -679,6 +831,16 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
               ringToday
             ].join(' ')}>
               <div className={`text-xs ${has ? 'text-white' : ''}`}>{d.getDate()}</div>
+              {inCycle && has && dayInfo.has(iso) && (
+                <div className="mt-1 text-[11px] leading-tight text-white/90">
+                  <div className="truncate">
+                    {Array.from(dayInfo.get(iso)?.projects || []).join(', ') || '—'}
+                  </div>
+                  {Number(dayInfo.get(iso)?.overtime || 0) > 0 && (
+                    <div className="text-white font-semibold">+{Number(dayInfo.get(iso)?.overtime || 0)}h extra</div>
+                  )}
+                </div>
+              )}
             </button>
           );
         })}
@@ -726,7 +888,7 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate})=>{
             <div className="flex gap-2"><Button variant="secondary" size="sm" onClick={()=>onDuplicate(t)}>Duplicar</Button><Button size="sm" onClick={()=>onEdit(t)}>Editar</Button></div>
           </div>
           <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            {t.template==='Trabalho Normal'?<>Projeto: <span className="font-medium text-slate-700 dark:text-slate-200">{t.project||'-'}</span> · Encarregado: {t.supervisor||'-'} · Horas: {t.hours||0} (+{t.overtime||0})</> : t.template==='Falta'?<>Motivo: {t.notes||'-'}</> : <>Período: {t.periodStart} → {t.periodEnd}</>}
+            {t.template==='Trabalho Normal'?<>Obra: <span className="font-medium text-slate-700 dark:text-slate-200">{t.project||'-'}</span> · Encarregado: {t.supervisor||'-'} · Horas: {t.hours||0} (+{t.overtime||0})</> : t.template==='Falta'?<>Motivo: {t.notes||'-'}</> : <>Período: {t.periodStart} → {t.periodEnd}</>}
           </div>
         </div>
       ))}
@@ -741,6 +903,8 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
   const [csvPreview,setCsvPreview]=useState({headers:[],rows:[],delim:','});
   const [map,setMap]=useState({});
   const [jsonPreview,setJsonPreview]=useState(null);
+  const [shareText,setShareText]=useState('');
+  const [shareOut,setShareOut]=useState('');
   const [status,setStatus]=useState('');
 
   // NOVO: catálogo em memória até escolher Juntar/Substituir
@@ -758,30 +922,34 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
       {k:'supervisorNormal',label:'Encarregado Normal (Coluna F)',opt:true},
       {k:'overtimeStart',label:'Extra Início (Coluna V)',opt:true},
       {k:'overtimeEnd',label:'Extra Fim (Coluna W)',opt:true},
-      {k:'overtimeCalc',label:'Extra Calculado (Coluna X)',opt:true},
+      {k:'overtimeCalc',label:'Horas Extra (Coluna L)',opt:true},
       
       // FIM DE SEMANA
-      {k:'projectWeekend',label:'Obra FDS (Coluna AH)',opt:true},
-      {k:'supervisorWeekend',label:'Encarregado FDS (Coluna AF)',opt:true},
-      {k:'weekendStart',label:'FDS Início (Coluna AO)',opt:true},
-      {k:'weekendEnd',label:'FDS Fim (Coluna AP)',opt:true},
-      {k:'weekendCalc',label:'FDS Calculado (Coluna AQ)',opt:true},
-      
-      // TRABALHO DESLOCADO
-      {k:'projectShifted',label:'Obra Deslocada (Coluna AG)',opt:true},
+    {k:'projectWeekend',label:'Obra FDS (Coluna AH)',opt:true},
+    {k:'supervisorWeekend',label:'Encarregado FDS (Coluna AF)',opt:true},
+    {k:'weekendStart',label:'FDS Início (Coluna AO)',opt:true},
+    {k:'weekendEnd',label:'FDS Fim (Coluna AP)',opt:true},
+    {k:'weekendCalc',label:'FDS Calculado (Coluna AQ)',opt:true},
+
+      // FERIADO
+      {k:'holidayFlag',label:'Marcador Feriado (Coluna AW)',opt:true},
+
+    // TRABALHO DESLOCADO
+    {k:'projectShifted',label:'Obra Deslocada (Coluna AG)',opt:true},
       {k:'supervisorShifted',label:'Encarregado Deslocado (Coluna F)',opt:true},
       
       // FÉRIAS E BAIXA
       {k:'holidayStart',label:'Férias Início (Coluna M)',opt:true},
       {k:'holidayEnd',label:'Férias Fim (Coluna N)',opt:true},
       {k:'sickStart',label:'Baixa Início (Coluna R)',opt:true},
-      {k:'sickEnd',label:'Baixa Fim (Coluna T)',opt:true},
+      {k:'sickEnd',label:'Baixa Fim (Coluna S)',opt:true},
+      {k:'sickDays',label:'Dias de Baixa (Coluna T)',opt:true},
       
       {k:'notes',label:'Observações',opt:true}
     ],
     materials:[
       {k:'requestedAt',label:'data pedido'},
-      {k:'project',label:'projeto/obra'},
+      {k:'project',label:'Obra'},
       {k:'item',label:'item/material'},
       { k:'code',  label:'código (opcional)', opt:true },   // ⬅️ adicionar
       {k:'qty',label:'quantidade'},
@@ -800,7 +968,7 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     supervisorNormal:['encarregado','supervisor','f'],
     overtimeStart:['extra inicio','overtime start','v'],
     overtimeEnd:['extra fim','overtime end','w'],
-    overtimeCalc:['extra calculado','overtime calc','x'],
+    overtimeCalc:['horas extra','extra','extra calculado','overtime calc','l','coluna l'],
     
     // Fim de Semana
     projectWeekend:['obra fds','obra fim semana','ah'],
@@ -816,16 +984,24 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     // Férias
     holidayStart:['ferias inicio','m'],
     holidayEnd:['ferias fim','n'],
-    
+    holidayFlag:['feriado','feriad','aw'],
+
     // Baixa
-    sickStart:['baixa inicio','r'],
-    sickEnd:['baixa fim','t'],
+    sickStart:[
+      'baixa inicio','inicio baixa','r',
+      'duracao da baixa - inicio','duração da baixa - inicio','duracao baixa inicio','duração baixa inicio'
+    ],
+    sickEnd:[
+      'baixa fim','fim baixa','s',
+      'duracao da baixa - fim','duração da baixa - fim','duracao baixa fim','duração baixa fim'
+    ],
+    sickDays:['dias baixa','baixa dias','t'],
     
     notes:['observações','notas','notes','obs'],
     
     // Materials (mantém)
     requestedAt:['data','pedido','data pedido','request date'],
-    project:['projeto','project','obra','site'], 
+    project:['obra','projeto','project','site'],
     item:['item','material','produto'],
     qty:['quantidade','qty','qtd','quantity'], 
     requestedBy:['requisitante','solicitante','quem pediu','requested by'],
@@ -867,14 +1043,15 @@ const handleCSV = (file) => {
         return index - 1;
       };
       
-      const mapping = {
-        worker: 'AX', template: 'D', date: 'C',
-        projectNormal: 'AC', supervisorNormal: 'F',
-        overtimeCalc: 'X', projectWeekend: 'AH',
-        supervisorWeekend: 'AF', weekendCalc: 'AQ',
-        projectShifted: 'AG', holidayStart: 'M',
-        holidayEnd: 'N', sickStart: 'R', sickEnd: 'T'
-      };
+        const mapping = {
+          worker: 'AX', template: 'D', date: 'C',
+          projectNormal: 'AC', supervisorNormal: 'F',
+          overtimeCalc: 'L', projectWeekend: 'AH',
+          supervisorWeekend: 'AF', weekendCalc: 'AQ',
+          projectShifted: 'AG', holidayStart: 'M',
+          holidayEnd: 'N', sickStart: 'R', sickEnd: 'S', sickDays: 'T',
+          holidayFlag: 'AW'
+        };
       
       for (const [field, letter] of Object.entries(mapping)) {
         const idx = colIndex(letter);
@@ -1108,7 +1285,7 @@ const handleCatalog = (file) => {
     onClose();
   };
 
-  const normalizeDate=(v)=>{const s=String(v||'').trim();if(!s)return'';if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;const m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);if(m){let [_,d,mo,y]=m;if(y.length===2)y='20'+y;d=d.padStart(2,'0');mo=mo.padStart(2,'0');return`${y}-${mo}-${d}`;}const d=new Date(s);if(!isNaN(d))return d.toISOString().slice(0,10);return'';};
+  const normalizeDate = normalizeISODate;
   const toNumber=(v)=>{if(v==null||v==='')return 0; const s=String(v).replace(/\./g,'').replace(',','.'); const n=parseFloat(s); return isNaN(n)?0:n};
 
   const mapRow = (r) => {
@@ -1134,60 +1311,122 @@ const handleCatalog = (file) => {
       template = 'Trabalho FDS';
     } else if (template.includes('Deslocad') || template.includes('deslocad')) {
       template = 'Trabalho Deslocado';
+    } else if (template.includes('Feriad') || template.includes('feriad')) {
+      template = 'Feriado';
     }
     const worker = val('worker');
-    const rawDate = val('date');
-    
+    const rawDate = val('date') || val('weekendStart') || val('overtimeStart') || val('holidayStart');
+
     // ✅ NORMALIZAR DATA
-    const date = normalizeDate(rawDate);
+    let date = normalizeDate(rawDate);
     
     let project = '';
     let supervisor = '';
-    let hours = 8;
+    let hours = 0;
     let overtime = 0;
     let periodStart = '';
     let periodEnd = '';
-    
+    let sickDays = 0;
+    const feriadoFlagRaw = val('holidayFlag');
+    const feriadoFlag = norm(feriadoFlagRaw || '');
+    const feriadoFalse = new Set(['', '0', 'nao', 'não', 'no', 'false', 'n', 'f']);
+    const feriadoTrue = ['1', 'sim', 's', 'yes', 'y', 'feriado', 'feriad', 'fer', 'feri', 'holiday'];
+    const isFeriadoFlag = feriadoFlag && !feriadoFalse.has(feriadoFlag) && feriadoTrue.some(t => feriadoFlag === t || feriadoFlag.includes(t));
+
     // ✅ LÓGICA INTELIGENTE POR TIPO DE TEMPLATE
+    const projectFromAC = val('projectNormal');
+    const projectFromAH = val('projectWeekend');
+    const projectFromAG = val('projectShifted');
+    const baseProject = projectFromAC || '';
+    const weekendProject = projectFromAH || '';
+    const shiftedProject = projectFromAG || '';
+
+    const extraHours = toNumber(val('overtimeCalc'));
+    const weekendHours = toNumber(val('weekendCalc'));
+    const isWeekendDate = (() => {
+      const d = date ? new Date(date) : null;
+      return d ? d.getDay() === 0 || d.getDay() === 6 : false;
+    })();
+
+    if (isWeekendDate && template === 'Trabalho Normal') {
+      template = 'Trabalho FDS';
+    }
+
+    if (isFeriadoFlag) {
+      template = 'Feriado';
+    }
+
+    const pickNormalProject = () => baseProject || weekendProject || shiftedProject || val('project');
+    const pickWeekendProject = () => weekendProject || baseProject || shiftedProject || val('project');
+    const pickShiftedProject = () => projectFromAG || weekendProject || baseProject || val('project');
+
     if (template.includes('Normal') || template.includes('normal')) {
       // TRABALHO NORMAL
-      project = val('projectNormal') || val('project');
+      project = pickNormalProject();
       supervisor = val('supervisorNormal') || val('supervisor');
-      
-      const calcExtra = val('overtimeCalc');
-      if (calcExtra) {
-        overtime = toNumber(calcExtra);
-      }
-      
+
+      hours = hours || 0;
+      overtime = extraHours || toNumber(val('overtimeStart') && val('overtimeEnd') ? calculateHoursDiff(val('overtimeStart'), val('overtimeEnd')) : 0);
+
     } else if (template.includes('Fim') || template.includes('FDS') || template.includes('semana')) {
       // FIM DE SEMANA
-      project = val('projectWeekend') || val('project');
+      project = pickWeekendProject();
       supervisor = val('supervisorWeekend') || val('supervisor');
-      
-      const calcHours = val('weekendCalc');
-      if (calcHours) {
-        hours = toNumber(calcHours);
-      }
-      
+
+      hours = weekendHours || hours || 0;
+
     } else if (template.includes('Deslocad') || template.includes('deslocad')) {
       // TRABALHO DESLOCADO
-      project = val('projectShifted') || val('project');
+      project = pickShiftedProject();
       supervisor = val('supervisorShifted') || val('supervisorNormal') || val('supervisor');
-      
+
+      hours = hours || 0;
+
     } else if (template.includes('Férias') || template.includes('ferias')) {
       // FÉRIAS
       periodStart = normalizeDate(val('holidayStart'));
-      periodEnd = normalizeDate(val('holidayEnd'));
+      periodEnd = normalizeDate(val('holidayEnd')) || periodStart;
       hours = 0;
       overtime = 0;
-      
+
     } else if (template.includes('Baixa') || template.includes('baixa')) {
-      // BAIXA
-      periodStart = normalizeDate(val('sickStart'));
-      periodEnd = normalizeDate(val('sickEnd'));
+      // BAIXA — priorizar o período e não o dia de registo
+      const sickStartRaw = normalizeDate(val('sickStart'));
+      const sickEndRaw = normalizeDate(val('sickEnd'));
+      sickDays = Math.max(0, toNumber(val('sickDays')));
+
+      // Derivar datas mesmo que o utilizador só preencha parte
+      const derivedStart = (() => {
+        if (sickStartRaw) return sickStartRaw;
+        if (sickEndRaw && sickDays > 0) {
+          const end = new Date(sickEndRaw);
+          end.setDate(end.getDate() - Math.max(0, sickDays - 1));
+          return normalizeDate(end.toISOString().slice(0, 10));
+        }
+        return '';
+      })();
+
+      const derivedEnd = (() => {
+        if (sickEndRaw) return sickEndRaw;
+        if (derivedStart && sickDays > 0) {
+          const end = new Date(derivedStart);
+          end.setDate(end.getDate() + sickDays - 1);
+          return normalizeDate(end.toISOString().slice(0, 10));
+        }
+        return derivedStart || '';
+      })();
+
+      periodStart = derivedStart || normalizeDate(val('holidayStart')) || date;
+      periodEnd = derivedEnd || periodStart;
+      date = periodStart || periodEnd || date;
       hours = 0;
       overtime = 0;
-      
+
+    } else if (template === 'Feriado') {
+      project = pickWeekendProject();
+      hours = weekendHours || hours || 0;
+      overtime = 0;
+
     } else if (template.includes('Falta') || template.includes('falta')) {
       // FALTA
       hours = toNumber(val('hours')) || 8;
@@ -1205,6 +1444,7 @@ const handleCatalog = (file) => {
       overtime,
       periodStart,
       periodEnd,
+      sickDays,
       notes: val('notes')
     };
   }
@@ -1257,16 +1497,16 @@ const handleCatalog = (file) => {
       } else { 
         // Trabalho Normal, FDS, Deslocado
         if (!o.date) errs.push('data'); 
-        // ⬇️ Projeto e supervisor são opcionais (podem estar vazios)
-        // if (!o.project) errs.push('projeto'); 
-        // if (!o.supervisor) errs.push('encarregado'); 
+        // ⬇️ Obra e supervisor são opcionais (podem estar vazios)
+        // if (!o.project) errs.push('obra');
+        // if (!o.supervisor) errs.push('encarregado');
       }
-    } 
-    
-    if (section === 'materials') { 
-      if (!o.project) errs.push('projeto'); 
-      if (!o.item) errs.push('item'); 
-    } 
+    }
+
+    if (section === 'materials') {
+      if (!o.project) errs.push('obra');
+      if (!o.item) errs.push('item');
+    }
     
     return errs;
   };
@@ -1275,7 +1515,12 @@ const handleCatalog = (file) => {
     const mapped=csvPreview.rows.map(mapRow);
     const valOk=mapped.filter(o=>validateMapped(o).length===0);
     if(!valOk.length){addToast('Nenhuma linha válida.','err');return;}
-    if(section==='timesheets'){ setters.setTimeEntries(cur=>mode==='replace'?valOk:[...valOk,...cur]); }
+    if (section === 'timesheets') {
+      setters.setTimeEntries((cur) => {
+        const next = mode === 'replace' ? valOk : [...valOk, ...cur];
+        return dedupTimeEntries(next);
+      });
+    }
     if(section==='materials'){
       const orders = valOk.map(x => ({
   id: uid(),
@@ -1292,9 +1537,46 @@ const handleCatalog = (file) => {
   };
 
   const exportBackup=()=>{ const all=setters.get(); download(`backup_${todayISO()}.json`, JSON.stringify(all,null,2),'application/json'); };
-const importBackup=(mode)=>{
-  if(!jsonPreview){ addToast('Carrega um JSON primeiro.','warn'); return; }
-  const obj=jsonPreview.obj; const safeArr=a=>Array.isArray(a)?a:[];
+  const shareEncode=(obj)=> btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+  const shareDecode=(code)=> JSON.parse(decodeURIComponent(escape(atob(code))));
+  const buildPreview=(obj)=>{
+    const info={
+      timeEntries: obj.timeEntries?.length||0,
+      orders: (obj.orders||obj.materials)?.length||0,
+      projects: obj.projects?.length||0,
+      activity: obj.activity?.length||0,
+      catalog: obj.catalog?.length||0
+    };
+    return {obj,info};
+  };
+  const shareFromLocal=()=>{
+    try{
+      const all=setters.get();
+      const code=shareEncode(all);
+      setShareOut(code);
+      navigator.clipboard?.writeText(code).then(()=>setStatus('Código copiado para a área de transferência.'),()=>{});
+      setStatus('Código gerado — copia/cola no outro dispositivo.');
+    }catch(err){
+      console.warn('Falha ao gerar código de partilha',err);
+      setStatus('Não foi possível gerar o código.');
+    }
+  };
+  const loadShareCode=()=>{
+    if(!shareText.trim()){setStatus('Cola primeiro um código.');return false;}
+    try{
+      const obj=shareDecode(shareText.trim());
+      setJsonPreview(buildPreview(obj));
+      setStatus('Código pronto — usa Substituir ou Juntar.');
+      return true;
+    }catch(err){
+      console.warn('Código de partilha inválido',err);
+      setStatus('Código inválido.');
+      return false;
+    }
+  };
+  const importBackup=(mode)=>{
+    if(!jsonPreview){ addToast('Carrega um JSON primeiro.','warn'); return; }
+    const obj=jsonPreview.obj; const safeArr=a=>Array.isArray(a)?a:[];
 const base={
   timeEntries: safeArr(obj.timeEntries),
   orders:     safeArr(obj.orders||obj.materials),
@@ -1402,10 +1684,10 @@ const base={
                 const mapping = {
                   worker: 'AX', template: 'D', date: 'C',
                   projectNormal: 'AC', supervisorNormal: 'F',
-                  overtimeCalc: 'X', projectWeekend: 'AH',
+                  overtimeCalc: 'L', projectWeekend: 'AH',
                   supervisorWeekend: 'AF', weekendCalc: 'AQ',
                   projectShifted: 'AG', holidayStart: 'M',
-                  holidayEnd: 'N', sickStart: 'R', sickEnd: 'T'
+                  holidayEnd: 'N', sickStart: 'R', sickEnd: 'S', sickDays: 'T'
                 };
                 
                 const autoMap = {};
@@ -1486,14 +1768,7 @@ const base={
                 reader.onload=()=>{
                   try{
                     const obj=JSON.parse(reader.result);
-                    const info={
-                      timeEntries: obj.timeEntries?.length||0,
-                      orders: (obj.orders||obj.materials)?.length||0,
-                      projects: obj.projects?.length||0,
-                      activity: obj.activity?.length||0,
-                      catalog: obj.catalog?.length||0
-                    };
-                    setJsonPreview({obj,info});
+                    setJsonPreview(buildPreview(obj));
                     setStatus('Backup JSON pronto');
                   }catch{
                     setStatus('JSON inválido');
@@ -1508,11 +1783,14 @@ const base={
           {jsonPreview&&(
             <Card className="p-3">
               <div className="text-sm">
-                Conteúdo: {
-                  Object.entries(jsonPreview.info)
-                    .map(([k,v])=>`${k}:${v}`)
-                    .join(' · ')
-                }
+                <div className="font-semibold">Resumo</div>
+                <div className="text-slate-600 dark:text-slate-300 text-xs space-y-1 mt-1">
+                  <div>Registos de horas: {jsonPreview.info.timeEntries}</div>
+                  <div>Encomendas: {jsonPreview.info.orders}</div>
+                  <div>Obras: {jsonPreview.info.projects}</div>
+                  <div>Atividade: {jsonPreview.info.activity}</div>
+                  <div>Catálogo: {jsonPreview.info.catalog}</div>
+                </div>
               </div>
               <div className="mt-3 flex gap-2 justify-end">
                 <Button variant="secondary" onClick={()=>importBackup('append')}>
@@ -1524,6 +1802,32 @@ const base={
               </div>
             </Card>
           )}
+
+          <Card className="p-3 space-y-3">
+            <div className="text-sm font-medium">Sincronização sem servidor</div>
+            <div className="text-xs text-slate-500 leading-relaxed">
+              Os registos ficam guardados no dispositivo; para vê-los noutro equipamento tens de os levar manualmente.
+              Gera o código abaixo no dispositivo de origem e cola-o no destino (por exemplo, do computador para o telemóvel),
+              depois escolhe <strong>Importar (Substituir)</strong> para ficarem idênticos.
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <div className="text-xs text-slate-500">Gera um código offline com todos os dados atuais e copia-o para colar no outro dispositivo.</div>
+                <Button variant="secondary" onClick={shareFromLocal}><Icon name="download"/> Gerar código</Button>
+                {shareOut && (
+                  <textarea value={shareOut} readOnly className="w-full h-28 text-xs rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700" />
+                )}
+              </div>
+              <div className="space-y-2">
+                <div className="text-xs text-slate-500">Cola aqui um código copiado de outro dispositivo e depois escolhe Substituir.</div>
+                <textarea value={shareText} onChange={e=>setShareText(e.target.value)} className="w-full h-28 text-xs rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700" placeholder="cola aqui o código gerado" />
+                <div className="flex gap-2 justify-end">
+                  <Button variant="secondary" onClick={loadShareCode}>Validar código</Button>
+                  <Button variant="danger" onClick={()=>{ if(loadShareCode()) importBackup('replace'); }}>Importar (Substituir)</Button>
+                </div>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
     </div>
@@ -1868,7 +2172,7 @@ const MaterialForm=({onSubmit,catalogMaps,projects,auth})=>{ // ⬅️ ADICIONA 
   const submit=()=>{
     const e={};
     const valid=items.map(r=>({name:cleanDesignation(r.name),qty:Number(r.qty||0)})).filter(r=>r.name&&r.qty>0);
-    if(!project.trim())e.project='Obra/Projeto é obrigatório.';
+    if(!project.trim())e.project='Obra é obrigatória.';
     if(valid.length===0)e.items='Adiciona pelo menos um item.';
     setErrors(e); 
     if(Object.keys(e).length) return;
@@ -1934,9 +2238,9 @@ const MaterialForm=({onSubmit,catalogMaps,projects,auth})=>{ // ⬅️ ADICIONA 
           {errors.items&&<div className="text-xs text-rose-600 mt-1">{errors.items}</div>}
         </div>
 
-        {/* ✅ APENAS O CAMPO OBRA/PROJETO */}
+        {/* ✅ APENAS O CAMPO OBRA */}
         <div className="space-y-3">
-          <label className="text-sm">Obra/Projeto
+          <label className="text-sm">Obra
             <input
               className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.project?'border-rose-400':''}`}
               placeholder="Escreve o nome da obra"
@@ -2073,7 +2377,7 @@ const LogisticsView = ({ orders, moveOrderStatus, setOrderPatch, setModal, downl
   );
 
   const exportCSV=()=> {
-    const headers=['ID','Data','Projeto','Requisitante','Estado','Total','Itens'];
+    const headers=['ID','Data','Obra','Requisitante','Estado','Total','Itens'];
     const rows=filtered.map(o=>[
       o.id,
       o.requestedAt,
@@ -2437,21 +2741,37 @@ const MonthlyReportView = ({ timeEntries, people }) => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+  const monthInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedWorker, setSelectedWorker] = useState(null);
+
+  const monthCycleLabel = useMemo(() => {
+    const base = new Date(`${selectedMonth}-01T00:00:00`);
+    if (Number.isNaN(base.getTime())) return 'Período';
+
+    const prev = new Date(base);
+    prev.setMonth(prev.getMonth() - 1);
+
+    const fmt = (date: Date) =>
+      new Intl.DateTimeFormat('pt-PT', { month: 'short' })
+        .format(date)
+        .replace('.', '')
+        .toLowerCase();
+
+    return `${fmt(prev)}/${fmt(base)} ${base.getFullYear()}`;
+  }, [selectedMonth]);
 
   // Calcular estatísticas por colaborador
   const stats = useMemo(() => {
     const [year, month] = selectedMonth.split('-').map(Number);
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0);
+    const startDate = new Date(year, month - 2, 21);
+    const endDate = new Date(year, month - 1, 20);
+    startDate.setHours(0, 0, 0, 0);
     endDate.setHours(23, 59, 59, 999);
 
-    // Contar dias úteis do mês
-    const workDays = countWeekdaysInclusive(startDate, endDate);
+    const allEntries = dedupTimeEntries(timeEntries);
 
-    // Filtrar entradas do mês
-    // Filtrar entradas do mês
-    const entriesInMonth = timeEntries.filter((t) => {
+    // Contar dias úteis do mês
+    const entriesInMonth = allEntries.filter((t) => {
       if (t.template === 'Férias' || t.template === 'Baixa') {
         const start = new Date(t.periodStart || t.date);
         const end = new Date(t.periodEnd || t.date);
@@ -2460,6 +2780,9 @@ const MonthlyReportView = ({ timeEntries, people }) => {
       const d = new Date(t.date);
       return d >= startDate && d <= endDate;
     });
+
+    const holidaySet = getHolidayDatesInRange(entriesInMonth, startDate, endDate);
+    const workDays = countWeekdaysInclusive(startDate, endDate, holidaySet);
 
     // ✅ DEBUG: Mostrar templates encontrados
     console.log('📊 Templates no mês:', {
@@ -2474,94 +2797,165 @@ const MonthlyReportView = ({ timeEntries, people }) => {
     // Agrupar por colaborador
     const byWorker = new Map();
 
-    entriesInMonth.forEach((entry) => {
-      // ✅ PRIORIZAR worker, depois supervisor, depois nome da coluna
-      const worker = 
-        entry.worker || 
-        entry.supervisor || 
-        entry.colaborador ||  // ⬅️ ADICIONAR ISTO
-        'Desconhecido';
-
-// Debug: logar registos sem worker
-if (!entry.worker && !entry.supervisor) {
-  console.warn('⚠️ Registo sem worker/supervisor:', {
-    id: entry.id,
-    date: entry.date,
-    template: entry.template,
-  });
-}
-
-if (!byWorker.has(worker)) {
-  byWorker.set(worker, {
-  name: worker,
-  daysWorked: new Set(),
-  totalHours: 0,
-  totalOvertime: 0,
-  totalOvertimeWeekend: 0,
-  totalAbsenceHours: 0, // ⬅️ ADICIONA ISTO
-  holidays: 0,
-  sickLeave: 0,
-  absences: 0,
-  entries: [],
-});
-}
-
-      const data = byWorker.get(worker);
-      data.entries.push(entry);
-
-      // ✅ ACEITAR QUALQUER VARIAÇÃO DE "TRABALHO NORMAL"
-      if (isNormalWork(entry.template)) {
-  data.daysWorked.add(entry.date);
-  data.totalHours += Number(entry.hours) || 0;
-  
-  const date = new Date(entry.date);
-  const dayOfWeek = date.getDay();
-  if (dayOfWeek === 0 || dayOfWeek === 6) {
-    data.totalOvertimeWeekend += (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
-  }
-}
-        // Verificar se é fim de semana
-        const date = new Date(entry.date);
-        const dayOfWeek = date.getDay();
-        if (dayOfWeek === 0 || dayOfWeek === 6) {
-          data.totalOvertimeWeekend += (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
-          }
-        }
-      } else if (entry.template === 'Férias') {
-        const start = new Date(entry.periodStart || entry.date);
-        const end = new Date(entry.periodEnd || entry.date);
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          if (d >= startDate && d <= endDate) {
-            const dow = d.getDay();
-            if (dow !== 0 && dow !== 6) data.holidays++;
-          }
-        }
-      } else if (entry.template === 'Baixa') {
-        const start = new Date(entry.periodStart || entry.date);
-        const end = new Date(entry.periodEnd || entry.date);
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          if (d >= startDate && d <= endDate) {
-            const dow = d.getDay();
-            if (dow !== 0 && dow !== 6) data.sickLeave++;
-          }
-        }
-      } else if (entry.template === 'Falta') {
-        data.absences++;
-        const horasFalta = Number(entry.hours) || 8;
-        data.totalAbsenceHours = (data.totalAbsenceHours || 0) + horasFalta;
+    const ensureWorker = (name) => {
+      if (!byWorker.has(name)) {
+        byWorker.set(name, {
+          name,
+          days: new Map(),
+          totalHours: 0,
+          totalOvertime: 0,
+          totalOvertimeWeekend: 0,
+          feriadoHours: 0,
+          deslocHours: 0,
+          totalAbsenceHours: 0,
+          holidays: 0,
+          sickLeave: 0,
+          absences: 0,
+          entries: [],
+        });
       }
+      return byWorker.get(name);
+    };
+
+    const addDay = (worker, iso) => {
+      if (!iso) return null;
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return null;
+      d.setHours(0, 0, 0, 0);
+      const ymd = d.toISOString().slice(0, 10);
+      if (!worker.days.has(ymd)) {
+        worker.days.set(ymd, {
+          hours: 0,
+          overtime: 0,
+          weekendHours: 0,
+          holidayHours: 0,
+          deslocHours: 0,
+          hasNormalWork: false,
+          isWeekend: d.getDay() === 0 || d.getDay() === 6,
+        });
+      }
+      return { rec: worker.days.get(ymd), ymd };
+    };
+
+    entriesInMonth.forEach((entry) => {
+      const workerName = entry.worker || entry.supervisor || entry.colaborador || 'Desconhecido';
+      const worker = ensureWorker(workerName);
+      worker.entries.push(entry);
+
+      const hours = Number(entry.hours) || 0;
+      const overtime = Number(entry.overtime) || 0;
+
+      if (entry.template === 'Férias') {
+        const start = new Date(entry.periodStart || entry.date);
+        const end = new Date(entry.periodEnd || entry.date);
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const ymd = d.toISOString().slice(0, 10);
+          const dow = d.getDay();
+          if (d >= startDate && d <= endDate && dow !== 0 && dow !== 6 && !holidaySet.has(ymd)) {
+            worker.holidays++;
+          }
+        }
+        return;
+      }
+
+      if (entry.template === 'Baixa') {
+        const parseSafeDate = (iso?: string) => {
+          if (!iso) return null;
+          const d = new Date(iso);
+          return isNaN(d.getTime()) ? null : d;
+        };
+
+        const start =
+          parseSafeDate(entry.periodStart || entry.date) ||
+          parseSafeDate(entry.date);
+
+        let end = parseSafeDate(entry.periodEnd) || null;
+
+        if (!end && start && entry.sickDays) {
+          const tmp = new Date(start);
+          tmp.setDate(tmp.getDate() + Math.max(0, Number(entry.sickDays) || 0) - 1);
+          end = tmp;
+        }
+
+        const finalEnd = end || start;
+
+        if (start && finalEnd) {
+          for (let d = new Date(start); d <= finalEnd; d.setDate(d.getDate() + 1)) {
+            const ymd = d.toISOString().slice(0, 10);
+            const dow = d.getDay();
+            if (d >= startDate && d <= endDate && dow !== 0 && dow !== 6 && !holidaySet.has(ymd)) {
+              worker.sickLeave++;
+            }
+          }
+        }
+
+        return;
+      }
+
+      if (entry.template === 'Falta') {
+        worker.absences++;
+        worker.totalAbsenceHours += hours || 8;
+        return;
+      }
+
+      const dayInfo = addDay(worker, entry.date);
+      if (!dayInfo) return;
+      const { rec, ymd } = dayInfo;
+
+      const isWeekend = rec.isWeekend;
+      const isHoliday = holidaySet.has(ymd);
+      const isDesloc = String(entry.template || '').toLowerCase().includes('desloc');
+      const isFeriadoTpl = String(entry.template || '').toLowerCase().includes('feriado');
+      const isFimSemanaTpl = String(entry.template || '').toLowerCase().includes('fim');
+
+      rec.hours += hours;
+      rec.overtime += overtime;
+      rec.hasNormalWork = rec.hasNormalWork || isNormalWork(entry.template);
+
+      if (isWeekend || isFimSemanaTpl) {
+        rec.weekendHours += hours + overtime;
+      }
+
+      if (isHoliday || isFeriadoTpl) {
+        rec.holidayHours += hours + overtime;
+      }
+
+      if (isDesloc) {
+        rec.deslocHours += hours + overtime;
+      }
+
+      // Contabilizar horas globais
+      worker.totalHours += hours;
+      worker.totalOvertime += overtime;
     });
 
     // Converter para array e calcular presença
     return Array.from(byWorker.values())
       .map((worker) => {
-        const daysWorked = worker.daysWorked.size;
+        let daysWorked = 0;
+        let weekendHours = 0;
+        let feriadoHours = 0;
+        let deslocHours = 0;
+
+        worker.days.forEach((rec, ymd) => {
+          const isHoliday = holidaySet.has(ymd);
+          if (rec.hasNormalWork && !rec.isWeekend && !isHoliday) {
+            daysWorked++;
+          }
+          weekendHours += rec.weekendHours;
+          feriadoHours += rec.holidayHours;
+          deslocHours += rec.deslocHours;
+        });
+
         const presence = workDays > 0 ? Math.round((daysWorked / workDays) * 100) : 0;
 
         return {
           ...worker,
           workDays,
           daysWorked,
+          totalOvertimeWeekend: weekendHours,
+          feriadoHours,
+          deslocHours,
           presence: `${presence}%`,
         };
       })
@@ -2585,6 +2979,8 @@ if (!byWorker.has(worker)) {
       'Baixa',
       'Horas Extra (h)',
       'FDS (h)',
+      'Feriado (h)',
+      'Horas Deslocadas (h)',
       'Presença',
     ];
 
@@ -2597,6 +2993,8 @@ if (!byWorker.has(worker)) {
       s.sickLeave || 0,
       s.totalOvertime || 0,
       s.totalOvertimeWeekend || 0,
+      s.feriadoHours || 0,
+      s.deslocHours || 0,
       s.presence,
     ]);
 
@@ -2625,19 +3023,37 @@ if (!byWorker.has(worker)) {
             return entry;
           });
 
-          setTimeEntries(fixed);
+          setTimeEntries(dedupTimeEntries(fixed));
           addToast(`${fixed.length} registos verificados`, 'ok');
         }}
       >
         Verificar Registos
       </Button>
 
-      <input
-        type="month"
-        value={selectedMonth}
-        onChange={(e) => setSelectedMonth(e.target.value)}
-        className="rounded-xl border p-2 text-sm dark:bg-slate-900 dark:border-slate-700"
-      />
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => {
+            const el = monthInputRef.current;
+            if (el?.showPicker) {
+              el.showPicker();
+            } else {
+              el?.click();
+            }
+          }}
+          className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium dark:bg-slate-900 dark:border-slate-700"
+        >
+          <span className="capitalize">{monthCycleLabel}</span>
+          <Icon name="calendar" className="w-4 h-4" />
+        </button>
+        <input
+          ref={monthInputRef}
+          type="month"
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(e.target.value)}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        />
+      </div>
       <Button variant="secondary" onClick={exportCSV}>
         <Icon name="download" /> Exportar CSV
       </Button>
@@ -2696,8 +3112,8 @@ if (!byWorker.has(worker)) {
                   <td className="px-3 py-2 text-center">{worker.sickLeave || '—'}</td>
                   <td className="px-3 py-2 text-center">{worker.totalOvertime || '—'}</td>
                   <td className="px-3 py-2 text-center">{worker.totalOvertimeWeekend || '—'}</td>
-                  <td className="px-3 py-2 text-center">—</td>
-                  <td className="px-3 py-2 text-center">—</td>
+                  <td className="px-3 py-2 text-center">{worker.feriadoHours || '—'}</td>
+                  <td className="px-3 py-2 text-center">{worker.deslocHours || '—'}</td>
                   <td className="px-3 py-2 text-center">
                     <Badge
                       tone={
@@ -2759,7 +3175,7 @@ if (!byWorker.has(worker)) {
                   <tr>
                     <th className="px-3 py-2 text-left">Data</th>
                     <th className="px-3 py-2 text-left">Tipo</th>
-                    <th className="px-3 py-2 text-left">Projeto</th>
+                    <th className="px-3 py-2 text-left">Obra</th>
                     <th className="px-3 py-2 text-right">Horas</th>
                     <th className="px-3 py-2 text-right">Extra</th>
                   </tr>
@@ -2865,7 +3281,7 @@ const ProfileView = ({ timeEntries, auth, people }) => {
         totalOvertime += Number(entry.overtime) || 0;
         daysWorked.add(entry.date);
 
-        const project = entry.project || 'Sem projeto';
+        const project = entry.project || 'Sem obra';
         const hours = (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
         projectHours.set(project, (projectHours.get(project) || 0) + hours);
         
@@ -3190,7 +3606,7 @@ const ProfileView = ({ timeEntries, auth, people }) => {
               <tr>
                 <th className="px-3 py-2 text-left">Data</th>
                 <th className="px-3 py-2 text-left">Tipo</th>
-                <th className="px-3 py-2 text-left">Projeto</th>
+                <th className="px-3 py-2 text-left">Obra</th>
                 <th className="px-3 py-2 text-right">Horas</th>
                 <th className="px-3 py-2 text-right">Extra</th>
               </tr>
@@ -3565,25 +3981,66 @@ const TimesheetTemplateForm = ({
     worker: initial?.worker || '',
     hours: initial?.hours ?? 8,
     overtime: initial?.overtime ?? 0,
+    weekendStartTime: initial?.weekendStartTime || '',
+    weekendEndTime: initial?.weekendEndTime || '',
+    extraStartTime: initial?.extraStartTime || '',
+    extraEndTime: initial?.extraEndTime || '',
     periodStart: initial?.periodStart || initial?.date || todayISO(),
     periodEnd: initial?.periodEnd || initial?.date || todayISO(),
     notes: initial?.notes || ''
   });
   const [errors, setErrors] = useState({});
 
+  const isWeekendDate = (iso?: string) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return false;
+    const dow = d.getDay();
+    return dow === 0 || dow === 6;
+  };
+
+  const diffHours = (start?: string, end?: string) => {
+    if (!start || !end) return 0;
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    if ([sh, sm, eh, em].some((v) => Number.isNaN(v))) return 0;
+    const mins = eh * 60 + em - (sh * 60 + sm);
+    return mins > 0 ? Math.round((mins / 60) * 100) / 100 : 0;
+  };
+
+  const isWeekendDay = isWeekendDate(form.date);
+  const weekendComputedHours = isWeekendDay
+    ? diffHours(form.weekendStartTime, form.weekendEndTime)
+    : 0;
+  const overtimeComputedHours = !isWeekendDay
+    ? diffHours(form.extraStartTime, form.extraEndTime)
+    : 0;
+
   const next = () => setStep(2);
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const validate = t => {
     const e = {};
-    
-    // Trabalho Normal: precisa data, projeto, supervisor, horas válidas
+
+    const weekend = isWeekendDate(t.date);
+
+    // Trabalho Normal: precisa data, obra, supervisor, horas válidas
     if (t.template === 'Trabalho Normal') {
       if (!t.date) e.date = 'Data é obrigatória.';
-      if (!t.project) e.project = 'Projeto/Obra é obrigatório.';
+      if (!t.project) e.project = 'Obra é obrigatória.';
       if (!t.supervisor) e.supervisor = 'Encarregado é obrigatório.';
-      if (t.hours < 0) e.hours = 'Horas inválidas.';
-      if (t.overtime < 0) e.overtime = 'Extra inválido.';
+      if (weekend) {
+        if (!t.weekendStartTime) e.weekendStartTime = 'Hora inicial obrigatória.';
+        if (!t.weekendEndTime) e.weekendEndTime = 'Hora final obrigatória.';
+        if (!e.weekendStartTime && !e.weekendEndTime && diffHours(t.weekendStartTime, t.weekendEndTime) <= 0) {
+          e.weekendEndTime = 'Fim tem de ser após início.';
+        }
+      } else {
+        if (t.hours < 0) e.hours = 'Horas inválidas.';
+        if ((t.extraStartTime || t.extraEndTime) && diffHours(t.extraStartTime, t.extraEndTime) <= 0) {
+          e.extraEndTime = 'Fim tem de ser após início.';
+        }
+      }
     }
     
     // Férias e Baixa: só precisam do período
@@ -3603,17 +4060,17 @@ const TimesheetTemplateForm = ({
   };
 
   const submit = () => {
-  const adjusted = { ...form };
-  
-  // ⬇️ SEMPRE PREENCHER WORKER (CRÍTICO!)
-  adjusted.worker = auth?.name || adjusted.worker || 'Desconhecido';
-  
-  console.log('📝 Submetendo timesheet:', {
-    worker: adjusted.worker,
-    authName: auth?.name,
-    date: adjusted.date,
-    template,
-  });
+    const adjusted = { ...form };
+
+    // ⬇️ SEMPRE PREENCHER WORKER (CRÍTICO!)
+    adjusted.worker = auth?.name || adjusted.worker || 'Desconhecido';
+
+    console.log('📝 Submetendo timesheet:', {
+      worker: adjusted.worker,
+      authName: auth?.name,
+      date: adjusted.date,
+      template,
+    });
     
     // Limpar campos desnecessários conforme o template
     if (template === 'Férias') {
@@ -3623,7 +4080,7 @@ const TimesheetTemplateForm = ({
       adjusted.supervisor = '';
       adjusted.date = adjusted.periodStart; // usar início como data
     }
-    
+
     if (template === 'Baixa') {
       adjusted.hours = 0;
       adjusted.overtime = 0;
@@ -3631,7 +4088,24 @@ const TimesheetTemplateForm = ({
       adjusted.supervisor = '';
       adjusted.date = adjusted.periodStart;
     }
-    
+
+    if (template === 'Trabalho Normal') {
+      const weekendHours = isWeekendDay ? weekendComputedHours : 0;
+      const otHours = !isWeekendDay ? overtimeComputedHours : 0;
+
+      adjusted.weekendStartTime = form.weekendStartTime || '';
+      adjusted.weekendEndTime = form.weekendEndTime || '';
+      adjusted.extraStartTime = form.extraStartTime || '';
+      adjusted.extraEndTime = form.extraEndTime || '';
+
+      if (isWeekendDay) {
+        adjusted.hours = weekendHours;
+        adjusted.overtime = 0;
+      } else {
+        adjusted.overtime = otHours;
+      }
+    }
+
     if (template === 'Falta') {
   // Se não especificar horas, assume dia completo (8h)
   if (!adjusted.hours || adjusted.hours === 0) {
@@ -3693,10 +4167,10 @@ const TimesheetTemplateForm = ({
               </label>
             )}
 
-            {/* OBRA/PROJETO (só para Trabalho Normal) */}
+            {/* OBRA (só para Trabalho Normal) */}
             {template === 'Trabalho Normal' && (
               <label className="text-sm">
-                Obra/Projeto
+                Obra
                 <div className="mt-1">
                   <CustomSelect
                     value={form.project}
@@ -3754,26 +4228,71 @@ const TimesheetTemplateForm = ({
               </>
             )}
 
-            {/* HORAS E EXTRA (só para Trabalho Normal) */}
-            {template === 'Trabalho Normal' && (
+            {/* HORAS (TRABALHO NORMAL) */}
+            {template === 'Trabalho Normal' && !isWeekendDay && (
+              <label className="text-sm">
+                Horas
+                <input
+                  type="number" min={0} step={0.5}
+                  value={form.hours}
+                  onChange={e=>update('hours',parseFloat(e.target.value))}
+                  className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.hours?'border-rose-400':''}`}
+                />
+              </label>
+            )}
+
+            {/* HORÁRIO FIM-DE-SEMANA */}
+            {template === 'Trabalho Normal' && isWeekendDay && (
               <>
                 <label className="text-sm">
-                  Horas
+                  Hora início (FDS)
                   <input
-                    type="number" min={0} step={0.5}
-                    value={form.hours}
-                    onChange={e=>update('hours',parseFloat(e.target.value))}
-                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.hours?'border-rose-400':''}`}
+                    type="time"
+                    value={form.weekendStartTime}
+                    onChange={e=>update('weekendStartTime', e.target.value)}
+                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.weekendStartTime?'border-rose-400':''}`}
                   />
+                  {errors.weekendStartTime && <div className="text-xs text-rose-600 mt-1">{errors.weekendStartTime}</div>}
                 </label>
+
                 <label className="text-sm">
-                  Horas Extra
+                  Hora fim (FDS)
                   <input
-                    type="number" min={0} step={0.5}
-                    value={form.overtime}
-                    onChange={e=>update('overtime',parseFloat(e.target.value))}
-                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.overtime?'border-rose-400':''}`}
+                    type="time"
+                    value={form.weekendEndTime}
+                    onChange={e=>update('weekendEndTime', e.target.value)}
+                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.weekendEndTime?'border-rose-400':''}`}
                   />
+                  {errors.weekendEndTime && <div className="text-xs text-rose-600 mt-1">{errors.weekendEndTime}</div>}
+                  <div className="text-xs text-slate-500 mt-1">Horas calculadas: {weekendComputedHours || '—'}h</div>
+                </label>
+              </>
+            )}
+
+            {/* HORÁRIO EXTRA EM DIAS ÚTEIS */}
+            {template === 'Trabalho Normal' && !isWeekendDay && (
+              <>
+                <label className="text-sm">
+                  Hora extra (início)
+                  <input
+                    type="time"
+                    value={form.extraStartTime}
+                    onChange={e=>update('extraStartTime', e.target.value)}
+                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.extraStartTime?'border-rose-400':''}`}
+                  />
+                  {errors.extraStartTime && <div className="text-xs text-rose-600 mt-1">{errors.extraStartTime}</div>}
+                </label>
+
+                <label className="text-sm">
+                  Hora extra (fim)
+                  <input
+                    type="time"
+                    value={form.extraEndTime}
+                    onChange={e=>update('extraEndTime', e.target.value)}
+                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.extraEndTime?'border-rose-400':''}`}
+                  />
+                  {errors.extraEndTime && <div className="text-xs text-rose-600 mt-1">{errors.extraEndTime}</div>}
+                  <div className="text-xs text-slate-500 mt-1">Horas extra calculadas: {overtimeComputedHours || '—'}h</div>
                 </label>
               </>
             )}
@@ -4051,6 +4570,8 @@ const DEFAULT_OT_MULTIPLIER = 1.5;
 // ---------------------------------------------------------------
 function App() {
   const persisted = loadState?.();
+  const [cloudStamp, setCloudStamp] = useState<string | null>(persisted?.updatedAt || null)
+  const [cloudReady, setCloudReady] = useState(false)
 
   // -------------------------------------------------------------
   // 🔐 AUTH E NAVEGAÇÃO
@@ -4065,6 +4586,10 @@ function App() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modal, setModal] = useState<any | null>(null);
+  const cloudSaveTimer = useRef<any>(null)
+  const [supabaseActive] = useState(() => supabaseReady)
+  const cloudKey = useMemo(() => CLOUD_ROW_ID, [])
+  const latestStampRef = useRef<string | null>(cloudStamp)
 
   // 👉 Função can() — PERMISSÕES
   const can = (section: keyof typeof CAN) => {
@@ -4141,7 +4666,7 @@ function App() {
   ];
 
   const [timeEntries, setTimeEntries] = useState(
-    persisted?.timeEntries || defaultTime
+    dedupTimeEntries(persisted?.timeEntries || defaultTime)
   );
   const [orders, setOrders] = useState(
     persisted?.orders || defaultOrders
@@ -4156,12 +4681,89 @@ function App() {
   );
   const [catalog, setCatalog] = useState(persisted?.catalog || []);
 
+  const applySnapshot = (snap: any) => {
+    if (!snap) return
+
+    setTimeEntries(dedupTimeEntries(snap.timeEntries || []))
+    setOrders(snap.orders || [])
+    setProjects(snap.projects || [])
+    setActivity((snap.activity || []).map((a: any) => ({ ...a, ts: a?.ts ? new Date(a.ts) : new Date() })))
+    setTheme(snap.theme || 'light')
+    setDensity(snap.density || 'comfy')
+    setCatalog(snap.catalog || [])
+    setPeople(migratePeople(snap.people) || {})
+    setPrefs(
+      snap.prefs || {
+        defaultRate: DEFAULT_HOURLY_RATE,
+        otMultiplier: DEFAULT_OT_MULTIPLIER,
+      }
+    )
+    setVehicles(snap.vehicles || [])
+    setAgenda(snap.agenda || [])
+    setSuppliers(snap.suppliers || {})
+    setCloudStamp(snap.updatedAt || new Date().toISOString())
+  }
+
   // -------------------------------------------------------------
   // 🌙 Alterar tema
   // -------------------------------------------------------------
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
+
+  // -------------------------------------------------------------
+  // ☁️ CARREGAR ESTADO NA CLOUD (SE EXISTIR)
+  // -------------------------------------------------------------
+  useEffect(() => {
+    latestStampRef.current = cloudStamp
+  }, [cloudStamp])
+
+  useEffect(() => {
+    let cancelled=false
+
+    ;(async()=>{
+      if(!supabaseActive){
+        setCloudReady(true)
+        return
+      }
+
+      const cloud = await fetchCloudState(cloudKey)
+      if(cancelled)return
+
+      const remoteTs = cloud?.updatedAt ? new Date(cloud.updatedAt).getTime() : 0
+      const localTs = cloudStamp ? new Date(cloudStamp).getTime() : 0
+
+      if(cloud?.payload && remoteTs>localTs){
+        applySnapshot({ ...cloud.payload, updatedAt: cloud.updatedAt })
+      }
+
+      setCloudReady(true)
+    })()
+
+    return ()=>{cancelled=true}
+  }, [cloudKey, supabaseActive])
+
+  useEffect(()=>{
+    if(!supabaseActive||!supabase)return
+
+    const channel = supabase
+      .channel('app_state_sync')
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:CLOUD_STATE_TABLE,filter:`id=eq.${cloudKey}`},payload=>{
+        const updatedAt = (payload.new as any)?.updated_at || (payload.new as any)?.updatedAt
+        const remoteTs = updatedAt ? new Date(updatedAt).getTime() : 0
+        const localTs = latestStampRef.current ? new Date(latestStampRef.current).getTime() : 0
+
+        if(remoteTs>localTs){
+          const snap = (payload.new as any)?.payload || (payload.new as any)
+          applySnapshot({ ...snap, updatedAt })
+        }
+      })
+      .subscribe()
+
+    return ()=>{
+      supabase.removeChannel(channel)
+    }
+  },[cloudKey, supabaseActive])
 
   // -------------------------------------------------------------
   // 🔄 REFRESH SUPABASE AO INICIAR
@@ -4216,7 +4818,10 @@ useEffect(() => {
   // 💾 PERSISTÊNCIA LOCAL
   // -------------------------------------------------------------
   useEffect(() => {
-    saveState({
+    if (!cloudReady) return
+
+    const updatedAt = new Date().toISOString()
+    const snapshot = {
       timeEntries,
       orders,
       projects,
@@ -4229,7 +4834,16 @@ useEffect(() => {
       vehicles,
       agenda,
       suppliers,
-    });
+      updatedAt,
+    }
+
+    saveState(snapshot)
+    setCloudStamp(updatedAt)
+
+    if (cloudReady && supabaseActive) {
+      if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current)
+      cloudSaveTimer.current = setTimeout(() => saveCloudState(snapshot, cloudKey), 400)
+    }
   }, [
     timeEntries,
     orders,
@@ -4243,7 +4857,11 @@ useEffect(() => {
     vehicles,
     agenda,
     suppliers,
+    cloudReady,
+    supabaseActive,
+    cloudKey,
   ]);
+
   // -------------------------------------------------------------
   // 🔍 MEMOS E DERIVADOS
   // -------------------------------------------------------------
@@ -4863,7 +5481,7 @@ function DashboardView() {
           icon="wrench"
           title="Obras Ativas"
           value={projects.length}
-          subtitle="Projetos em curso"
+          subtitle="Obras em curso"
           onClick={() => setView("obras")}
         />
       </div>
@@ -4893,6 +5511,37 @@ function DashboardView() {
 // ⏰ TIMESHEETS VIEW (COM BOTÃO DE REMOVER)
 // ---------------------------------------------------------------
 function TimesheetsView() {
+  const hasEntriesForDay = useCallback(
+    (iso) => {
+      const target = new Date(iso);
+      target.setHours(0, 0, 0, 0);
+      return visibleTimeEntries.some((t) => {
+        if (t.template === "Férias" || t.template === "Baixa") {
+          const a = new Date(t.periodStart || t.date);
+          const b = new Date(t.periodEnd || t.date);
+          a.setHours(0, 0, 0, 0);
+          b.setHours(0, 0, 0, 0);
+          return target >= a && target <= b;
+        }
+        const d = new Date(t.date);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime() === target.getTime();
+      });
+    },
+    [visibleTimeEntries]
+  );
+
+  const handleDayClick = useCallback(
+    (iso) => {
+      if (hasEntriesForDay(iso)) {
+        setModal({ name: "day-details", dateISO: iso });
+      } else {
+        setModal({ name: "day-actions", dateISO: iso });
+      }
+    },
+    [hasEntriesForDay]
+  );
+
   return (
     <section className="space-y-4">
       <PageHeader
@@ -4926,7 +5575,7 @@ function TimesheetsView() {
 
       <CycleCalendar
         timeEntries={visibleTimeEntries}
-        onDayClick={(iso) => setModal({ name: "day-actions", dateISO: iso })}
+        onDayClick={handleDayClick}
         auth={auth}
       />
 
@@ -4938,7 +5587,7 @@ function TimesheetsView() {
               <tr>
                 <th className="px-3 py-2 text-left">Data</th>
                 <th className="px-3 py-2 text-left">Tipo</th>
-                <th className="px-3 py-2 text-left">Projeto</th>
+                <th className="px-3 py-2 text-left">Obra</th>
                 <th className="px-3 py-2 text-left">Colaborador</th>
                 <th className="px-3 py-2 text-right">Horas</th>
                 <th className="px-3 py-2 text-right">Extra</th>
@@ -5043,7 +5692,7 @@ function TableMaterials() {
 
       <Card className="p-4">
         <TableSimple
-          columns={["Data", "Projeto", "Requisitante", "Estado", "Itens"]}
+          columns={["Data", "Obra", "Requisitante", "Estado", "Itens"]}
           rows={visibleOrders.map((o) => [
             fmtDate(o.requestedAt),
             o.project,
@@ -5445,7 +6094,8 @@ function TableMaterials() {
       return d >= a && d <= b;
     };
 
-    const uteis = countWeekdaysInclusive(start, end);
+    const holidaySet = getHolidayDatesInRange(timeEntries, start, end);
+    const uteis = countWeekdaysInclusive(start, end, holidaySet);
 
     // dias registados (qualquer tipo) dentro do ciclo
     const diasReg = (() => {
@@ -5730,7 +6380,7 @@ function TableMaterials() {
 </Modal>
 
       <Modal open={modal?.name==='ts-all'} title="Todos os Timesheets" onClose={()=>setModal(null)} wide>
-        <TableSimple columns={["Data/Período","Tipo","Projeto","Encarregado","Horas","Extra"]} rows={visibleTimeEntries.map(t=>[t.template==='Trabalho Normal'?t.date:`${t.periodStart}→${t.periodEnd}`,t.template,t.project||'-',t.supervisor||'-',t.hours||0,t.overtime||0])}/>
+        <TableSimple columns={["Data/Período","Tipo","Obra","Encarregado","Horas","Extra"]} rows={visibleTimeEntries.map(t=>[t.template==='Trabalho Normal'?t.date:`${t.periodStart}→${t.periodEnd}`,t.template,t.project||'-',t.supervisor||'-',t.hours||0,t.overtime||0])}/>
       </Modal>
 
       <Modal open={modal?.name==='import'} title="Importar / Exportar Dados" onClose={()=>setModal(null)} wide>
