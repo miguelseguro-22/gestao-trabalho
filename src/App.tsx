@@ -5488,6 +5488,37 @@ function DashboardView() {
 // ⏰ TIMESHEETS VIEW (COM BOTÃO DE REMOVER)
 // ---------------------------------------------------------------
 function TimesheetsView() {
+  const hasEntriesForDay = useCallback(
+    (iso) => {
+      const target = new Date(iso);
+      target.setHours(0, 0, 0, 0);
+      return visibleTimeEntries.some((t) => {
+        if (t.template === "Férias" || t.template === "Baixa") {
+          const a = new Date(t.periodStart || t.date);
+          const b = new Date(t.periodEnd || t.date);
+          a.setHours(0, 0, 0, 0);
+          b.setHours(0, 0, 0, 0);
+          return target >= a && target <= b;
+        }
+        const d = new Date(t.date);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime() === target.getTime();
+      });
+    },
+    [visibleTimeEntries]
+  );
+
+  const handleDayClick = useCallback(
+    (iso) => {
+      if (hasEntriesForDay(iso)) {
+        setModal({ name: "day-details", dateISO: iso });
+      } else {
+        setModal({ name: "day-actions", dateISO: iso });
+      }
+    },
+    [hasEntriesForDay]
+  );
+
   return (
     <section className="space-y-4">
       <PageHeader
@@ -5521,7 +5552,7 @@ function TimesheetsView() {
 
       <CycleCalendar
         timeEntries={visibleTimeEntries}
-        onDayClick={(iso) => setModal({ name: "day-actions", dateISO: iso })}
+        onDayClick={handleDayClick}
         auth={auth}
       />
 
