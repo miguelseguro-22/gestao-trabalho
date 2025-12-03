@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import supabase from './lib/supabaseClient'
+import { supabase, supabaseReady } from './lib/supabaseClient'
 /* ---------- Helpers ---------- */
 const Icon=({name,className='w-5 h-5'})=>{
   const S={stroke:'currentColor',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'};
@@ -132,13 +132,13 @@ const clearState=()=>{try{localStorage.removeItem(LS_KEY)}catch{}};
 
 const CLOUD_STATE_TABLE='app_state'
 const CLOUD_ROW_ID='shared'
-const fetchCloudState=async()=>{
-  if(!supabase)return null
+const fetchCloudState=async(rowId:string=CLOUD_ROW_ID)=>{
+  if(!supabaseReady||!supabase)return null
   try{
     const {data,error}=await supabase
       .from(CLOUD_STATE_TABLE)
       .select('payload,updated_at')
-      .eq('id',CLOUD_ROW_ID)
+      .eq('id',rowId)
       .single()
     if(error){
       console.warn('Falha a carregar estado da cloud',error)
@@ -150,11 +150,11 @@ const fetchCloudState=async()=>{
     return null
   }
 }
-const saveCloudState=async(payload)=>{
-  if(!supabase)return
+const saveCloudState=async(payload,rowId:string=CLOUD_ROW_ID)=>{
+  if(!supabaseReady||!supabase)return
   try{
     const updatedAt=payload?.updatedAt||new Date().toISOString()
-    await supabase.from(CLOUD_STATE_TABLE).upsert({id:CLOUD_ROW_ID,payload,updated_at:updatedAt})
+    await supabase.from(CLOUD_STATE_TABLE).upsert({id:rowId,payload,updated_at:updatedAt})
   }catch(err){
     console.warn('Falha ao gravar estado na cloud',err)
   }
@@ -4473,6 +4473,9 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modal, setModal] = useState<any | null>(null);
   const cloudSaveTimer = useRef<any>(null)
+  const [supabaseActive] = useState(() => supabaseReady)
+  const cloudKey = useMemo(() => (auth?.email?.toLowerCase?.() || CLOUD_ROW_ID), [auth])
+  const latestStampRef = useRef<string | null>(cloudStamp)
 
   // 👉 Função can() — PERMISSÕES
   const can = (section: keyof typeof CAN) => {
@@ -4598,10 +4601,19 @@ function App() {
   // ☁️ CARREGAR ESTADO NA CLOUD (SE EXISTIR)
   // -------------------------------------------------------------
   useEffect(() => {
+    latestStampRef.current = cloudStamp
+  }, [cloudStamp])
+
+  useEffect(() => {
     let cancelled=false
 
     ;(async()=>{
-      const cloud = await fetchCloudState()
+      if(!supabaseActive){
+        setCloudReady(true)
+        return
+      }
+
+      const cloud = await fetchCloudState(cloudKey)
       if(cancelled)return
 
       const remoteTs = cloud?.updatedAt ? new Date(cloud.updatedAt).getTime() : 0
@@ -4615,7 +4627,29 @@ function App() {
     })()
 
     return ()=>{cancelled=true}
-  }, [])
+  }, [cloudKey, supabaseActive])
+
+  useEffect(()=>{
+    if(!supabaseActive||!supabase)return
+
+    const channel = supabase
+      .channel('app_state_sync')
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:CLOUD_STATE_TABLE,filter:`id=eq.${cloudKey}`},payload=>{
+        const updatedAt = (payload.new as any)?.updated_at || (payload.new as any)?.updatedAt
+        const remoteTs = updatedAt ? new Date(updatedAt).getTime() : 0
+        const localTs = latestStampRef.current ? new Date(latestStampRef.current).getTime() : 0
+
+        if(remoteTs>localTs){
+          const snap = (payload.new as any)?.payload || (payload.new as any)
+          applySnapshot({ ...snap, updatedAt })
+        }
+      })
+      .subscribe()
+
+    return ()=>{
+      supabase.removeChannel(channel)
+    }
+  },[cloudKey, supabaseActive])
 
   // -------------------------------------------------------------
   // 🔄 REFRESH SUPABASE AO INICIAR
@@ -4692,9 +4726,9 @@ useEffect(() => {
     saveState(snapshot)
     setCloudStamp(updatedAt)
 
-    if (cloudReady) {
+    if (cloudReady && supabaseActive) {
       if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current)
-      cloudSaveTimer.current = setTimeout(() => saveCloudState(snapshot), 400)
+      cloudSaveTimer.current = setTimeout(() => saveCloudState(snapshot, cloudKey), 400)
     }
   }, [
     timeEntries,
@@ -4710,6 +4744,8 @@ useEffect(() => {
     agenda,
     suppliers,
     cloudReady,
+    supabaseActive,
+    cloudKey,
   ]);
 
   // -------------------------------------------------------------

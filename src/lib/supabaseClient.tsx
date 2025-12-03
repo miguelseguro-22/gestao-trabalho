@@ -11,5 +11,7 @@ if (supabaseUrl && supabaseAnonKey) {
   console.warn('Supabase não configurado — a sincronização na cloud fica desativada.')
 }
 
-export { supabase }
+const supabaseReady = Boolean(supabase)
+
+export { supabase, supabaseReady }
 export default supabase
