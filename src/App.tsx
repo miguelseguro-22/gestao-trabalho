@@ -850,6 +850,8 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
   const [csvPreview,setCsvPreview]=useState({headers:[],rows:[],delim:','});
   const [map,setMap]=useState({});
   const [jsonPreview,setJsonPreview]=useState(null);
+  const [shareText,setShareText]=useState('');
+  const [shareOut,setShareOut]=useState('');
   const [status,setStatus]=useState('');
 
   // NOVO: catálogo em memória até escolher Juntar/Substituir
@@ -1482,9 +1484,46 @@ const handleCatalog = (file) => {
   };
 
   const exportBackup=()=>{ const all=setters.get(); download(`backup_${todayISO()}.json`, JSON.stringify(all,null,2),'application/json'); };
-const importBackup=(mode)=>{
-  if(!jsonPreview){ addToast('Carrega um JSON primeiro.','warn'); return; }
-  const obj=jsonPreview.obj; const safeArr=a=>Array.isArray(a)?a:[];
+  const shareEncode=(obj)=> btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+  const shareDecode=(code)=> JSON.parse(decodeURIComponent(escape(atob(code))));
+  const buildPreview=(obj)=>{
+    const info={
+      timeEntries: obj.timeEntries?.length||0,
+      orders: (obj.orders||obj.materials)?.length||0,
+      projects: obj.projects?.length||0,
+      activity: obj.activity?.length||0,
+      catalog: obj.catalog?.length||0
+    };
+    return {obj,info};
+  };
+  const shareFromLocal=()=>{
+    try{
+      const all=setters.get();
+      const code=shareEncode(all);
+      setShareOut(code);
+      navigator.clipboard?.writeText(code).then(()=>setStatus('Código copiado para a área de transferência.'),()=>{});
+      setStatus('Código gerado — copia/cola no outro dispositivo.');
+    }catch(err){
+      console.warn('Falha ao gerar código de partilha',err);
+      setStatus('Não foi possível gerar o código.');
+    }
+  };
+  const loadShareCode=()=>{
+    if(!shareText.trim()){setStatus('Cola primeiro um código.');return false;}
+    try{
+      const obj=shareDecode(shareText.trim());
+      setJsonPreview(buildPreview(obj));
+      setStatus('Código pronto — usa Substituir ou Juntar.');
+      return true;
+    }catch(err){
+      console.warn('Código de partilha inválido',err);
+      setStatus('Código inválido.');
+      return false;
+    }
+  };
+  const importBackup=(mode)=>{
+    if(!jsonPreview){ addToast('Carrega um JSON primeiro.','warn'); return; }
+    const obj=jsonPreview.obj; const safeArr=a=>Array.isArray(a)?a:[];
 const base={
   timeEntries: safeArr(obj.timeEntries),
   orders:     safeArr(obj.orders||obj.materials),
@@ -1676,14 +1715,7 @@ const base={
                 reader.onload=()=>{
                   try{
                     const obj=JSON.parse(reader.result);
-                    const info={
-                      timeEntries: obj.timeEntries?.length||0,
-                      orders: (obj.orders||obj.materials)?.length||0,
-                      projects: obj.projects?.length||0,
-                      activity: obj.activity?.length||0,
-                      catalog: obj.catalog?.length||0
-                    };
-                    setJsonPreview({obj,info});
+                    setJsonPreview(buildPreview(obj));
                     setStatus('Backup JSON pronto');
                   }catch{
                     setStatus('JSON inválido');
@@ -1698,11 +1730,14 @@ const base={
           {jsonPreview&&(
             <Card className="p-3">
               <div className="text-sm">
-                Conteúdo: {
-                  Object.entries(jsonPreview.info)
-                    .map(([k,v])=>`${k}:${v}`)
-                    .join(' · ')
-                }
+                <div className="font-semibold">Resumo</div>
+                <div className="text-slate-600 dark:text-slate-300 text-xs space-y-1 mt-1">
+                  <div>Registos de horas: {jsonPreview.info.timeEntries}</div>
+                  <div>Encomendas: {jsonPreview.info.orders}</div>
+                  <div>Obras: {jsonPreview.info.projects}</div>
+                  <div>Atividade: {jsonPreview.info.activity}</div>
+                  <div>Catálogo: {jsonPreview.info.catalog}</div>
+                </div>
               </div>
               <div className="mt-3 flex gap-2 justify-end">
                 <Button variant="secondary" onClick={()=>importBackup('append')}>
@@ -1714,6 +1749,27 @@ const base={
               </div>
             </Card>
           )}
+
+          <Card className="p-3 space-y-3">
+            <div className="text-sm font-medium">Sincronização sem servidor</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <div className="text-xs text-slate-500">Gera um código offline com todos os dados atuais e copia-o para colar no outro dispositivo.</div>
+                <Button variant="secondary" onClick={shareFromLocal}><Icon name="download"/> Gerar código</Button>
+                {shareOut && (
+                  <textarea value={shareOut} readOnly className="w-full h-28 text-xs rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700" />
+                )}
+              </div>
+              <div className="space-y-2">
+                <div className="text-xs text-slate-500">Cola aqui um código copiado de outro dispositivo e depois escolhe Substituir.</div>
+                <textarea value={shareText} onChange={e=>setShareText(e.target.value)} className="w-full h-28 text-xs rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700" placeholder="cola aqui o código gerado" />
+                <div className="flex gap-2 justify-end">
+                  <Button variant="secondary" onClick={loadShareCode}>Validar código</Button>
+                  <Button variant="danger" onClick={()=>{ if(loadShareCode()) importBackup('replace'); }}>Importar (Substituir)</Button>
+                </div>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
     </div>
