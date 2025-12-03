@@ -667,20 +667,29 @@ const CalendarLegend = () => {
 
 const TYPE_FILL_BG = { 'Trabalho Normal':'bg-emerald-600','Férias':'bg-violet-600','Baixa':'bg-rose-600','Falta':'bg-amber-600' };
 const TYPE_COLORS = TYPE_FILL_BG;
+const isValidDateValue = (d) => d instanceof Date && !Number.isNaN(d.getTime());
 const getHolidayDatesInRange = (entries = [], start, end) => {
   if (!start || !end) return new Set();
   const holidaySet = new Set();
 
+  const normalizeISO = (raw) => {
+    if (!raw) return null;
+    const d = new Date(raw);
+    if (!isValidDateValue(d)) return null;
+    return d.toISOString().slice(0, 10);
+  };
+
   const inRange = (iso) => {
     if (!iso) return false;
     const d = new Date(iso);
+    if (!isValidDateValue(d)) return false;
     return d >= start && d <= end;
   };
 
   entries.forEach((t) => {
     if (t.template !== 'Feriado') return;
-    const iso = t.date || t.periodStart || t.periodEnd;
-    if (inRange(iso)) holidaySet.add(new Date(iso).toISOString().slice(0, 10));
+    const iso = normalizeISO(t.date || t.periodStart || t.periodEnd);
+    if (iso && inRange(iso)) holidaySet.add(iso);
   });
 
   return holidaySet;
@@ -705,15 +714,22 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
   const { start, end } = useMemo(()=>getCycle(offset),[offset]);
   const dayTypes = useMemo(()=>{
     const m=new Map(); const push=(iso,t)=>{if(!m.has(iso))m.set(iso,new Set()); m.get(iso).add(t);};
+    const toDay = (val) => {
+      const d = new Date(val);
+      if (!isValidDateValue(d)) return null;
+      d.setHours(0,0,0,0);
+      return d;
+    };
     timeEntries.forEach(t=>{
       const inRange=d=>(d>=start&&d<=end);
 
       if (t.template === 'Férias' || t.template === 'Baixa') { // ⬅️ JÁ VEM NORMALIZADO
-        const s=new Date(t.periodStart||t.date),e=new Date(t.periodEnd||t.date);
-        const cur=new Date(s);cur.setHours(0,0,0,0);const last=new Date(e);last.setHours(0,0,0,0);
+        const s = toDay(t.periodStart||t.date), e = toDay(t.periodEnd||t.date);
+        if (!s || !e) return;
+        const cur=new Date(s);const last=new Date(e);
         while(cur<=last){if(inRange(cur)) push(cur.toISOString().slice(0,10),t.template); cur.setDate(cur.getDate()+1);}
       }else{
-        const d=new Date(t.date); if(inRange(d)) push(d.toISOString().slice(0,10),t.template);
+        const d=toDay(t.date); if(!d) return; if(inRange(d)) push(d.toISOString().slice(0,10),t.template);
       }
     });
     return m;
@@ -728,10 +744,17 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
       if (ot) cur.overtime = Number((cur.overtime || 0) + ot);
     };
 
+    const toDay = (val) => {
+      const d = new Date(val);
+      if (!isValidDateValue(d)) return null;
+      d.setHours(0,0,0,0);
+      return d;
+    };
+
     timeEntries.forEach((t) => {
       if (t.template !== 'Trabalho Normal') return;
-      const d = new Date(t.date);
-      if (!(d >= start && d <= end)) return;
+      const d = toDay(t.date);
+      if (!d || !(d >= start && d <= end)) return;
       const iso = d.toISOString().slice(0, 10);
       add(iso, t.project || t.projectNormal || '', t.overtime);
     });
