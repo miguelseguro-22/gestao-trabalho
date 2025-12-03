@@ -3836,25 +3836,66 @@ const TimesheetTemplateForm = ({
     worker: initial?.worker || '',
     hours: initial?.hours ?? 8,
     overtime: initial?.overtime ?? 0,
+    weekendStartTime: initial?.weekendStartTime || '',
+    weekendEndTime: initial?.weekendEndTime || '',
+    extraStartTime: initial?.extraStartTime || '',
+    extraEndTime: initial?.extraEndTime || '',
     periodStart: initial?.periodStart || initial?.date || todayISO(),
     periodEnd: initial?.periodEnd || initial?.date || todayISO(),
     notes: initial?.notes || ''
   });
   const [errors, setErrors] = useState({});
 
+  const isWeekendDate = (iso?: string) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return false;
+    const dow = d.getDay();
+    return dow === 0 || dow === 6;
+  };
+
+  const diffHours = (start?: string, end?: string) => {
+    if (!start || !end) return 0;
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    if ([sh, sm, eh, em].some((v) => Number.isNaN(v))) return 0;
+    const mins = eh * 60 + em - (sh * 60 + sm);
+    return mins > 0 ? Math.round((mins / 60) * 100) / 100 : 0;
+  };
+
+  const isWeekendDay = isWeekendDate(form.date);
+  const weekendComputedHours = isWeekendDay
+    ? diffHours(form.weekendStartTime, form.weekendEndTime)
+    : 0;
+  const overtimeComputedHours = !isWeekendDay
+    ? diffHours(form.extraStartTime, form.extraEndTime)
+    : 0;
+
   const next = () => setStep(2);
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const validate = t => {
     const e = {};
-    
+
+    const weekend = isWeekendDate(t.date);
+
     // Trabalho Normal: precisa data, obra, supervisor, horas válidas
     if (t.template === 'Trabalho Normal') {
       if (!t.date) e.date = 'Data é obrigatória.';
       if (!t.project) e.project = 'Obra é obrigatória.';
       if (!t.supervisor) e.supervisor = 'Encarregado é obrigatório.';
-      if (t.hours < 0) e.hours = 'Horas inválidas.';
-      if (t.overtime < 0) e.overtime = 'Extra inválido.';
+      if (weekend) {
+        if (!t.weekendStartTime) e.weekendStartTime = 'Hora inicial obrigatória.';
+        if (!t.weekendEndTime) e.weekendEndTime = 'Hora final obrigatória.';
+        if (!e.weekendStartTime && !e.weekendEndTime && diffHours(t.weekendStartTime, t.weekendEndTime) <= 0) {
+          e.weekendEndTime = 'Fim tem de ser após início.';
+        }
+      } else {
+        if (t.hours < 0) e.hours = 'Horas inválidas.';
+        if ((t.extraStartTime || t.extraEndTime) && diffHours(t.extraStartTime, t.extraEndTime) <= 0) {
+          e.extraEndTime = 'Fim tem de ser após início.';
+        }
+      }
     }
     
     // Férias e Baixa: só precisam do período
@@ -3874,17 +3915,17 @@ const TimesheetTemplateForm = ({
   };
 
   const submit = () => {
-  const adjusted = { ...form };
-  
-  // ⬇️ SEMPRE PREENCHER WORKER (CRÍTICO!)
-  adjusted.worker = auth?.name || adjusted.worker || 'Desconhecido';
-  
-  console.log('📝 Submetendo timesheet:', {
-    worker: adjusted.worker,
-    authName: auth?.name,
-    date: adjusted.date,
-    template,
-  });
+    const adjusted = { ...form };
+
+    // ⬇️ SEMPRE PREENCHER WORKER (CRÍTICO!)
+    adjusted.worker = auth?.name || adjusted.worker || 'Desconhecido';
+
+    console.log('📝 Submetendo timesheet:', {
+      worker: adjusted.worker,
+      authName: auth?.name,
+      date: adjusted.date,
+      template,
+    });
     
     // Limpar campos desnecessários conforme o template
     if (template === 'Férias') {
@@ -3894,7 +3935,7 @@ const TimesheetTemplateForm = ({
       adjusted.supervisor = '';
       adjusted.date = adjusted.periodStart; // usar início como data
     }
-    
+
     if (template === 'Baixa') {
       adjusted.hours = 0;
       adjusted.overtime = 0;
@@ -3902,7 +3943,24 @@ const TimesheetTemplateForm = ({
       adjusted.supervisor = '';
       adjusted.date = adjusted.periodStart;
     }
-    
+
+    if (template === 'Trabalho Normal') {
+      const weekendHours = isWeekendDay ? weekendComputedHours : 0;
+      const otHours = !isWeekendDay ? overtimeComputedHours : 0;
+
+      adjusted.weekendStartTime = form.weekendStartTime || '';
+      adjusted.weekendEndTime = form.weekendEndTime || '';
+      adjusted.extraStartTime = form.extraStartTime || '';
+      adjusted.extraEndTime = form.extraEndTime || '';
+
+      if (isWeekendDay) {
+        adjusted.hours = weekendHours;
+        adjusted.overtime = 0;
+      } else {
+        adjusted.overtime = otHours;
+      }
+    }
+
     if (template === 'Falta') {
   // Se não especificar horas, assume dia completo (8h)
   if (!adjusted.hours || adjusted.hours === 0) {
@@ -4025,26 +4083,71 @@ const TimesheetTemplateForm = ({
               </>
             )}
 
-            {/* HORAS E EXTRA (só para Trabalho Normal) */}
-            {template === 'Trabalho Normal' && (
+            {/* HORAS (TRABALHO NORMAL) */}
+            {template === 'Trabalho Normal' && !isWeekendDay && (
+              <label className="text-sm">
+                Horas
+                <input
+                  type="number" min={0} step={0.5}
+                  value={form.hours}
+                  onChange={e=>update('hours',parseFloat(e.target.value))}
+                  className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.hours?'border-rose-400':''}`}
+                />
+              </label>
+            )}
+
+            {/* HORÁRIO FIM-DE-SEMANA */}
+            {template === 'Trabalho Normal' && isWeekendDay && (
               <>
                 <label className="text-sm">
-                  Horas
+                  Hora início (FDS)
                   <input
-                    type="number" min={0} step={0.5}
-                    value={form.hours}
-                    onChange={e=>update('hours',parseFloat(e.target.value))}
-                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.hours?'border-rose-400':''}`}
+                    type="time"
+                    value={form.weekendStartTime}
+                    onChange={e=>update('weekendStartTime', e.target.value)}
+                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.weekendStartTime?'border-rose-400':''}`}
                   />
+                  {errors.weekendStartTime && <div className="text-xs text-rose-600 mt-1">{errors.weekendStartTime}</div>}
                 </label>
+
                 <label className="text-sm">
-                  Horas Extra
+                  Hora fim (FDS)
                   <input
-                    type="number" min={0} step={0.5}
-                    value={form.overtime}
-                    onChange={e=>update('overtime',parseFloat(e.target.value))}
-                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.overtime?'border-rose-400':''}`}
+                    type="time"
+                    value={form.weekendEndTime}
+                    onChange={e=>update('weekendEndTime', e.target.value)}
+                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.weekendEndTime?'border-rose-400':''}`}
                   />
+                  {errors.weekendEndTime && <div className="text-xs text-rose-600 mt-1">{errors.weekendEndTime}</div>}
+                  <div className="text-xs text-slate-500 mt-1">Horas calculadas: {weekendComputedHours || '—'}h</div>
+                </label>
+              </>
+            )}
+
+            {/* HORÁRIO EXTRA EM DIAS ÚTEIS */}
+            {template === 'Trabalho Normal' && !isWeekendDay && (
+              <>
+                <label className="text-sm">
+                  Hora extra (início)
+                  <input
+                    type="time"
+                    value={form.extraStartTime}
+                    onChange={e=>update('extraStartTime', e.target.value)}
+                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.extraStartTime?'border-rose-400':''}`}
+                  />
+                  {errors.extraStartTime && <div className="text-xs text-rose-600 mt-1">{errors.extraStartTime}</div>}
+                </label>
+
+                <label className="text-sm">
+                  Hora extra (fim)
+                  <input
+                    type="time"
+                    value={form.extraEndTime}
+                    onChange={e=>update('extraEndTime', e.target.value)}
+                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.extraEndTime?'border-rose-400':''}`}
+                  />
+                  {errors.extraEndTime && <div className="text-xs text-rose-600 mt-1">{errors.extraEndTime}</div>}
+                  <div className="text-xs text-slate-500 mt-1">Horas extra calculadas: {overtimeComputedHours || '—'}h</div>
                 </label>
               </>
             )}
