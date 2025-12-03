@@ -85,33 +85,6 @@ function parseCatalogCSV(text){const lines=text.replace(/\r\n/g,'\n').replace(/\
 
 
 
-<<<<<<< HEAD
-function printOrderHTML(o, priceOf, codeOf){
-  const rows = o.items.map(it=>{
-    const p   = priceOf(it.name);
-    const c   = codeOf(it.name, o.project) || '—';
-    const qty = Number(it.qty)||0;
-    const sub = p*qty;
-    return `<tr>
-      <td>${it.name}</td><td>${c}</td>
-      <td style="text-align:right">${qty}</td>
-      <td style="text-align:right">${p.toFixed(2)} €</td>
-      <td style="text-align:right">${sub.toFixed(2)} €</td>
-    </tr>`;
-  }).join('');
-
-  function orderToEmailText(o, priceOf, codeOf) {
-  const linhas = o.items.map(it=>{
-    const p = priceOf(it.name);
-    const c = codeOf(it.name, o.project) || '';
-    const sub = p * (Number(it.qty)||0);
-    return `- ${it.name}${c?` [${c}]`:''} × ${it.qty} @ ${p.toFixed(2)}€ = ${sub.toFixed(2)}€`;
-  });
-  const total = o.items.reduce((s,it)=> s + priceOf(it.name)*(Number(it.qty)||0), 0);
-  return [
-    `Pedido de Material — ${o.project}`,
-    `Requisitante: ${o.requestedBy||'—'} · Data: ${o.requestedAt}`,
-=======
 // ---------- Impressão de Pedidos ----------
 function orderToEmailText(o, priceOf, codeOf) {
   const linhas = o.items.map(it => {
@@ -124,7 +97,6 @@ function orderToEmailText(o, priceOf, codeOf) {
   return [
     `Pedido de Material — ${o.project}`,
     `Requisitante: ${o.requestedBy || '—'} · Data: ${o.requestedAt}`,
->>>>>>> origin/main
     ``,
     ...linhas,
     ``,
@@ -144,28 +116,18 @@ function openPrintWindow(html) {
       return true;
     }
   } catch {}
-<<<<<<< HEAD
-  // Fallback: descarrega o HTML se a popup for bloqueada
-=======
->>>>>>> origin/main
   try {
     const blob = new Blob([html], { type: 'text/html' });
     const url  = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-<<<<<<< HEAD
-    a.download = `relatorio_timesheets_${todayISO()}.html`;
-=======
     a.download = `pedido_material_${todayISO()}.html`;
->>>>>>> origin/main
     a.click();
     URL.revokeObjectURL(url);
   } catch {}
   return false;
 }
 
-<<<<<<< HEAD
-=======
 function printOrderHTML(o, priceOf, codeOf) {
   const rows = o.items.map(it => {
     const p   = priceOf(it.name);
@@ -216,8 +178,259 @@ function printOrder(o, priceOf, codeOf) {
   openPrintWindow(printOrderHTML(o, priceOf, codeOf));
 }
 
+/**
+ * RELATÓRIO MENSAL DE COLABORADORES
+ * Baseado no script Google Apps Script fornecido
+ * Calcula métricas detalhadas por colaborador seguindo a lógica do período 21→20
+ */
 
->>>>>>> origin/main
+// Feriados fixos por ano (YYYY-MM-DD)
+const FERIADOS_FIXOS = {
+  2025: new Set([
+    '2025-01-01','2025-03-04','2025-04-18','2025-04-20','2025-04-25',
+    '2025-05-01','2025-06-10','2025-06-19','2025-08-15','2025-10-05',
+    '2025-11-01','2025-11-02','2025-12-25'
+  ]),
+  2024: new Set([
+    '2024-01-01','2024-03-29','2024-03-31','2024-04-25',
+    '2024-05-01','2024-05-30','2024-06-10','2024-08-15','2024-10-05',
+    '2024-11-01','2024-12-01','2024-12-08','2024-12-25'
+  ])
+};
+
+// Retorna Set de feriados para um dado ano
+const getFeriadosSet = (year) => {
+  return FERIADOS_FIXOS[year] || new Set();
+};
+
+// Conta dias úteis (Seg-Sex) entre start e end (INCLUSIVO), excluindo feriados
+const countBusinessDaysInclusive = (start, end, feriadosSet = new Set()) => {
+  if (!start || !end) return 0;
+  let d1 = new Date(start), d2 = new Date(end);
+  if (d2 < d1) { const t = d1; d1 = d2; d2 = t; }
+  d1.setHours(0,0,0,0); d2.setHours(0,0,0,0);
+
+  let n = 0;
+  const cur = new Date(d1);
+  while (cur <= d2) {
+    const ymd = cur.toISOString().slice(0,10);
+    const dow = cur.getDay();
+    // Seg=1 a Sex=5, e não é feriado
+    if (dow >= 1 && dow <= 5 && !feriadosSet.has(ymd)) {
+      n++;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return n;
+};
+
+/**
+ * Calcula dados do relatório mensal de colaboradores
+ * Retorna array de objetos com métricas por colaborador
+ */
+function calcularRelatorioMensalColaboradores(timeEntries, cycle) {
+  const { start, end } = cycle;
+  const year = start.getFullYear();
+  const feriadosSet = getFeriadosSet(year);
+
+  // Total de dias úteis no período (excluindo feriados)
+  const uteisPeriodo = countBusinessDaysInclusive(start, end, feriadosSet);
+
+  // Criar mapa de dias por colaborador
+  const perColab = new Map();
+  const feriasPorColab = new Map();
+  const baixaPorColab = new Map();
+
+  // Array de todos os dias no período
+  const dias = [];
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
+    const c = new Date(d);
+    c.setHours(0,0,0,0);
+    dias.push(c);
+  }
+
+  // 1) Processar férias e baixas primeiro (períodos)
+  for (const t of timeEntries) {
+    const worker = t.worker;
+    if (!worker) continue;
+
+    // Férias
+    if (t.template === 'Férias' && t.periodStart && t.periodEnd) {
+      const ini = new Date(t.periodStart);
+      const fim = new Date(t.periodEnd);
+      ini.setHours(0,0,0,0); fim.setHours(0,0,0,0);
+
+      if (fim >= start && ini <= end) {
+        const overlapStart = ini < start ? start : ini;
+        const overlapEnd = fim > end ? end : fim;
+        const diasFerias = countBusinessDaysInclusive(overlapStart, overlapEnd, feriadosSet);
+
+        if (!feriasPorColab.has(worker)) feriasPorColab.set(worker, 0);
+        feriasPorColab.set(worker, feriasPorColab.get(worker) + diasFerias);
+      }
+    }
+
+    // Baixa
+    if (t.template === 'Baixa' && t.periodStart && t.periodEnd) {
+      const ini = new Date(t.periodStart);
+      const fim = new Date(t.periodEnd);
+      ini.setHours(0,0,0,0); fim.setHours(0,0,0,0);
+
+      if (fim >= start && ini <= end) {
+        const overlapStart = ini < start ? start : ini;
+        const overlapEnd = fim > end ? end : fim;
+        const diasBaixa = countBusinessDaysInclusive(overlapStart, overlapEnd, feriadosSet);
+
+        if (!baixaPorColab.has(worker)) baixaPorColab.set(worker, 0);
+        baixaPorColab.set(worker, baixaPorColab.get(worker) + diasBaixa);
+      }
+    }
+  }
+
+  // 2) Processar registos diários
+  for (const t of timeEntries) {
+    const worker = t.worker;
+    if (!worker) continue;
+
+    const template = t.template || '';
+
+    // Para férias e baixas, expandir para todos os dias do período
+    if ((template === 'Férias' || template === 'Baixa') && t.periodStart && t.periodEnd) {
+      const ini = new Date(t.periodStart);
+      const fim = new Date(t.periodEnd);
+      ini.setHours(0,0,0,0); fim.setHours(0,0,0,0);
+
+      for (let d = new Date(ini); d <= fim; d.setDate(d.getDate()+1)) {
+        if (d >= start && d <= end) {
+          const ymd = d.toISOString().slice(0,10);
+
+          if (!perColab.has(worker)) perColab.set(worker, { days: new Map() });
+          const C = perColab.get(worker);
+          if (!C.days.has(ymd)) C.days.set(ymd, { tipos: new Set(), horas: 0, overtime: 0, hDesloc: 0, projeto: '' });
+          const rec = C.days.get(ymd);
+          rec.tipos.add(template);
+        }
+      }
+      continue;
+    }
+
+    // Para registos com data específica
+    if (t.date) {
+      const data = new Date(t.date);
+      data.setHours(0,0,0,0);
+
+      if (data >= start && data <= end) {
+        const ymd = data.toISOString().slice(0,10);
+
+        if (!perColab.has(worker)) perColab.set(worker, { days: new Map() });
+        const C = perColab.get(worker);
+        if (!C.days.has(ymd)) C.days.set(ymd, { tipos: new Set(), horas: 0, overtime: 0, hDesloc: 0, projeto: '' });
+        const rec = C.days.get(ymd);
+
+        rec.tipos.add(template);
+
+        // Para Trabalho Normal, acumular horas
+        if (template === 'Trabalho Normal') {
+          rec.horas += Number(t.hours || 0);
+          rec.overtime += Number(t.overtime || 0);
+          rec.projeto = t.project || '';
+        }
+      }
+    }
+  }
+
+  // 3) Calcular métricas por colaborador
+  const rowsOut = [];
+
+  for (const [nome, C] of perColab.entries()) {
+    let dTrab = 0;      // dias trabalhados (com "Trabalho Normal" em dias úteis)
+    let dFalta = 0;     // dias com falta em dias úteis
+    let extraU = 0;     // horas extra em dias úteis
+    let hWE = 0;        // horas trabalhadas ao fim de semana
+    let hFer = 0;       // horas trabalhadas em feriados
+    let hDes = 0;       // horas deslocadas (não implementado ainda)
+
+    for (const dia of dias) {
+      const ymd = dia.toISOString().slice(0,10);
+      const rec = C.days.get(ymd);
+      const dow = dia.getDay();
+      const isUtil = (dow >= 1 && dow <= 5) && !feriadosSet.has(ymd);
+      const isFeriado = feriadosSet.has(ymd);
+      const isFDS = (dow === 0 || dow === 6);
+
+      if (!rec) continue;
+
+      // Dias trabalhados: dias úteis com "Trabalho Normal"
+      if (rec.tipos.has('Trabalho Normal') && isUtil) {
+        dTrab++;
+      }
+
+      // Faltas em dias úteis
+      if (rec.tipos.has('Falta') && isUtil) {
+        dFalta++;
+      }
+
+      // Horas extra em dias úteis
+      if (rec.tipos.has('Trabalho Normal') && isUtil) {
+        extraU += rec.overtime;
+      }
+
+      // Horas trabalhadas ao fim de semana
+      if (rec.tipos.has('Trabalho Normal') && isFDS && !isFeriado) {
+        hWE += rec.horas + rec.overtime;
+      }
+
+      // Horas trabalhadas em feriados
+      if (rec.tipos.has('Trabalho Normal') && isFeriado) {
+        hFer += rec.horas + rec.overtime;
+      }
+    }
+
+    // Presença = (dias trabalhados / dias úteis) * 100
+    const pres = uteisPeriodo ? (dTrab / uteisPeriodo) : 0;
+
+    rowsOut.push({
+      nome,
+      uteis: uteisPeriodo,
+      dTrab,
+      dFalta,
+      dFerias: feriasPorColab.get(nome) || 0,
+      dBaixa: baixaPorColab.get(nome) || 0,
+      extraU,
+      hWE,
+      hFer,
+      hDes,
+      pres
+    });
+  }
+
+  // 4) Calcular totais
+  const totals = {
+    uteis: uteisPeriodo,
+    trabNormal: rowsOut.reduce((s, r) => s + r.dTrab, 0),
+    faltas: rowsOut.reduce((s, r) => s + r.dFalta, 0),
+    ferias: rowsOut.reduce((s, r) => s + r.dFerias, 0),
+    baixa: rowsOut.reduce((s, r) => s + r.dBaixa, 0),
+    extraUteis: rowsOut.reduce((s, r) => s + r.extraU, 0),
+    hWE: rowsOut.reduce((s, r) => s + r.hWE, 0),
+    hFer: rowsOut.reduce((s, r) => s + r.hFer, 0),
+    hDesloc: rowsOut.reduce((s, r) => s + r.hDes, 0)
+  };
+
+  // Presença média
+  const presMed = rowsOut.length ? Math.round(100 * rowsOut.reduce((s, r) => s + r.pres, 0) / rowsOut.length) : 0;
+
+  // Colaboradores com presença < 80%
+  const below80 = rowsOut.filter(r => r.pres < 0.8).length;
+
+  return {
+    rows: rowsOut,
+    totals,
+    presMed,
+    below80,
+    uteisPeriodo
+  };
+}
 
 
 function buildTimesheetCycleRows({ worker, timeEntries, cycle }) {
@@ -350,12 +563,7 @@ function exportTimesheetCycleCSV(entries = []) {
   download(`relatorio_timesheets_${todayISO()}.csv`, csv);
 }
 
-<<<<<<< HEAD
-
-// ---- RELATÓRIO: Registo de horas do ciclo 21→20 ----
-=======
 // HTML imprimível — esta é a que o botão deve chamar
->>>>>>> origin/main
 function printTimesheetCycleReport(entries = []) {
   const { start, end } = getCycle(0);
   const inRange = (iso) => {
@@ -366,12 +574,7 @@ function printTimesheetCycleReport(entries = []) {
     return d >= a && d <= b;
   };
 
-<<<<<<< HEAD
-  // só “Trabalho Normal” (ajusta se quiseres incluir Férias/Baixa/Falta)
-  const rows = entries
-=======
   const rows = (entries||[])
->>>>>>> origin/main
     .filter(t => t.template === 'Trabalho Normal' && inRange(t.date))
     .sort((a,b) =>
       (a.date||'').localeCompare(b.date||'') ||
@@ -417,44 +620,7 @@ function printTimesheetCycleReport(entries = []) {
     </table>
   </body></html>`;
 
-<<<<<<< HEAD
-  const w = window.open('', '_blank');
-  w.document.write(html);
-  w.document.close();
-  w.focus?.();
-  setTimeout(()=>{ try{ w.print(); }catch{} }, 100);
-}
-
-  <title>Pedido ${o.id}</title>
-  <style>/* estilos iguais aos de cima */</style>
-  </head><body>
-    <!-- conteúdo igual ao de cima, sem a tag <script> -->
-    <h1>Pedido de Material</h1>
-    <div class="meta">
-      <div><b>Projeto:</b> ${o.project}</div>
-      <div><b>Requisitante:</b> ${o.requestedBy||'—'}</div>
-      <div><b>Data:</b> ${o.requestedAt}</div>
-      <div><b>ID:</b> ${o.id}</div>
-      ${o.notes?`<div><b>Notas:</b> ${o.notes}</div>`:''}
-    </div>
-    <table>
-      <tr><th>Item</th><th>Código</th><th class="right">Qtd</th><th class="right">Preço</th><th class="right">Subtotal</th></tr>
-      ${rows}
-      <tr><th colspan="4" class="right">Total</th><th class="right">${total.toFixed(2)} €</th></tr>
-    </table>
-  </body></html>`;
-}
-
-function printOrder(o, priceOf, codeOf){
-  const w = window.open('', '_blank');
-  w.document.write(printOrderHTML(o, priceOf, codeOf));
-  w.document.close();
-  // dá um microtempo para render e imprime
-  w.focus?.();
-  setTimeout(() => { try { w.print(); } catch {} }, 100);
-=======
   openPrintWindow(html);
->>>>>>> origin/main
 }
 
 
@@ -2540,39 +2706,6 @@ const defaultViewForRole = (role) =>
 ];
 
 const LoginView = ({ onLogin }) => {
-<<<<<<< HEAD
-  const [email,setEmail] = React.useState('');
-  const [password,setPassword] = React.useState('');
-  const [loading,setLoading] = React.useState(false);
-  const [error,setError] = React.useState('');
-  const [showRegister,setShowRegister] = React.useState(false);
-  const [role,setRole] = React.useState('tecnico'); // só usado no registo
-
-  const handleLogin = async () => {
-    setLoading(true); setError('');
-    try{
-      const u = await Auth.login(email.trim(), password);
-      onLogin(u);
-    }catch(e){
-      setError(e?.message || 'Falha no login.');
-    }finally{
-      setLoading(false);
-    }
-  };
-
-  const handleRegister = async () => {
-    setLoading(true); setError('');
-    try{
-      const u = await Auth.register(email.trim(), password, role);
-      // Opcional: podes pedir confirmação de email no Supabase (Auth > Email confirmations)
-      onLogin(u);
-    }catch(e){
-      setError(e?.message || 'Falha no registo.');
-    }finally{
-      setLoading(false);
-    }
-  };
-=======
   const [username, setUsername] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [role, setRole] = React.useState('tecnico');
@@ -2585,7 +2718,6 @@ const LoginView = ({ onLogin }) => {
    window.Auth?.login(username || 'Utilizador', '***', effectiveRole);
    onLogin(window.Auth?.user());
  };
->>>>>>> origin/main
 
   return (
     <div className="min-h-screen grid place-items-center p-4 bg-slate-50 dark:bg-slate-950">
@@ -2602,85 +2734,26 @@ const LoginView = ({ onLogin }) => {
 
         <div className="space-y-3">
           <label className="text-sm">
-<<<<<<< HEAD
-            Email
-            <input
-              type="email"
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              placeholder="nome@empresa.com"
-              value={email}
-              onChange={e=>setEmail(e.target.value)}
-=======
             Nome de Utilizador
             <input
               className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
               placeholder="Digite seu usuário"
               value={username}
               onChange={e=>setUsername(e.target.value)}
->>>>>>> origin/main
             />
           </label>
 
           <label className="text-sm">
-<<<<<<< HEAD
-            Palavra-passe
-            <input
-              type="password"
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              placeholder="••••••••"
-=======
             Senha
             <input
               type="password"
               className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
               placeholder="Digite sua senha"
->>>>>>> origin/main
               value={password}
               onChange={e=>setPassword(e.target.value)}
             />
           </label>
 
-<<<<<<< HEAD
-          {showRegister && (
-            <label className="text-sm">
-              Papel do utilizador
-              <select
-                className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                value={role}
-                onChange={e=>setRole(e.target.value)}
-              >
-                <option value="tecnico">Técnico</option>
-                <option value="encarregado">Encarregado</option>
-                <option value="diretor">Diretor de Obra</option>
-                <option value="logistica">Gestor de Logística</option>
-                <option value="admin">Administrador</option>
-              </select>
-            </label>
-          )}
-
-          {error && <div className="text-xs text-rose-500">{error}</div>}
-
-          {!showRegister ? (
-            <Button className="w-full justify-center" onClick={handleLogin} disabled={loading}>
-              {loading ? 'A entrar…' : 'Entrar'}
-            </Button>
-          ) : (
-            <Button className="w-full justify-center" onClick={handleRegister} disabled={loading}>
-              {loading ? 'A registar…' : 'Criar conta'}
-            </Button>
-          )}
-
-          <div className="text-xs text-center text-slate-500 dark:text-slate-400">
-            {showRegister ? 'Já tens conta?' : 'Ainda não tens conta?'}{' '}
-            <button
-              className="underline"
-              onClick={()=>setShowRegister(v=>!v)}
-              type="button"
-            >
-              {showRegister ? 'Entrar' : 'Criar conta'}
-            </button>
-          </div>
-=======
           <label className="text-sm">
             Tipo de Utilizador (apenas para demo sem password)
             <select
@@ -2731,17 +2804,12 @@ const LoginView = ({ onLogin }) => {
             </div>
           </div>
           {/* === fim do bloco === */}
->>>>>>> origin/main
         </div>
       </Card>
     </div>
   );
 };
 
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/main
 const JOB_TYPES = ['Instalação','Manutenção','Visita Técnica','Reunião'];
 
 function AgendaQuickForm({ initial, setAgenda, onClose, peopleNames=[], projectNames=[] }) {
@@ -3125,7 +3193,7 @@ const DashboardView = () => (
       const fleetOk = fleetTotal; // se adicionares estados de avaria, ajusta aqui
 
       return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
           <KpiCard
   icon="calendar"
   title="Visão Geral do Mês"
@@ -3133,6 +3201,13 @@ const DashboardView = () => (
   subtitle="dias registados/úteis"
   onClick={() => setModal({ name: 'kpi-overview' })}
 />
+          <KpiCard
+            icon="user"
+            title="Relatório de Colaboradores"
+            value={`${peopleNames.length}`}
+            subtitle="ver detalhes mensais"
+            onClick={() => setModal({ name: 'monthly-collab-report' })}
+          />
           <KpiCard
             icon="file"
             title="Eficiência Material"
@@ -3418,8 +3493,6 @@ const DashboardView = () => (
   </div>
 </Modal>
 
-<<<<<<< HEAD
-=======
 {/* Escolha rápida: registar horas / agendar (apenas hoje+futuro) */}
 <Modal
   open={modal?.name==='day-actions'}
@@ -3445,7 +3518,6 @@ const DashboardView = () => (
   </div>
 </Modal>
 
->>>>>>> origin/main
 {/* Agendamento rápido (formulário compacto) */}
 <Modal open={modal?.name==='agenda-add'} title="Agendar Trabalho" onClose={()=>setModal(null)}>
   <AgendaQuickForm initial={modal?.initial}
@@ -3592,7 +3664,155 @@ const DashboardView = () => (
   })()}
 </Modal>
 
+{/* NOVO MODAL: Relatório Mensal de Colaboradores */}
+<Modal
+  open={modal?.name === 'monthly-collab-report'}
+  title="Relatório Mensal de Colaboradores"
+  onClose={() => setModal(null)}
+  wide
+>
+  {(() => {
+    const cycle = getCycle(0);
+    const { start, end } = cycle;
+    const dados = calcularRelatorioMensalColaboradores(visibleTimeEntries, cycle);
 
+    // Ordenar por presença descendente, depois por faltas, depois por nome
+    const rowsOrdenadas = dados.rows
+      .slice()
+      .sort((a, b) => {
+        if (b.pres !== a.pres) return b.pres - a.pres;
+        if (b.dFalta !== a.dFalta) return b.dFalta - a.dFalta;
+        return a.nome.localeCompare(b.nome, 'pt', { sensitivity: 'base' });
+      });
+
+    const dashH = (n) => n === 0 ? '–' : `${Math.round(n * 10) / 10}h`;
+    const dashInt = (n) => n === 0 ? '–' : `${n}`;
+    const fmt = (d) => new Date(d).toLocaleDateString('pt-PT');
+
+    return (
+      <div className="space-y-4">
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="rounded-2xl p-5 bg-slate-900 text-white dark:bg-slate-800">
+            <div className="text-sm opacity-80">Dias Úteis</div>
+            <div className="mt-1 text-4xl font-semibold">{dados.uteisPeriodo}</div>
+            <div className="mt-1 text-sm opacity-80">no período</div>
+          </div>
+
+          <div className="rounded-2xl p-5 bg-blue-900 text-white dark:bg-blue-800">
+            <div className="text-sm opacity-80">Colaboradores Ativos</div>
+            <div className="mt-1 text-4xl font-semibold">{dados.rows.length}</div>
+            <div className="mt-1 text-sm opacity-80">com registos</div>
+          </div>
+
+          <div className="rounded-2xl p-5 bg-emerald-900 text-white dark:bg-emerald-800">
+            <div className="text-sm opacity-80">Presença Média</div>
+            <div className="mt-1 text-4xl font-semibold">{dados.presMed}%</div>
+            <div className="mt-1 text-sm opacity-80">taxa geral</div>
+          </div>
+
+          <div className="rounded-2xl p-5 bg-amber-900 text-white dark:bg-amber-800">
+            <div className="text-sm opacity-80">Presença {'<'} 80%</div>
+            <div className="mt-1 text-4xl font-semibold">{dados.below80}</div>
+            <div className="mt-1 text-sm opacity-80">colaboradores</div>
+          </div>
+        </div>
+
+        {/* Tabela Detalhada */}
+        <Card className="p-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-700">
+                  <th className="text-left p-3 font-semibold dark:text-slate-100">Colaborador</th>
+                  <th className="text-center p-3 font-semibold dark:text-slate-100">Dias Úteis</th>
+                  <th className="text-center p-3 font-semibold dark:text-slate-100">Dias Trabalhados</th>
+                  <th className="text-center p-3 font-semibold dark:text-slate-100">Faltas</th>
+                  <th className="text-center p-3 font-semibold dark:text-slate-100">Férias</th>
+                  <th className="text-center p-3 font-semibold dark:text-slate-100">Baixa</th>
+                  <th className="text-center p-3 font-semibold dark:text-slate-100">Horas Extra (h)</th>
+                  <th className="text-center p-3 font-semibold dark:text-slate-100">FDS (h)</th>
+                  <th className="text-center p-3 font-semibold dark:text-slate-100">Feriado (h)</th>
+                  <th className="text-center p-3 font-semibold dark:text-slate-100">Presença</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rowsOrdenadas.length > 0 ? (
+                  rowsOrdenadas.map((r, idx) => {
+                    const pres = Math.round(100 * r.pres);
+                    const isAlert = r.dFalta > 2;
+                    return (
+                      <tr
+                        key={idx}
+                        className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${
+                          isAlert ? 'bg-red-50 dark:bg-red-900/20' : ''
+                        }`}
+                      >
+                        <td className="p-3 dark:text-slate-200">{r.nome}</td>
+                        <td className="p-3 text-center dark:text-slate-300">{r.uteis}</td>
+                        <td className="p-3 text-center dark:text-slate-300">{r.dTrab}</td>
+                        <td className="p-3 text-center dark:text-slate-300">{dashInt(r.dFalta)}</td>
+                        <td className="p-3 text-center dark:text-slate-300">{dashInt(r.dFerias)}</td>
+                        <td className="p-3 text-center dark:text-slate-300">{dashInt(r.dBaixa)}</td>
+                        <td className="p-3 text-center dark:text-slate-300">{dashH(r.extraU)}</td>
+                        <td className="p-3 text-center dark:text-slate-300">{dashH(r.hWE)}</td>
+                        <td className="p-3 text-center dark:text-slate-300">{dashH(r.hFer)}</td>
+                        <td className="p-3 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="w-24 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-emerald-500"
+                                style={{ width: `${pres}%` }}
+                              />
+                            </div>
+                            <span className="text-xs font-semibold dark:text-slate-300">{pres}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="10" className="p-6 text-center text-slate-500 dark:text-slate-400">
+                      Sem registos no período
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              {rowsOrdenadas.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-slate-300 dark:border-slate-600 font-semibold bg-slate-50 dark:bg-slate-800">
+                    <td className="p-3 dark:text-slate-100">Totais</td>
+                    <td className="p-3 text-center dark:text-slate-200">{dados.totals.uteis}</td>
+                    <td className="p-3 text-center dark:text-slate-200">{dados.totals.trabNormal}</td>
+                    <td className="p-3 text-center dark:text-slate-200">{dashInt(dados.totals.faltas)}</td>
+                    <td className="p-3 text-center dark:text-slate-200">{dashInt(dados.totals.ferias)}</td>
+                    <td className="p-3 text-center dark:text-slate-200">{dashInt(dados.totals.baixa)}</td>
+                    <td className="p-3 text-center dark:text-slate-200">{dashH(dados.totals.extraUteis)}</td>
+                    <td className="p-3 text-center dark:text-slate-200">{dashH(dados.totals.hWE)}</td>
+                    <td className="p-3 text-center dark:text-slate-200">{dashH(dados.totals.hFer)}</td>
+                    <td className="p-3 text-center dark:text-slate-200">{dados.presMed}%</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </Card>
+
+        {/* Info do Período */}
+        <Card className="p-4">
+          <div className="text-sm text-slate-500 dark:text-slate-300">
+            <b>Período de Análise:</b> {fmt(start)} até {fmt(end)} (ciclo 21→20)
+            <br />
+            <span className="text-xs opacity-75">
+              Nota: Dias úteis excluem fins-de-semana e feriados. A presença é calculada como (dias trabalhados / dias úteis) × 100%.
+            </span>
+          </div>
+        </Card>
+      </div>
+    );
+  })()}
+</Modal>
 
 <Modal open={modal?.name==='kpi-logistics'} title="Eficiência Material" onClose={()=>setModal(null)} wide>
   {/* conteúdo do anexo 3: barras + lista de pedidos recentes */}
