@@ -499,6 +499,50 @@ const cleanDesignation = s => String(s||'')
   .trim();
 const normText = s => String(s||'').trim().toLowerCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const normalizeISODate = (v) => {
+  const s = String(v || '').trim();
+  if (!s) return '';
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (m) {
+    let [_, d, mo, y] = m;
+    if (y.length === 2) y = '20' + y;
+    d = d.padStart(2, '0');
+    mo = mo.padStart(2, '0');
+    return `${y}-${mo}-${d}`;
+  }
+  const d = new Date(s);
+  if (!isNaN(d)) return d.toISOString().slice(0, 10);
+  return '';
+};
+const timeEntrySignature = (t) => {
+  const primaryDate = normalizeISODate(t.date || t.periodStart || '');
+  const endDate = normalizeISODate(t.periodEnd || t.date || '');
+
+  return [
+    normText(t.worker || t.supervisor || ''),
+    normText(t.template || ''),
+    normText(t.project || ''),
+    normText(t.supervisor || ''),
+    primaryDate,
+    endDate,
+    Number(t.hours) || 0,
+    Number(t.overtime) || 0,
+    normText(t.notes || ''),
+  ].join('||');
+};
+const dedupTimeEntries = (entries = []) => {
+  const seen = new Set();
+  const out = [];
+  for (const t of entries) {
+    const key = timeEntrySignature(t);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+};
 const parseEUPriceString = (s) => { if(!s) return NaN; const t=String(s).replace(/[^\d,.\-]/g,'').replace(/\.(?=.*\.)/g,'').replace(',', '.'); const n=parseFloat(t); return isNaN(n)?NaN:n; };
 const pickPriceFromColumns = (cols) => { let p = NaN; if(cols[3]!=null && cols[3]!==''){ p = parseEUPriceString(cols[3]); } if(!isFinite(p)){ p = parseEUPriceString(cols[2]); } if(!isFinite(p)) p = 0; return Math.round(p*10000)/10000; };
 
@@ -1141,7 +1185,7 @@ const handleCatalog = (file) => {
     onClose();
   };
 
-  const normalizeDate=(v)=>{const s=String(v||'').trim();if(!s)return'';if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;const m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);if(m){let [_,d,mo,y]=m;if(y.length===2)y='20'+y;d=d.padStart(2,'0');mo=mo.padStart(2,'0');return`${y}-${mo}-${d}`;}const d=new Date(s);if(!isNaN(d))return d.toISOString().slice(0,10);return'';};
+  const normalizeDate = normalizeISODate;
   const toNumber=(v)=>{if(v==null||v==='')return 0; const s=String(v).replace(/\./g,'').replace(',','.'); const n=parseFloat(s); return isNaN(n)?0:n};
 
   const mapRow = (r) => {
@@ -1187,10 +1231,13 @@ const handleCatalog = (file) => {
     const projectFromAC = val('projectNormal');
     const projectFromAH = val('projectWeekend');
     const projectFromAG = val('projectShifted');
+    const baseProject = projectFromAC || '';
+    const weekendProject = projectFromAH || '';
+    const shiftedProject = projectFromAG || '';
 
     if (template.includes('Normal') || template.includes('normal')) {
       // TRABALHO NORMAL
-      project = projectFromAC || projectFromAH || val('project');
+      project = baseProject || weekendProject || shiftedProject || val('project');
       supervisor = val('supervisorNormal') || val('supervisor');
 
       const calcExtra = val('overtimeCalc');
@@ -1200,7 +1247,7 @@ const handleCatalog = (file) => {
       
     } else if (template.includes('Fim') || template.includes('FDS') || template.includes('semana')) {
       // FIM DE SEMANA
-      project = projectFromAH || projectFromAC || val('project');
+      project = weekendProject || baseProject || shiftedProject || val('project');
       supervisor = val('supervisorWeekend') || val('supervisor');
 
       const calcHours = val('weekendCalc');
@@ -1210,7 +1257,7 @@ const handleCatalog = (file) => {
       
     } else if (template.includes('Deslocad') || template.includes('deslocad')) {
       // TRABALHO DESLOCADO
-      project = projectFromAG || projectFromAH || projectFromAC || val('project');
+      project = shiftedProject || weekendProject || baseProject || val('project');
       supervisor = val('supervisorShifted') || val('supervisorNormal') || val('supervisor');
       
     } else if (template.includes('Férias') || template.includes('ferias')) {
@@ -1318,7 +1365,12 @@ const handleCatalog = (file) => {
     const mapped=csvPreview.rows.map(mapRow);
     const valOk=mapped.filter(o=>validateMapped(o).length===0);
     if(!valOk.length){addToast('Nenhuma linha válida.','err');return;}
-    if(section==='timesheets'){ setters.setTimeEntries(cur=>mode==='replace'?valOk:[...valOk,...cur]); }
+    if (section === 'timesheets') {
+      setters.setTimeEntries((cur) => {
+        const next = mode === 'replace' ? valOk : [...valOk, ...cur];
+        return dedupTimeEntries(next);
+      });
+    }
     if(section==='materials'){
       const orders = valOk.map(x => ({
   id: uid(),
@@ -2502,12 +2554,15 @@ const MonthlyReportView = ({ timeEntries, people }) => {
   // Calcular estatísticas por colaborador
   const stats = useMemo(() => {
     const [year, month] = selectedMonth.split('-').map(Number);
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0);
+    const startDate = new Date(year, month - 2, 21);
+    const endDate = new Date(year, month - 1, 20);
+    startDate.setHours(0, 0, 0, 0);
     endDate.setHours(23, 59, 59, 999);
 
+    const allEntries = dedupTimeEntries(timeEntries);
+
     // Contar dias úteis do mês
-    const entriesInMonth = timeEntries.filter((t) => {
+    const entriesInMonth = allEntries.filter((t) => {
       if (t.template === 'Férias' || t.template === 'Baixa') {
         const start = new Date(t.periodStart || t.date);
         const end = new Date(t.periodEnd || t.date);
@@ -2678,7 +2733,7 @@ if (!byWorker.has(worker)) {
             return entry;
           });
 
-          setTimeEntries(fixed);
+          setTimeEntries(dedupTimeEntries(fixed));
           addToast(`${fixed.length} registos verificados`, 'ok');
         }}
       >
@@ -4212,7 +4267,7 @@ function App() {
   ];
 
   const [timeEntries, setTimeEntries] = useState(
-    persisted?.timeEntries || defaultTime
+    dedupTimeEntries(persisted?.timeEntries || defaultTime)
   );
   const [orders, setOrders] = useState(
     persisted?.orders || defaultOrders
