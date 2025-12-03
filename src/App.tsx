@@ -2608,88 +2608,144 @@ const MonthlyReportView = ({ timeEntries, people }) => {
     // Agrupar por colaborador
     const byWorker = new Map();
 
-    entriesInMonth.forEach((entry) => {
-      // ✅ PRIORIZAR worker, depois supervisor, depois nome da coluna
-      const worker = 
-        entry.worker || 
-        entry.supervisor || 
-        entry.colaborador ||  // ⬅️ ADICIONAR ISTO
-        'Desconhecido';
-
-// Debug: logar registos sem worker
-if (!entry.worker && !entry.supervisor) {
-  console.warn('⚠️ Registo sem worker/supervisor:', {
-    id: entry.id,
-    date: entry.date,
-    template: entry.template,
-  });
-}
-
-if (!byWorker.has(worker)) {
-  byWorker.set(worker, {
-  name: worker,
-  daysWorked: new Set(),
-  totalHours: 0,
-  totalOvertime: 0,
-  totalOvertimeWeekend: 0,
-  totalAbsenceHours: 0, // ⬅️ ADICIONA ISTO
-  holidays: 0,
-  sickLeave: 0,
-  absences: 0,
-  entries: [],
-});
-}
-
-      const data = byWorker.get(worker);
-      data.entries.push(entry);
-
-      // ✅ ACEITAR QUALQUER VARIAÇÃO DE "TRABALHO NORMAL"
-      if (isNormalWork(entry.template)) {
-        data.daysWorked.add(entry.date);
-        data.totalHours += Number(entry.hours) || 0;
-        data.totalOvertime += Number(entry.overtime) || 0;
-
-        // Verificar se é fim de semana
-        const date = new Date(entry.date);
-        const dayOfWeek = date.getDay();
-        if (dayOfWeek === 0 || dayOfWeek === 6) {
-          data.totalOvertimeWeekend += (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
-        }
-      } else if (entry.template === 'Férias') {
-        const start = new Date(entry.periodStart || entry.date);
-        const end = new Date(entry.periodEnd || entry.date);
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          if (d >= startDate && d <= endDate) {
-            const dow = d.getDay();
-            if (dow !== 0 && dow !== 6) data.holidays++;
-          }
-        }
-      } else if (entry.template === 'Baixa') {
-        const start = new Date(entry.periodStart || entry.date);
-        const end = new Date(entry.periodEnd || entry.date);
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          if (d >= startDate && d <= endDate) {
-            const dow = d.getDay();
-            if (dow !== 0 && dow !== 6) data.sickLeave++;
-          }
-        }
-      } else if (entry.template === 'Falta') {
-        data.absences++;
-        const horasFalta = Number(entry.hours) || 8;
-        data.totalAbsenceHours = (data.totalAbsenceHours || 0) + horasFalta;
+    const ensureWorker = (name) => {
+      if (!byWorker.has(name)) {
+        byWorker.set(name, {
+          name,
+          days: new Map(),
+          totalHours: 0,
+          totalOvertime: 0,
+          totalOvertimeWeekend: 0,
+          feriadoHours: 0,
+          deslocHours: 0,
+          totalAbsenceHours: 0,
+          holidays: 0,
+          sickLeave: 0,
+          absences: 0,
+          entries: [],
+        });
       }
+      return byWorker.get(name);
+    };
+
+    const addDay = (worker, iso) => {
+      if (!iso) return null;
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return null;
+      d.setHours(0, 0, 0, 0);
+      const ymd = d.toISOString().slice(0, 10);
+      if (!worker.days.has(ymd)) {
+        worker.days.set(ymd, {
+          hours: 0,
+          overtime: 0,
+          weekendHours: 0,
+          holidayHours: 0,
+          deslocHours: 0,
+          hasNormalWork: false,
+          isWeekend: d.getDay() === 0 || d.getDay() === 6,
+        });
+      }
+      return { rec: worker.days.get(ymd), ymd };
+    };
+
+    entriesInMonth.forEach((entry) => {
+      const workerName = entry.worker || entry.supervisor || entry.colaborador || 'Desconhecido';
+      const worker = ensureWorker(workerName);
+      worker.entries.push(entry);
+
+      const hours = Number(entry.hours) || 0;
+      const overtime = Number(entry.overtime) || 0;
+
+      if (entry.template === 'Férias') {
+        const start = new Date(entry.periodStart || entry.date);
+        const end = new Date(entry.periodEnd || entry.date);
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const ymd = d.toISOString().slice(0, 10);
+          const dow = d.getDay();
+          if (d >= startDate && d <= endDate && dow !== 0 && dow !== 6 && !holidaySet.has(ymd)) {
+            worker.holidays++;
+          }
+        }
+        return;
+      }
+
+      if (entry.template === 'Baixa') {
+        const start = new Date(entry.periodStart || entry.date);
+        const end = new Date(entry.periodEnd || entry.date);
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const ymd = d.toISOString().slice(0, 10);
+          const dow = d.getDay();
+          if (d >= startDate && d <= endDate && dow !== 0 && dow !== 6 && !holidaySet.has(ymd)) {
+            worker.sickLeave++;
+          }
+        }
+        return;
+      }
+
+      if (entry.template === 'Falta') {
+        worker.absences++;
+        worker.totalAbsenceHours += hours || 8;
+        return;
+      }
+
+      const dayInfo = addDay(worker, entry.date);
+      if (!dayInfo) return;
+      const { rec, ymd } = dayInfo;
+
+      const isWeekend = rec.isWeekend;
+      const isHoliday = holidaySet.has(ymd);
+      const isDesloc = String(entry.template || '').toLowerCase().includes('desloc');
+      const isFeriadoTpl = String(entry.template || '').toLowerCase().includes('feriado');
+      const isFimSemanaTpl = String(entry.template || '').toLowerCase().includes('fim');
+
+      rec.hours += hours;
+      rec.overtime += overtime;
+      rec.hasNormalWork = rec.hasNormalWork || isNormalWork(entry.template);
+
+      if (isWeekend || isFimSemanaTpl) {
+        rec.weekendHours += hours + overtime;
+      }
+
+      if (isHoliday || isFeriadoTpl) {
+        rec.holidayHours += hours + overtime;
+      }
+
+      if (isDesloc) {
+        rec.deslocHours += hours + overtime;
+      }
+
+      // Contabilizar horas globais
+      worker.totalHours += hours;
+      worker.totalOvertime += overtime;
     });
 
     // Converter para array e calcular presença
     return Array.from(byWorker.values())
       .map((worker) => {
-        const daysWorked = worker.daysWorked.size;
+        let daysWorked = 0;
+        let weekendHours = 0;
+        let feriadoHours = 0;
+        let deslocHours = 0;
+
+        worker.days.forEach((rec, ymd) => {
+          const isHoliday = holidaySet.has(ymd);
+          if (rec.hasNormalWork && !rec.isWeekend && !isHoliday) {
+            daysWorked++;
+          }
+          weekendHours += rec.weekendHours;
+          feriadoHours += rec.holidayHours;
+          deslocHours += rec.deslocHours;
+        });
+
         const presence = workDays > 0 ? Math.round((daysWorked / workDays) * 100) : 0;
 
         return {
           ...worker,
           workDays,
           daysWorked,
+          totalOvertimeWeekend: weekendHours,
+          feriadoHours,
+          deslocHours,
           presence: `${presence}%`,
         };
       })
@@ -2713,6 +2769,8 @@ if (!byWorker.has(worker)) {
       'Baixa',
       'Horas Extra (h)',
       'FDS (h)',
+      'Feriado (h)',
+      'Horas Deslocadas (h)',
       'Presença',
     ];
 
@@ -2725,6 +2783,8 @@ if (!byWorker.has(worker)) {
       s.sickLeave || 0,
       s.totalOvertime || 0,
       s.totalOvertimeWeekend || 0,
+      s.feriadoHours || 0,
+      s.deslocHours || 0,
       s.presence,
     ]);
 
@@ -2842,8 +2902,8 @@ if (!byWorker.has(worker)) {
                   <td className="px-3 py-2 text-center">{worker.sickLeave || '—'}</td>
                   <td className="px-3 py-2 text-center">{worker.totalOvertime || '—'}</td>
                   <td className="px-3 py-2 text-center">{worker.totalOvertimeWeekend || '—'}</td>
-                  <td className="px-3 py-2 text-center">—</td>
-                  <td className="px-3 py-2 text-center">—</td>
+                  <td className="px-3 py-2 text-center">{worker.feriadoHours || '—'}</td>
+                  <td className="px-3 py-2 text-center">{worker.deslocHours || '—'}</td>
                   <td className="px-3 py-2 text-center">
                     <Badge
                       tone={
