@@ -177,6 +177,29 @@ function printOrderHTML(o, priceOf, codeOf){
     </tr>`;
   }).join('');
 
+  const total = o.items.reduce((s,it)=>s+priceOf(it.name)*(Number(it.qty)||0),0);
+
+  return `<!doctype html><html><head><meta charset="utf-8"/>
+  <title>Pedido ${o.id}</title>
+  <style>
+    body{font:14px/1.4 system-ui;padding:24px}
+    table{width:100%;border-collapse:collapse}
+    th,td{border:1px solid #cbd5e1;padding:8px}
+    th{background:#f8fafc}
+  </style>
+  </head><body>
+    <h1>Pedido de Material</h1>
+    <div><b>Projeto:</b> ${o.project}</div>
+    <div><b>Requisitante:</b> ${o.requestedBy||'—'}</div>
+    <div><b>Data:</b> ${o.requestedAt}</div>
+    <table>
+      <tr><th>Item</th><th>Código</th><th>Qtd</th><th>Preço</th><th>Subtotal</th></tr>
+      ${rows}
+      <tr><th colspan="4">Total</th><th>${total.toFixed(2)} €</th></tr>
+    </table>
+  </body></html>`;
+}
+
 function printTimesheetReportHTML({ worker, cycle, rows }) {
   const fmt = iso => new Date(iso).toLocaleDateString('pt-PT');
   const totalExtras = rows.reduce((s,r)=>s+(r.extras||0),0);
@@ -915,7 +938,7 @@ const handleCSV = (file) => {
     const parsed = parseCSV(text);
     setCsvPreview(parsed);
 
-    // ✅ AUTO-MAPEAR COLUNAS POR LETRA (A, B, C, ...)
+    // ✅ AUTO-MAPEAR COLUNAS POR LETRA
     const autoMap = {};
     
     if (section === 'timesheets') {
@@ -927,41 +950,15 @@ const handleCSV = (file) => {
         return index - 1;
       };
       
-      // Mapear automaticamente pelas letras das colunas
       const mapping = {
-        worker: 'AX',       // Colaborador
-        template: 'D',      // Template
-        date: 'C',          // Data
-        
-        // Trabalho Normal
-        projectNormal: 'AC',
-        supervisorNormal: 'F',
-        overtimeStart: 'V',
-        overtimeEnd: 'W',
-        overtimeCalc: 'X',
-        
-        // Fim de Semana
-        projectWeekend: 'AH',
-        supervisorWeekend: 'AF',
-        weekendStart: 'AO',
-        weekendEnd: 'AP',
-        weekendCalc: 'AQ',
-        
-        // Deslocado
-        projectShifted: 'AG',
-        
-        // Férias
-        holidayStart: 'M',
-        holidayEnd: 'N',
-        
-        // Baixa
-        sickStart: 'R',
-        sickEnd: 'T',
-        
-        notes: 'Z'
+        worker: 'AX', template: 'D', date: 'C',
+        projectNormal: 'AC', supervisorNormal: 'F',
+        overtimeCalc: 'X', projectWeekend: 'AH',
+        supervisorWeekend: 'AF', weekendCalc: 'AQ',
+        projectShifted: 'AG', holidayStart: 'M',
+        holidayEnd: 'N', sickStart: 'R', sickEnd: 'T'
       };
       
-      // Converter letras para índices de coluna
       for (const [field, letter] of Object.entries(mapping)) {
         const idx = colIndex(letter);
         if (parsed.headers[idx]) {
@@ -969,124 +966,6 @@ const handleCSV = (file) => {
         }
       }
     } else if (section === 'materials') {
-      // Auto-mapear materiais (se necessário)
-      const auto = buildAutoMap(parsed.headers.map(h => norm(h)));
-      Object.assign(autoMap, auto);
-    }
-
-    setMap(autoMap);
-    setStatus(`CSV (${parsed.rows.length}) · AUTO-MAPEADO ✅`);
-  });
-};
-    
-    const worker = val('worker');
-    const rawDate = val('date');
-    const date = normalizeDate(rawDate);
-    
-    let project = '';
-    let supervisor = '';
-    let hours = 8;
-    let overtime = 0;
-    let periodStart = '';
-    let periodEnd = '';
-    
-    if (template === 'Trabalho Normal') {
-      project = val('projectNormal') || val('project');
-      supervisor = val('supervisorNormal') || val('supervisor');
-      
-      const calcExtra = val('overtimeCalc');
-      if (calcExtra) {
-        overtime = toNumber(calcExtra);
-      }
-      
-    } else if (template === 'Trabalho FDS') {
-      project = val('projectWeekend') || val('project');
-      supervisor = val('supervisorWeekend') || val('supervisor');
-      
-      const calcHours = val('weekendCalc');
-      if (calcHours) {
-        hours = toNumber(calcHours);
-      }
-      
-    } else if (template === 'Trabalho Deslocado') {
-      project = val('projectShifted') || val('project');
-      supervisor = val('supervisorShifted') || val('supervisorNormal') || val('supervisor');
-      
-    } else if (template === 'Férias') {
-      periodStart = normalizeDate(val('holidayStart'));
-      periodEnd = normalizeDate(val('holidayEnd'));
-      hours = 0;
-      overtime = 0;
-      
-    } else if (template === 'Baixa') {
-      periodStart = normalizeDate(val('sickStart'));
-      periodEnd = normalizeDate(val('sickEnd'));
-      hours = 0;
-      overtime = 0;
-      
-    } else if (template === 'Falta') {
-      hours = toNumber(val('hours')) || 8;
-      overtime = 0;
-    }
-    
-    return {
-      id: uid(),
-      template,
-      worker,
-      date,
-      project,
-      supervisor,
-      hours,
-      overtime,
-      periodStart,
-      periodEnd,
-      notes: val('notes')
-    };
-  }
-      
-      // Mapear automaticamente pelas letras das colunas
-      const mapping = {
-        worker: 'AX',       // Colaborador
-        template: 'D',      // Template
-        date: 'C',          // Data
-        
-        // Trabalho Normal
-        projectNormal: 'AC',
-        supervisorNormal: 'F',
-        overtimeStart: 'V',
-        overtimeEnd: 'W',
-        overtimeCalc: 'X',
-        
-        // Fim de Semana
-        projectWeekend: 'AH',
-        supervisorWeekend: 'AF',
-        weekendStart: 'AO',
-        weekendEnd: 'AP',
-        weekendCalc: 'AQ',
-        
-        // Deslocado
-        projectShifted: 'AG',
-        
-        // Férias
-        holidayStart: 'M',
-        holidayEnd: 'N',
-        
-        // Baixa
-        sickStart: 'R',
-        sickEnd: 'T',
-        
-        notes: 'Z'
-      };
-      
-      // Converter letras para índices de coluna
-      for (const [field, letter] of Object.entries(mapping)) {
-        const idx = colIndex(letter);
-        if (parsed.headers[idx]) {
-          autoMap[field] = parsed.headers[idx];
-        }
-      }
-    } else if (section === 'materials') {
-      // Auto-mapear materiais (se necessário)
       const auto = buildAutoMap(parsed.headers.map(h => norm(h)));
       Object.assign(autoMap, auto);
     }
@@ -1234,9 +1113,17 @@ const handleCatalog = (file) => {
 
     // tenta detetar se a 1ª linha é cabeçalho
     const hdr = rowsRaw[0] || [];
-    const hasHeader =
-      /ref|refer|descr|design|produto|artigo/i.test(String(hdr[0] || '')) ||
-      /cod|c[oó]digo|code|sku|ean/i.test(String(hdr[1] || ''));
+    const hasHeader = (() => {
+  const h0 = String(hdr[0] || '').toLowerCase();
+  const h1 = String(hdr[1] || '').toLowerCase();
+  
+  return (
+    /ref|refer|descr|design|produto|artigo/.test(h0) ||
+    /cod|c[oó]digo|code|sku|ean/.test(h1) ||
+    HDR_NAME.some(h => h0.includes(h)) ||
+    HDR_CODE.some(h => h1.includes(h))
+  );
+})();
 
     // se houver cabeçalho, começa na linha 1; senão começa na 0
     const startIdx = hasHeader ? 1 : 0;
@@ -2706,11 +2593,16 @@ if (!byWorker.has(worker)) {
       data.entries.push(entry);
 
       // ✅ ACEITAR QUALQUER VARIAÇÃO DE "TRABALHO NORMAL"
-      if (isNormalWork(entry.template)) { // ⬅️ USA A FUNÇÃO HELPER
-      
-      if (isNormalWork) {
-        data.daysWorked.add(entry.date);
-        data.totalHours += Number(entry.hours) || 0;
+      if (isNormalWork(entry.template)) {
+  data.daysWorked.add(entry.date);
+  data.totalHours += Number(entry.hours) || 0;
+  
+  const date = new Date(entry.date);
+  const dayOfWeek = date.getDay();
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    data.totalOvertimeWeekend += (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
+  }
+}
         // Verificar se é fim de semana
         const date = new Date(entry.date);
         const dayOfWeek = date.getDay();
