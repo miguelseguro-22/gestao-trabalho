@@ -919,8 +919,65 @@ const handleCSV = (file) => {
     const autoMap = {};
     
     if (section === 'timesheets') {
-    const rawTemplate = val('template') || 'Trabalho Normal';
-    const template = normalizeTemplate(rawTemplate); // ⬅️ USA A FUNÇÃO HELPER
+      const colIndex = (letter) => {
+        let index = 0;
+        for (let i = 0; i < letter.length; i++) {
+          index = index * 26 + (letter.charCodeAt(i) - 64);
+        }
+        return index - 1;
+      };
+      
+      // Mapear automaticamente pelas letras das colunas
+      const mapping = {
+        worker: 'AX',       // Colaborador
+        template: 'D',      // Template
+        date: 'C',          // Data
+        
+        // Trabalho Normal
+        projectNormal: 'AC',
+        supervisorNormal: 'F',
+        overtimeStart: 'V',
+        overtimeEnd: 'W',
+        overtimeCalc: 'X',
+        
+        // Fim de Semana
+        projectWeekend: 'AH',
+        supervisorWeekend: 'AF',
+        weekendStart: 'AO',
+        weekendEnd: 'AP',
+        weekendCalc: 'AQ',
+        
+        // Deslocado
+        projectShifted: 'AG',
+        
+        // Férias
+        holidayStart: 'M',
+        holidayEnd: 'N',
+        
+        // Baixa
+        sickStart: 'R',
+        sickEnd: 'T',
+        
+        notes: 'Z'
+      };
+      
+      // Converter letras para índices de coluna
+      for (const [field, letter] of Object.entries(mapping)) {
+        const idx = colIndex(letter);
+        if (parsed.headers[idx]) {
+          autoMap[field] = parsed.headers[idx];
+        }
+      }
+    } else if (section === 'materials') {
+      // Auto-mapear materiais (se necessário)
+      const auto = buildAutoMap(parsed.headers.map(h => norm(h)));
+      Object.assign(autoMap, auto);
+    }
+
+    setMap(autoMap);
+    setStatus(`CSV (${parsed.rows.length}) · AUTO-MAPEADO ✅`);
+  });
+};
     
     const worker = val('worker');
     const rawDate = val('date');
