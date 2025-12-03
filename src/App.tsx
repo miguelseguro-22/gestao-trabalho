@@ -81,6 +81,40 @@ const personRates = (people, name, prefs) => {
 
 const currency=n=>new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'}).format(n||0);
 
+// ✅ NORMALIZAR TEMPLATES
+const normalizeTemplate = (template) => {
+  if (!template) return 'Trabalho Normal';
+  
+  const t = String(template).toLowerCase().trim();
+  
+  if (t.includes('trabalho') || t.includes('normal') || t.includes('horário')) {
+    return 'Trabalho Normal';
+  }
+  if (t.includes('férias') || t.includes('ferias')) {
+    return 'Férias';
+  }
+  if (t.includes('baixa')) {
+    return 'Baixa';
+  }
+  if (t.includes('falta')) {
+    return 'Falta';
+  }
+  if (t.includes('fim') || t.includes('fds') || t.includes('semana')) {
+    return 'Trabalho FDS';
+  }
+  if (t.includes('deslocad')) {
+    return 'Trabalho Deslocado';
+  }
+  
+  return template; // retorna original se não reconhecer
+};
+
+// ✅ VERIFICAR SE É TRABALHO NORMAL
+const isNormalWork = (template) => {
+  const t = String(template || '').toLowerCase();
+  return t.includes('trabalho') || t.includes('normal') || t.includes('horário');
+};
+
 const REQUESTER_SUGGESTIONS = ['Paulo Silva','Paulo Carujo','Hélder Pinto','António Sousa','André Sequeira','Alexandre Pires','Laura Luz','Márcio Batista','Cláudio Alves','José Duarte'];
 
 const uid=()=>Math.random().toString(36).slice(2,9);
@@ -625,7 +659,8 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
     const m=new Map(); const push=(iso,t)=>{if(!m.has(iso))m.set(iso,new Set()); m.get(iso).add(t);};
     timeEntries.forEach(t=>{
       const inRange=d=>(d>=start&&d<=end);
-      if(t.template==='Férias'||t.template==='Baixa'){
+      
+      if (t.template === 'Férias' || t.template === 'Baixa') { // ⬅️ JÁ VEM NORMALIZADO
         const s=new Date(t.periodStart||t.date),e=new Date(t.periodEnd||t.date);
         const cur=new Date(s);cur.setHours(0,0,0,0);const last=new Date(e);last.setHours(0,0,0,0);
         while(cur<=last){if(inRange(cur)) push(cur.toISOString().slice(0,10),t.template); cur.setDate(cur.getDate()+1);}
@@ -884,14 +919,73 @@ const handleCSV = (file) => {
     const autoMap = {};
     
     if (section === 'timesheets') {
-      const colIndex = (letter) => {
-        // Converte letra de coluna (ex: "AX") para índice numérico
-        let index = 0;
-        for (let i = 0; i < letter.length; i++) {
-          index = index * 26 + (letter.charCodeAt(i) - 64);
-        }
-        return index - 1;
-      };
+    const rawTemplate = val('template') || 'Trabalho Normal';
+    const template = normalizeTemplate(rawTemplate); // ⬅️ USA A FUNÇÃO HELPER
+    
+    const worker = val('worker');
+    const rawDate = val('date');
+    const date = normalizeDate(rawDate);
+    
+    let project = '';
+    let supervisor = '';
+    let hours = 8;
+    let overtime = 0;
+    let periodStart = '';
+    let periodEnd = '';
+    
+    if (template === 'Trabalho Normal') {
+      project = val('projectNormal') || val('project');
+      supervisor = val('supervisorNormal') || val('supervisor');
+      
+      const calcExtra = val('overtimeCalc');
+      if (calcExtra) {
+        overtime = toNumber(calcExtra);
+      }
+      
+    } else if (template === 'Trabalho FDS') {
+      project = val('projectWeekend') || val('project');
+      supervisor = val('supervisorWeekend') || val('supervisor');
+      
+      const calcHours = val('weekendCalc');
+      if (calcHours) {
+        hours = toNumber(calcHours);
+      }
+      
+    } else if (template === 'Trabalho Deslocado') {
+      project = val('projectShifted') || val('project');
+      supervisor = val('supervisorShifted') || val('supervisorNormal') || val('supervisor');
+      
+    } else if (template === 'Férias') {
+      periodStart = normalizeDate(val('holidayStart'));
+      periodEnd = normalizeDate(val('holidayEnd'));
+      hours = 0;
+      overtime = 0;
+      
+    } else if (template === 'Baixa') {
+      periodStart = normalizeDate(val('sickStart'));
+      periodEnd = normalizeDate(val('sickEnd'));
+      hours = 0;
+      overtime = 0;
+      
+    } else if (template === 'Falta') {
+      hours = toNumber(val('hours')) || 8;
+      overtime = 0;
+    }
+    
+    return {
+      id: uid(),
+      template,
+      worker,
+      date,
+      project,
+      supervisor,
+      hours,
+      overtime,
+      periodStart,
+      periodEnd,
+      notes: val('notes')
+    };
+  }
       
       // Mapear automaticamente pelas letras das colunas
       const mapping = {
@@ -1164,7 +1258,22 @@ const handleCatalog = (file) => {
   };
   
   if (section === 'timesheets') {
-    const template = (val('template') || 'Trabalho Normal').trim();
+    let template = (val('template') || 'Trabalho Normal').trim();
+    
+    // ✅ NORMALIZAR TEMPLATES
+    if (template.includes('Trabalho') || template.includes('Normal') || template.includes('normal')) {
+      template = 'Trabalho Normal';
+    } else if (template.includes('Férias') || template.includes('ferias')) {
+      template = 'Férias';
+    } else if (template.includes('Baixa') || template.includes('baixa')) {
+      template = 'Baixa';
+    } else if (template.includes('Falta') || template.includes('falta')) {
+      template = 'Falta';
+    } else if (template.includes('Fim') || template.includes('FDS') || template.includes('semana')) {
+      template = 'Trabalho FDS';
+    } else if (template.includes('Deslocad') || template.includes('deslocad')) {
+      template = 'Trabalho Deslocado';
+    }
     const worker = val('worker');
     const rawDate = val('date');
     
@@ -2480,6 +2589,7 @@ const MonthlyReportView = ({ timeEntries, people }) => {
     const workDays = countWeekdaysInclusive(startDate, endDate);
 
     // Filtrar entradas do mês
+    // Filtrar entradas do mês
     const entriesInMonth = timeEntries.filter((t) => {
       if (t.template === 'Férias' || t.template === 'Baixa') {
         const start = new Date(t.periodStart || t.date);
@@ -2488,6 +2598,16 @@ const MonthlyReportView = ({ timeEntries, people }) => {
       }
       const d = new Date(t.date);
       return d >= startDate && d <= endDate;
+    });
+
+    // ✅ DEBUG: Mostrar templates encontrados
+    console.log('📊 Templates no mês:', {
+      total: entriesInMonth.length,
+      templates: [...new Set(entriesInMonth.map(t => t.template))],
+      porTipo: entriesInMonth.reduce((acc, t) => {
+        acc[t.template] = (acc[t.template] || 0) + 1;
+        return acc;
+      }, {})
     });
 
     // Agrupar por colaborador
@@ -2528,11 +2648,12 @@ if (!byWorker.has(worker)) {
       const data = byWorker.get(worker);
       data.entries.push(entry);
 
-      if (entry.template === 'Trabalho Normal') {
+      // ✅ ACEITAR QUALQUER VARIAÇÃO DE "TRABALHO NORMAL"
+      if (isNormalWork(entry.template)) { // ⬅️ USA A FUNÇÃO HELPER
+      
+      if (isNormalWork) {
         data.daysWorked.add(entry.date);
         data.totalHours += Number(entry.hours) || 0;
-        data.totalOvertime += Number(entry.overtime) || 0;
-
         // Verificar se é fim de semana
         const date = new Date(entry.date);
         const dayOfWeek = date.getDay();
@@ -2872,7 +2993,7 @@ const ProfileView = ({ timeEntries, auth, people }) => {
     const absenceEntries = [];
 
     myEntries.forEach((entry) => {
-      if (entry.template === 'Trabalho Normal') {
+      if (isNormalWork(entry.template)) { // ⬅️ USA A FUNÇÃO HELPER
         totalHours += Number(entry.hours) || 0;
         totalOvertime += Number(entry.overtime) || 0;
         daysWorked.add(entry.date);
@@ -3345,7 +3466,9 @@ const ProjectReportView = ({
     return d>=a && d<=b;
   };
 
-  const ts = timeEntries.filter(t => t.template==='Trabalho Normal' && t.project===project.name && inRange(t.date));
+  const ts = timeEntries.filter(t => 
+    isNormalWork(t.template) && t.project === project.name && inRange(t.date)
+  );
   const ord = orders.filter(o => o.project===project.name && inRange(o.requestedAt) && statusFilter.has(o.status));
 
  const labor = ts.map(t=>{
