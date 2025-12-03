@@ -1752,6 +1752,11 @@ const base={
 
           <Card className="p-3 space-y-3">
             <div className="text-sm font-medium">Sincronização sem servidor</div>
+            <div className="text-xs text-slate-500 leading-relaxed">
+              Os registos ficam guardados no dispositivo; para vê-los noutro equipamento tens de os levar manualmente.
+              Gera o código abaixo no dispositivo de origem e cola-o no destino (por exemplo, do computador para o telemóvel),
+              depois escolhe <strong>Importar (Substituir)</strong> para ficarem idênticos.
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <div className="text-xs text-slate-500">Gera um código offline com todos os dados atuais e copia-o para colar no outro dispositivo.</div>
