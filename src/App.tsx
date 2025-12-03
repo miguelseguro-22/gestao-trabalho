@@ -901,8 +901,14 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     holidayFlag:['feriado','feriad','aw'],
 
     // Baixa
-    sickStart:['baixa inicio','inicio baixa','r'],
-    sickEnd:['baixa fim','fim baixa','s'],
+    sickStart:[
+      'baixa inicio','inicio baixa','r',
+      'duracao da baixa - inicio','duração da baixa - inicio','duracao baixa inicio','duração baixa inicio'
+    ],
+    sickEnd:[
+      'baixa fim','fim baixa','s',
+      'duracao da baixa - fim','duração da baixa - fim','duracao baixa fim','duração baixa fim'
+    ],
     sickDays:['dias baixa','baixa dias','t'],
     
     notes:['observações','notas','notes','obs'],
@@ -1298,23 +1304,35 @@ const handleCatalog = (file) => {
       overtime = 0;
 
     } else if (template.includes('Baixa') || template.includes('baixa')) {
-      // BAIXA
-      const sickStart = normalizeDate(val('sickStart')) || normalizeDate(val('holidayStart')) || date;
-      const sickEndInput = normalizeDate(val('sickEnd'));
+      // BAIXA — priorizar o período e não o dia de registo
+      const sickStartRaw = normalizeDate(val('sickStart'));
+      const sickEndRaw = normalizeDate(val('sickEnd'));
       sickDays = Math.max(0, toNumber(val('sickDays')));
 
-      periodStart = sickStart;
-      periodEnd = (() => {
-        if (sickEndInput) return sickEndInput;
-        if (!sickStart) return '';
-        if (sickDays > 0) {
-          const end = new Date(sickStart);
+      // Derivar datas mesmo que o utilizador só preencha parte
+      const derivedStart = (() => {
+        if (sickStartRaw) return sickStartRaw;
+        if (sickEndRaw && sickDays > 0) {
+          const end = new Date(sickEndRaw);
+          end.setDate(end.getDate() - Math.max(0, sickDays - 1));
+          return normalizeDate(end.toISOString().slice(0, 10));
+        }
+        return '';
+      })();
+
+      const derivedEnd = (() => {
+        if (sickEndRaw) return sickEndRaw;
+        if (derivedStart && sickDays > 0) {
+          const end = new Date(derivedStart);
           end.setDate(end.getDate() + sickDays - 1);
           return normalizeDate(end.toISOString().slice(0, 10));
         }
-        return sickStart;
+        return derivedStart || '';
       })();
-      date = periodStart || date;
+
+      periodStart = derivedStart || normalizeDate(val('holidayStart')) || date;
+      periodEnd = derivedEnd || periodStart;
+      date = periodStart || periodEnd || date;
       hours = 0;
       overtime = 0;
 
