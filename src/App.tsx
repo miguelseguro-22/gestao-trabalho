@@ -193,7 +193,7 @@ function printTimesheetReportHTML({ worker, cycle, rows }) {
   const trs = rows.map(r=>`<tr><td>${fmt(r.data)}</td><td>${r.dia}</td><td>${r.situ}</td><td style="text-align:right">${r.horas||'—'}</td><td style="text-align:right">${r.extras||'—'}</td><td>${r.local}</td></tr>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"/><title>Resumo do Registo — ${worker||'Colaborador'}</title><style>body { font-family: system-ui, Arial, sans-serif; padding: 24px; color:#0f172a }h1 { margin:0 0 12px 0; font-size:20px }.muted{color:#64748b}table{ width:100%; border-collapse:collapse; margin-top:16px }th,td{ padding:8px 10px; border-bottom:1px solid #e2e8f0; font-size:12px }th{text-align:left; background:#f8fafc}.box{ margin-top:16px; padding:12px; border:1px solid #e2e8f0; border-radius:10px }.grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px }</style></head><body><h1>Resumo do Registo: ${fmt(cycle.start)} - ${fmt(cycle.end)}</h1><div class="muted">Olá ${worker||'—'}, segue abaixo o resumo do seu registo das horas.</div><table><tr><th>Data</th><th>Dia da Semana</th><th>Situação Atual</th><th>Horas</th><th>Extras</th><th>Local de Trabalho</th></tr>${trs}</table><div class="box grid"><div><b>Total de dias úteis:</b> ${uteis}</div><div><b>Dias de fim de semana:</b> ${fds}</div><div><b>Feriados:</b> 0</div><div><b>Baixas:</b> ${baixas}</div><div><b>Férias:</b> ${ferias}</div><div><b>Dias sem registo:</b> ${semReg}</div><div><b>Total de horas extras:</b> ${totalExtras}h</div></div></body></html>`;
 }
-}
+
 
   // ---------------------------------------------------------------
 // 📊 CONSTRUIR LINHAS DO RELATÓRIO POR DIA
