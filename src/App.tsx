@@ -2623,12 +2623,31 @@ if (!byWorker.has(worker)) {
         Verificar Registos
       </Button>
 
-      <input
-        type="month"
-        value={selectedMonth}
-        onChange={(e) => setSelectedMonth(e.target.value)}
-        className="rounded-xl border p-2 text-sm dark:bg-slate-900 dark:border-slate-700"
-      />
+      {(() => {
+        const [y, m] = selectedMonth.split('-').map(Number);
+        const prev = new Date(y, m - 2, 1);
+        const curr = new Date(y, m - 1, 1);
+        const monthLabel = (d) =>
+          d.toLocaleDateString('pt-PT', { month: 'short' })
+            .replace('.', '')
+            .toLowerCase();
+        const cycleLabel = `${monthLabel(prev)}/${monthLabel(curr)} ${curr.getFullYear()}`;
+
+        return (
+          <div className="relative">
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            />
+            <div className="pointer-events-none flex items-center gap-2 rounded-xl border bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900">
+              <span className="font-medium">{cycleLabel}</span>
+              <Icon name="calendar" className="text-slate-500" />
+            </div>
+          </div>
+        );
+      })()}
       <Button variant="secondary" onClick={exportCSV}>
         <Icon name="download" /> Exportar CSV
       </Button>
