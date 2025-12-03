@@ -179,78 +179,20 @@ function printOrderHTML(o, priceOf, codeOf){
 
   const total = o.items.reduce((s,it)=>s+priceOf(it.name)*(Number(it.qty)||0),0);
 
-  return `<!doctype html><html><head><meta charset="utf-8"/>
-  <title>Pedido ${o.id}</title>
-  <style>
-    body{font:14px/1.4 system-ui;padding:24px}
-    table{width:100%;border-collapse:collapse}
-    th,td{border:1px solid #cbd5e1;padding:8px}
-    th{background:#f8fafc}
-  </style>
-  </head><body>
-    <h1>Pedido de Material</h1>
-    <div><b>Projeto:</b> ${o.project}</div>
-    <div><b>Requisitante:</b> ${o.requestedBy||'—'}</div>
-    <div><b>Data:</b> ${o.requestedAt}</div>
-    <table>
-      <tr><th>Item</th><th>Código</th><th>Qtd</th><th>Preço</th><th>Subtotal</th></tr>
-      ${rows}
-      <tr><th colspan="4">Total</th><th>${total.toFixed(2)} €</th></tr>
-    </table>
-  </body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"/><title>Pedido ${o.id}</title><style>body{font-family:system-ui,Arial;padding:24px;color:#0f172a}h1{margin:0 0 12px 0;font-size:20px}.meta{margin-bottom:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #cbd5e1;padding:8px}th{text-align:left;background:#f8fafc}.right{text-align:right}</style></head><body><h1>Pedido de Material</h1><div class="meta"><div><b>Projeto:</b> ${o.project}</div><div><b>Requisitante:</b> ${o.requestedBy||'—'}</div><div><b>Data:</b> ${o.requestedAt}</div><div><b>ID:</b> ${o.id}</div>${o.notes?`<div style="grid-column:span 2"><b>Notas:</b> ${o.notes}</div>`:''}</div><table><tr><th>Item</th><th>Código</th><th class="right">Qtd</th><th class="right">Preço</th><th class="right">Subtotal</th></tr>${rows}<tr><th colspan="4" class="right">Total</th><th class="right">${total.toFixed(2)} €</th></tr></table></body></html>`;
 }
 
 function printTimesheetReportHTML({ worker, cycle, rows }) {
   const fmt = iso => new Date(iso).toLocaleDateString('pt-PT');
   const totalExtras = rows.reduce((s,r)=>s+(r.extras||0),0);
-
   const uteis  = rows.filter(r=>!['Sábado','Domingo'].includes(r.dia)).length;
   const fds    = rows.length - uteis;
   const ferias = rows.filter(r=>r.situ==='Férias').length;
   const baixas = rows.filter(r=>r.situ==='Baixa').length;
   const semReg = rows.filter(r=>r.situ==='Sem Registo').length;
-
-  const trs = rows.map(r=>`
-    <tr>
-      <td>${fmt(r.data)}</td>
-      <td>${r.dia}</td>
-      <td>${r.situ}</td>
-      <td style="text-align:right">${r.horas||'—'}</td>
-      <td style="text-align:right">${r.extras||'—'}</td>
-      <td>${r.local}</td>
-    </tr>
-  `).join('');
-
-  return `<!doctype html><html><head><meta charset="utf-8"/>
-  <title>Resumo do Registo — ${worker||'Colaborador'}</title>
-  <style>
-    body { font-family: system-ui, Arial, sans-serif; padding: 24px; color:#0f172a }
-    h1 { margin:0 0 12px 0; font-size:20px }
-    .muted{color:#64748b}
-    table{ width:100%; border-collapse:collapse; margin-top:16px }
-    th,td{ padding:8px 10px; border-bottom:1px solid #e2e8f0; font-size:12px }
-    th{text-align:left; background:#f8fafc}
-    .box{ margin-top:16px; padding:12px; border:1px solid #e2e8f0; border-radius:10px }
-    .grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px }
-  </style></head><body>
-    <h1>Resumo do Registo: ${fmt(cycle.start)} - ${fmt(cycle.end)}</h1>
-    <div class="muted">Olá ${worker||'—'}, segue abaixo o resumo do seu registo das horas.</div>
-
-    <table>
-      <tr><th>Data</th><th>Dia da Semana</th><th>Situação Atual</th><th>Horas</th><th>Extras</th><th>Local de Trabalho</th></tr>
-      ${trs}
-    </table>
-
-    <div class="box grid">
-      <div><b>Total de dias úteis:</b> ${uteis}</div>
-      <div><b>Dias de fim de semana:</b> ${fds}</div>
-      <div><b>Feriados:</b> 0</div>
-      <div><b>Baixas:</b> ${baixas}</div>
-      <div><b>Férias:</b> ${ferias}</div>
-      <div><b>Dias sem registo:</b> ${semReg}</div>
-      <div><b>Total de horas extras:</b> ${totalExtras}h</div>
-    </div>
-  </body></html>`;
+  const trs = rows.map(r=>`<tr><td>${fmt(r.data)}</td><td>${r.dia}</td><td>${r.situ}</td><td style="text-align:right">${r.horas||'—'}</td><td style="text-align:right">${r.extras||'—'}</td><td>${r.local}</td></tr>`).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"/><title>Resumo do Registo — ${worker||'Colaborador'}</title><style>body { font-family: system-ui, Arial, sans-serif; padding: 24px; color:#0f172a }h1 { margin:0 0 12px 0; font-size:20px }.muted{color:#64748b}table{ width:100%; border-collapse:collapse; margin-top:16px }th,td{ padding:8px 10px; border-bottom:1px solid #e2e8f0; font-size:12px }th{text-align:left; background:#f8fafc}.box{ margin-top:16px; padding:12px; border:1px solid #e2e8f0; border-radius:10px }.grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px }</style></head><body><h1>Resumo do Registo: ${fmt(cycle.start)} - ${fmt(cycle.end)}</h1><div class="muted">Olá ${worker||'—'}, segue abaixo o resumo do seu registo das horas.</div><table><tr><th>Data</th><th>Dia da Semana</th><th>Situação Atual</th><th>Horas</th><th>Extras</th><th>Local de Trabalho</th></tr>${trs}</table><div class="box grid"><div><b>Total de dias úteis:</b> ${uteis}</div><div><b>Dias de fim de semana:</b> ${fds}</div><div><b>Feriados:</b> 0</div><div><b>Baixas:</b> ${baixas}</div><div><b>Férias:</b> ${ferias}</div><div><b>Dias sem registo:</b> ${semReg}</div><div><b>Total de horas extras:</b> ${totalExtras}h</div></div></body></html>`;
+}
 }
 
   // ---------------------------------------------------------------
