@@ -718,6 +718,26 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
     });
     return m;
   },[timeEntries,start,end]);
+  const dayInfo = useMemo(() => {
+    const m = new Map();
+    const add = (iso, project, overtime) => {
+      if (!m.has(iso)) m.set(iso, { projects: new Set(), overtime: 0 });
+      const cur = m.get(iso);
+      if (project) cur.projects.add(project);
+      const ot = Number(overtime) || 0;
+      if (ot) cur.overtime = Number((cur.overtime || 0) + ot);
+    };
+
+    timeEntries.forEach((t) => {
+      if (t.template !== 'Trabalho Normal') return;
+      const d = new Date(t.date);
+      if (!(d >= start && d <= end)) return;
+      const iso = d.toISOString().slice(0, 10);
+      add(iso, t.project || t.projectNormal || '', t.overtime);
+    });
+
+    return m;
+  }, [timeEntries, start, end]);
   const days = useMemo(()=>{
     const first=(()=>{const d=new Date(start);const diff=mondayIndex(d);d.setDate(d.getDate()-diff);return d})();
     const last=(()=>{const d=new Date(end);const diff=6-mondayIndex(d);d.setDate(d.getDate()+diff);d.setHours(0,0,0,0);return d})();
@@ -788,6 +808,16 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
               ringToday
             ].join(' ')}>
               <div className={`text-xs ${has ? 'text-white' : ''}`}>{d.getDate()}</div>
+              {inCycle && has && dayInfo.has(iso) && (
+                <div className="mt-1 text-[11px] leading-tight text-white/90">
+                  <div className="truncate">
+                    {Array.from(dayInfo.get(iso)?.projects || []).join(', ') || '—'}
+                  </div>
+                  {Number(dayInfo.get(iso)?.overtime || 0) > 0 && (
+                    <div className="text-white font-semibold">+{Number(dayInfo.get(iso)?.overtime || 0)}h extra</div>
+                  )}
+                </div>
+              )}
             </button>
           );
         })}
