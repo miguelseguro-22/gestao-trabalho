@@ -415,7 +415,6 @@ function printTimesheetCycleReport(entries = []) {
     return d >= a && d <= b;
   };
 
-  // só “Trabalho Normal” (ajusta se quiseres incluir Férias/Baixa/Falta)
   const rows = entries
     .filter(t => t.template === 'Trabalho Normal' && inRange(t.date))
     .sort((a,b) =>
@@ -469,34 +468,10 @@ function printTimesheetCycleReport(entries = []) {
   setTimeout(()=>{ try{ w.print(); }catch{} }, 100);
 }
 
-  const total = o.items.reduce((s,it)=>s+priceOf(it.name)*(Number(it.qty)||0),0);
-
-  return `<!doctype html><html><head><meta charset="utf-8"/>
-  <title>Pedido ${o.id}</title>
-  <style>/* estilos iguais aos de cima */</style>
-  </head><body>
-    <!-- conteúdo igual ao de cima, sem a tag <script> -->
-    <h1>Pedido de Material</h1>
-    <div class="meta">
-      <div><b>Projeto:</b> ${o.project}</div>
-      <div><b>Requisitante:</b> ${o.requestedBy||'—'}</div>
-      <div><b>Data:</b> ${o.requestedAt}</div>
-      <div><b>ID:</b> ${o.id}</div>
-      ${o.notes?`<div><b>Notas:</b> ${o.notes}</div>`:''}
-    </div>
-    <table>
-      <tr><th>Item</th><th>Código</th><th class="right">Qtd</th><th class="right">Preço</th><th class="right">Subtotal</th></tr>
-      ${rows}
-      <tr><th colspan="4" class="right">Total</th><th class="right">${total.toFixed(2)} €</th></tr>
-    </table>
-  </body></html>`;
-}
-
 function printOrder(o, priceOf, codeOf){
   const w = window.open('', '_blank');
   w.document.write(printOrderHTML(o, priceOf, codeOf));
   w.document.close();
-  // dá um microtempo para render e imprime
   w.focus?.();
   setTimeout(() => { try { w.print(); } catch {} }, 100);
 }
