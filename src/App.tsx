@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import supabase from './lib/supabaseClient';
 /* ---------- Helpers ---------- */
 const Icon=({name,className='w-5 h-5'})=>{
   const S={stroke:'currentColor',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'};
@@ -129,43 +128,6 @@ const LS_KEY='wm_platform_import_v1';
 const loadState=()=>{try{const raw=localStorage.getItem(LS_KEY);if(!raw)return null;const s=JSON.parse(raw);if(Array.isArray(s.activity))s.activity=s.activity.map(a=>({...a,ts:new Date(a.ts)}));return s}catch{return null}};
 const saveState=(state)=>{try{localStorage.setItem(LS_KEY,JSON.stringify(state))}catch{}};
 const clearState=()=>{try{localStorage.removeItem(LS_KEY)}catch{}};
-const APP_STATE_TABLE='app_state';
-const APP_STATE_ID='global';
-const fetchSupabaseState=async()=>{
-  try{
-    const { data, error } = await supabase
-      .from(APP_STATE_TABLE)
-      .select('data')
-      .eq('id', APP_STATE_ID)
-      .maybeSingle();
-
-    if(error){
-      console.error('Erro ao carregar estado do Supabase:', error);
-      return null;
-    }
-
-    return data?.data || null;
-  }catch(err){
-    console.error('Falha ao obter estado remoto:', err);
-    return null;
-  }
-};
-const persistSupabaseState=async(payload)=>{
-  try{
-    const { error } = await supabase
-      .from(APP_STATE_TABLE)
-      .upsert({ id: APP_STATE_ID, data: payload, updated_at: new Date().toISOString() });
-
-    if(error){
-      console.error('Erro ao guardar estado no Supabase:', error);
-      return false;
-    }
-    return true;
-  }catch(err){
-    console.error('Falha na escrita do estado remoto:', err);
-    return false;
-  }
-};
 const toCSV=(headers,rows)=>{const esc=v=>`"${String(v??'').replace(/"/g,'""')}"`;return[headers.join(','),...rows.map(r=>r.map(esc).join(','))].join('\r\n')};
 const download=(filename,content,mime='text/csv')=>{const blob=new Blob([content],{type:mime});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url)};
 const guessDelimiter=line=>{const sc=(line.match(/;/g)||[]).length,cc=(line.match(/,/g)||[]).length;return sc>cc?';':','};
@@ -4507,8 +4469,6 @@ function App() {
     }
   );
   const [projectFocus, setProjectFocus] = useState(null);
-  const [remoteLoaded, setRemoteLoaded] = useState(false);
-  const supaSaveRef = useRef<any>(null);
 
   // Defaults
   const defaultTime = [
@@ -4570,28 +4530,6 @@ function App() {
   );
   const [catalog, setCatalog] = useState(persisted?.catalog || []);
 
-  const applySnapshot = (snap: any) => {
-    if (!snap || typeof snap !== 'object') return;
-    const safeArr = (a: any) => (Array.isArray(a) ? a : []);
-    const normActivity = safeArr(snap.activity).map((a: any) => ({
-      ...a,
-      ts: a?.ts ? new Date(a.ts) : new Date(),
-    }));
-
-    setTimeEntries(dedupTimeEntries(snap.timeEntries || []));
-    setOrders(snap.orders || []);
-    setProjects(snap.projects || []);
-    setActivity(normActivity.length ? normActivity : [{ id: uid(), ts: new Date(), text: "Estado remoto carregado." }]);
-    setTheme(snap.theme || 'light');
-    setDensity(snap.density || 'comfy');
-    setCatalog(Array.isArray(snap.catalog) ? snap.catalog : []);
-    setPeople(snap.people || {});
-    setPrefs(snap.prefs || { defaultRate: DEFAULT_HOURLY_RATE, otMultiplier: DEFAULT_OT_MULTIPLIER });
-    setVehicles(safeArr(snap.vehicles));
-    setAgenda(safeArr(snap.agenda));
-    setSuppliers(snap.suppliers || {});
-  };
-
   // -------------------------------------------------------------
   // 🌙 Alterar tema
   // -------------------------------------------------------------
@@ -4649,35 +4587,6 @@ useEffect(() => {
   }, [auth, view]);
 
   // -------------------------------------------------------------
-  // ☁️ PERSISTÊNCIA NO SUPABASE (CARREGAR)
-  // -------------------------------------------------------------
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!auth) {
-      setRemoteLoaded(false);
-      return;
-    }
-
-    setRemoteLoaded(false);
-
-    (async () => {
-      const remote = await fetchSupabaseState();
-      if (cancelled) return;
-
-      if (remote) {
-        applySnapshot(remote);
-      }
-
-      setRemoteLoaded(true);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [auth?.id]);
-
-  // -------------------------------------------------------------
   // 💾 PERSISTÊNCIA LOCAL
   // -------------------------------------------------------------
   useEffect(() => {
@@ -4710,54 +4619,6 @@ useEffect(() => {
     suppliers,
   ]);
 
-  // -------------------------------------------------------------
-  // ☁️ PERSISTÊNCIA NO SUPABASE (GUARDAR)
-  // -------------------------------------------------------------
-  useEffect(() => {
-    if (!auth || !remoteLoaded) return;
-
-    const snapshot = {
-      timeEntries,
-      orders,
-      projects,
-      activity,
-      theme,
-      density,
-      catalog,
-      people,
-      prefs,
-      vehicles,
-      agenda,
-      suppliers,
-    };
-
-    saveState(snapshot);
-
-    if (supaSaveRef.current) clearTimeout(supaSaveRef.current);
-
-    supaSaveRef.current = setTimeout(() => {
-      persistSupabaseState(snapshot);
-    }, 400);
-
-    return () => {
-      if (supaSaveRef.current) clearTimeout(supaSaveRef.current);
-    };
-  }, [
-    auth,
-    remoteLoaded,
-    timeEntries,
-    orders,
-    projects,
-    activity,
-    theme,
-    density,
-    catalog,
-    people,
-    prefs,
-    vehicles,
-    agenda,
-    suppliers,
-  ]);
   // -------------------------------------------------------------
   // 🔍 MEMOS E DERIVADOS
   // -------------------------------------------------------------
