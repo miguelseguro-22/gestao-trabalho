@@ -1,5 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react'
-import { supabaseConfigured } from './lib/supabaseClient'
+﻿import React, { useState, useEffect, useMemo } from 'react';
 /* ---------- Helpers ---------- */
 const Icon=({name,className='w-5 h-5'})=>{
   const S={stroke:'currentColor',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'};
@@ -85,9 +84,9 @@ const currency=n=>new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'
 // ✅ NORMALIZAR TEMPLATES
 const normalizeTemplate = (template) => {
   if (!template) return 'Trabalho Normal';
-
+  
   const t = String(template).toLowerCase().trim();
-
+  
   if (t.includes('trabalho') || t.includes('normal') || t.includes('horário')) {
     return 'Trabalho Normal';
   }
@@ -100,16 +99,13 @@ const normalizeTemplate = (template) => {
   if (t.includes('falta')) {
     return 'Falta';
   }
-  if (t.includes('feriado')) {
-    return 'Feriado';
-  }
   if (t.includes('fim') || t.includes('fds') || t.includes('semana')) {
     return 'Trabalho FDS';
   }
   if (t.includes('deslocad')) {
     return 'Trabalho Deslocado';
   }
-
+  
   return template; // retorna original se não reconhecer
 };
 
@@ -189,14 +185,13 @@ function printOrderHTML(o, priceOf, codeOf){
 function printTimesheetReportHTML({ worker, cycle, rows }) {
   const fmt = iso => new Date(iso).toLocaleDateString('pt-PT');
   const totalExtras = rows.reduce((s,r)=>s+(r.extras||0),0);
-  const feriados = rows.filter(r=>r.situ==='Feriado').length;
-  const uteis  = rows.filter(r=>!['Sábado','Domingo'].includes(r.dia) && r.situ!=='Feriado').length;
-  const fds    = rows.length - uteis - feriados;
+  const uteis  = rows.filter(r=>!['Sábado','Domingo'].includes(r.dia)).length;
+  const fds    = rows.length - uteis;
   const ferias = rows.filter(r=>r.situ==='Férias').length;
   const baixas = rows.filter(r=>r.situ==='Baixa').length;
   const semReg = rows.filter(r=>r.situ==='Sem Registo').length;
   const trs = rows.map(r=>`<tr><td>${fmt(r.data)}</td><td>${r.dia}</td><td>${r.situ}</td><td style="text-align:right">${r.horas||'—'}</td><td style="text-align:right">${r.extras||'—'}</td><td>${r.local}</td></tr>`).join('');
-  return `<!doctype html><html><head><meta charset="utf-8"/><title>Resumo do Registo — ${worker||'Colaborador'}</title><style>body { font-family: system-ui, Arial, sans-serif; padding: 24px; color:#0f172a }h1 { margin:0 0 12px 0; font-size:20px }.muted{color:#64748b}table{ width:100%; border-collapse:collapse; margin-top:16px }th,td{ padding:8px 10px; border-bottom:1px solid #e2e8f0; font-size:12px }th{text-align:left; background:#f8fafc}.box{ margin-top:16px; padding:12px; border:1px solid #e2e8f0; border-radius:10px }.grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px }</style></head><body><h1>Resumo do Registo: ${fmt(cycle.start)} - ${fmt(cycle.end)}</h1><div class="muted">Olá ${worker||'—'}, segue abaixo o resumo do seu registo das horas.</div><table><tr><th>Data</th><th>Dia da Semana</th><th>Situação Atual</th><th>Horas</th><th>Extras</th><th>Local de Trabalho</th></tr>${trs}</table><div class="box grid"><div><b>Total de dias úteis:</b> ${uteis}</div><div><b>Dias de fim de semana:</b> ${fds}</div><div><b>Feriados:</b> ${feriados}</div><div><b>Baixas:</b> ${baixas}</div><div><b>Férias:</b> ${ferias}</div><div><b>Dias sem registo:</b> ${semReg}</div><div><b>Total de horas extras:</b> ${totalExtras}h</div></div></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"/><title>Resumo do Registo — ${worker||'Colaborador'}</title><style>body { font-family: system-ui, Arial, sans-serif; padding: 24px; color:#0f172a }h1 { margin:0 0 12px 0; font-size:20px }.muted{color:#64748b}table{ width:100%; border-collapse:collapse; margin-top:16px }th,td{ padding:8px 10px; border-bottom:1px solid #e2e8f0; font-size:12px }th{text-align:left; background:#f8fafc}.box{ margin-top:16px; padding:12px; border:1px solid #e2e8f0; border-radius:10px }.grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px }</style></head><body><h1>Resumo do Registo: ${fmt(cycle.start)} - ${fmt(cycle.end)}</h1><div class="muted">Olá ${worker||'—'}, segue abaixo o resumo do seu registo das horas.</div><table><tr><th>Data</th><th>Dia da Semana</th><th>Situação Atual</th><th>Horas</th><th>Extras</th><th>Local de Trabalho</th></tr>${trs}</table><div class="box grid"><div><b>Total de dias úteis:</b> ${uteis}</div><div><b>Dias de fim de semana:</b> ${fds}</div><div><b>Feriados:</b> 0</div><div><b>Baixas:</b> ${baixas}</div><div><b>Férias:</b> ${ferias}</div><div><b>Dias sem registo:</b> ${semReg}</div><div><b>Total de horas extras:</b> ${totalExtras}h</div></div></body></html>`;
 }
 
 
@@ -207,13 +202,12 @@ function buildTimesheetCycleRows({ worker, timeEntries, cycle }) {
   const { start, end } = cycle;
   const rows = [];
   const dayName = d => d.toLocaleDateString('pt-PT', { weekday: 'long' });
-  const holidaySet = collectHolidayDates(timeEntries, start, end);
 
   const byDay = new Map();
   for (const t of timeEntries) {
     if (worker && t.worker && t.worker !== worker) continue;
-
-    const dates = (t.template === 'Férias' || t.template === 'Baixa' || t.template === 'Feriado')
+    
+    const dates = (t.template === 'Férias' || t.template === 'Baixa')
       ? (() => {
           const a = new Date(t.periodStart || t.date);
           const b = new Date(t.periodEnd || t.date);
@@ -237,7 +231,7 @@ function buildTimesheetCycleRows({ worker, timeEntries, cycle }) {
   cur.setHours(0, 0, 0, 0);
   const last = new Date(end);
   last.setHours(0, 0, 0, 0);
-
+  
   while (cur <= last) {
     const iso = cur.toISOString().slice(0, 10);
     const dow = cur.getDay();
@@ -246,27 +240,20 @@ function buildTimesheetCycleRows({ worker, timeEntries, cycle }) {
     let situ = weekend ? 'Fim de Semana' : 'Sem Registo';
     let horas = 0, extras = 0, local = '—';
 
-    if (holidaySet.has(iso)) {
-      situ = 'Feriado';
-    }
-
     const reg = byDay.get(iso) || [];
     if (reg.length) {
-      const preferred = reg.find(r => isNormalWork(r.template)) || reg.find(r => r.project) || reg[0];
-      if (preferred.template === 'Trabalho Normal') {
+      const t = reg[0];
+      if (t.template === 'Trabalho Normal') {
         situ = 'Trabalho - Horário Normal';
-        horas = Number(preferred.hours || 0);
-        extras = Number(preferred.overtime || 0);
-        local = preferred.project || '—';
-      } else if (preferred.template === 'Férias') {
+        horas = Number(t.hours || 0);
+        extras = Number(t.overtime || 0);
+        local = t.project || '—';
+      } else if (t.template === 'Férias') {
         situ = 'Férias';
-      } else if (preferred.template === 'Baixa') {
+      } else if (t.template === 'Baixa') {
         situ = 'Baixa';
-      } else if (preferred.template === 'Falta') {
+      } else if (t.template === 'Falta') {
         situ = 'Falta';
-        horas = preferred.hours || horas;
-      } else if (preferred.template === 'Feriado') {
-        situ = 'Feriado';
       }
     }
 
@@ -296,9 +283,9 @@ function generatePersonalTimesheetReport({ worker, timeEntries, cycle }) {
   const fmt = iso => new Date(iso).toLocaleDateString('pt-PT');
   
   const totalExtras = rows.reduce((s, r) => s + (r.extras || 0), 0);
-  const feriados = rows.filter(r => r.situ === 'Feriado').length;
-  const uteis = rows.filter(r => !['Sábado', 'Domingo'].includes(r.dia) && r.situ !== 'Feriado').length;
+  const uteis = rows.filter(r => !['Sábado', 'Domingo'].includes(r.dia)).length;
   const fds = rows.filter(r => ['Sábado', 'Domingo'].includes(r.dia)).length;
+  const feriados = rows.filter(r => r.situ === 'Feriado').length;
   const ferias = rows.filter(r => r.situ === 'Férias').length;
   const baixas = rows.filter(r => r.situ === 'Baixa').length;
   const semReg = rows.filter(r => r.situ === 'Sem Registo' && !['Sábado', 'Domingo'].includes(r.dia)).length;
@@ -604,64 +591,7 @@ const CalendarLegend = () => {
 
 const TYPE_FILL_BG = { 'Trabalho Normal':'bg-emerald-600','Férias':'bg-violet-600','Baixa':'bg-rose-600','Falta':'bg-amber-600' };
 const TYPE_COLORS = TYPE_FILL_BG;
-const collectHolidayDates = (entries = [], start, end) => {
-  const startDate = start ? new Date(start) : null;
-  const endDate = end ? new Date(end) : null;
-  const set = new Set();
-
-  entries.forEach((t) => {
-    if (normalizeTemplate(t.template) !== 'Feriado') return;
-
-    const dates = (t.periodStart || t.periodEnd)
-      ? (() => {
-          const a = new Date(t.periodStart || t.date);
-          const b = new Date(t.periodEnd || t.date);
-          a.setHours(0, 0, 0, 0);
-          b.setHours(0, 0, 0, 0);
-          const out = [];
-          for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
-            out.push(d.toISOString().slice(0, 10));
-          }
-          return out;
-        })()
-      : [new Date(t.date).toISOString().slice(0, 10)];
-
-    dates.forEach((iso) => {
-      const d = new Date(iso);
-      if (startDate && d < startDate) return;
-      if (endDate && d > endDate) return;
-      const dow = d.getDay();
-      if (dow === 0 || dow === 6) return; // já não contam para dias úteis
-      set.add(iso);
-    });
-  });
-
-  return set;
-};
-
-const dedupeEntries = (entries = []) => {
-  const byKey = new Map();
-  entries.forEach((e) => {
-    const key = e.id || `${e.worker || ''}||${e.date || e.periodStart || ''}||${e.template || ''}||${e.project || ''}`;
-    if (!byKey.has(key)) byKey.set(key, e);
-  });
-  return Array.from(byKey.values());
-};
-
-const countWeekdaysInclusive = (start, end, holidaySet) => {
-  const cur = new Date(start);
-  cur.setHours(0, 0, 0, 0);
-  const last = new Date(end);
-  last.setHours(0, 0, 0, 0);
-  let c = 0;
-  while (cur <= last) {
-    const iso = cur.toISOString().slice(0, 10);
-    const d = cur.getDay();
-    if (d !== 0 && d !== 6 && !(holidaySet?.has(iso))) c++;
-    cur.setDate(cur.getDate() + 1);
-  }
-  return c;
-};
+const countWeekdaysInclusive=(start,end)=>{const cur=new Date(start);cur.setHours(0,0,0,0);const last=new Date(end);last.setHours(0,0,0,0);let c=0;while(cur<=last){const d=cur.getDay();if(d!==0&&d!==6)c++;cur.setDate(cur.getDate()+1)}return c}
 const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
   const [offset, setOffset] = useState(0);
   const { start, end } = useMemo(()=>getCycle(offset),[offset]);
@@ -680,14 +610,13 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
     });
     return m;
   },[timeEntries,start,end]);
-  const holidaySet = useMemo(() => collectHolidayDates(timeEntries, start, end), [timeEntries, start, end]);
   const days = useMemo(()=>{
     const first=(()=>{const d=new Date(start);const diff=mondayIndex(d);d.setDate(d.getDate()-diff);return d})();
     const last=(()=>{const d=new Date(end);const diff=6-mondayIndex(d);d.setDate(d.getDate()+diff);d.setHours(0,0,0,0);return d})();
     const arr=[]; for(let d=new Date(first);d<=last;d.setDate(d.getDate()+1)) arr.push(new Date(d));
     return arr;
   },[start,end]);
-  const wd = countWeekdaysInclusive(start, end, holidaySet);
+  const wd = countWeekdaysInclusive(start, end);
   const isToday = (d) => { const t=new Date();t.setHours(0,0,0,0); const x=new Date(d);x.setHours(0,0,0,0); return t.getTime()===x.getTime(); };
   const click = (d) => { if (onDayClick && d >= start && d <= end) onDayClick(d.toISOString().slice(0,10)); };
 
@@ -1190,7 +1119,22 @@ const handleCatalog = (file) => {
   };
   
   if (section === 'timesheets') {
-    let template = normalizeTemplate(val('template') || 'Trabalho Normal');
+    let template = (val('template') || 'Trabalho Normal').trim();
+    
+    // ✅ NORMALIZAR TEMPLATES
+    if (template.includes('Trabalho') || template.includes('Normal') || template.includes('normal')) {
+      template = 'Trabalho Normal';
+    } else if (template.includes('Férias') || template.includes('ferias')) {
+      template = 'Férias';
+    } else if (template.includes('Baixa') || template.includes('baixa')) {
+      template = 'Baixa';
+    } else if (template.includes('Falta') || template.includes('falta')) {
+      template = 'Falta';
+    } else if (template.includes('Fim') || template.includes('FDS') || template.includes('semana')) {
+      template = 'Trabalho FDS';
+    } else if (template.includes('Deslocad') || template.includes('deslocad')) {
+      template = 'Trabalho Deslocado';
+    }
     const worker = val('worker');
     const rawDate = val('date');
     
@@ -1205,7 +1149,7 @@ const handleCatalog = (file) => {
     let periodEnd = '';
     
     // ✅ LÓGICA INTELIGENTE POR TIPO DE TEMPLATE
-    if (template === 'Trabalho Normal') {
+    if (template.includes('Normal') || template.includes('normal')) {
       // TRABALHO NORMAL
       project = val('projectNormal') || val('project');
       supervisor = val('supervisorNormal') || val('supervisor');
@@ -1215,7 +1159,7 @@ const handleCatalog = (file) => {
         overtime = toNumber(calcExtra);
       }
       
-    } else if (template === 'Trabalho FDS') {
+    } else if (template.includes('Fim') || template.includes('FDS') || template.includes('semana')) {
       // FIM DE SEMANA
       project = val('projectWeekend') || val('project');
       supervisor = val('supervisorWeekend') || val('supervisor');
@@ -1225,34 +1169,28 @@ const handleCatalog = (file) => {
         hours = toNumber(calcHours);
       }
       
-    } else if (template === 'Trabalho Deslocado') {
+    } else if (template.includes('Deslocad') || template.includes('deslocad')) {
       // TRABALHO DESLOCADO
       project = val('projectShifted') || val('project');
       supervisor = val('supervisorShifted') || val('supervisorNormal') || val('supervisor');
       
-    } else if (template === 'Férias') {
+    } else if (template.includes('Férias') || template.includes('ferias')) {
       // FÉRIAS
       periodStart = normalizeDate(val('holidayStart'));
       periodEnd = normalizeDate(val('holidayEnd'));
       hours = 0;
       overtime = 0;
-
-    } else if (template === 'Baixa') {
+      
+    } else if (template.includes('Baixa') || template.includes('baixa')) {
       // BAIXA
       periodStart = normalizeDate(val('sickStart'));
       periodEnd = normalizeDate(val('sickEnd'));
       hours = 0;
       overtime = 0;
-
-    } else if (template === 'Falta') {
+      
+    } else if (template.includes('Falta') || template.includes('falta')) {
       // FALTA
       hours = toNumber(val('hours')) || 8;
-      overtime = 0;
-
-    } else if (template === 'Feriado') {
-      periodStart = normalizeDate(val('holidayStart')) || date;
-      periodEnd = normalizeDate(val('holidayEnd')) || date;
-      hours = 0;
       overtime = 0;
     }
     
@@ -2500,17 +2438,20 @@ const MonthlyReportView = ({ timeEntries, people }) => {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [selectedWorker, setSelectedWorker] = useState(null);
-  const monthInputRef = useRef(null);
 
   // Calcular estatísticas por colaborador
   const stats = useMemo(() => {
     const [year, month] = selectedMonth.split('-').map(Number);
-    const startDate = new Date(year, month - 2, 21);
-    const endDate = new Date(year, month - 1, 20);
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
     endDate.setHours(23, 59, 59, 999);
 
-    // Filtrar entradas do ciclo (dedup para evitar linhas repetidas)
-    const entriesInMonth = dedupeEntries(timeEntries).filter((t) => {
+    // Contar dias úteis do mês
+    const workDays = countWeekdaysInclusive(startDate, endDate);
+
+    // Filtrar entradas do mês
+    // Filtrar entradas do mês
+    const entriesInMonth = timeEntries.filter((t) => {
       if (t.template === 'Férias' || t.template === 'Baixa') {
         const start = new Date(t.periodStart || t.date);
         const end = new Date(t.periodEnd || t.date);
@@ -2519,11 +2460,6 @@ const MonthlyReportView = ({ timeEntries, people }) => {
       const d = new Date(t.date);
       return d >= startDate && d <= endDate;
     });
-
-    const holidaySet = collectHolidayDates(entriesInMonth, startDate, endDate);
-
-    // Contar dias úteis no ciclo (21 do mês anterior a 20 do mês atual)
-    const workDays = countWeekdaysInclusive(startDate, endDate, holidaySet);
 
     // ✅ DEBUG: Mostrar templates encontrados
     console.log('📊 Templates no mês:', {
@@ -2577,7 +2513,9 @@ if (!byWorker.has(worker)) {
       if (isNormalWork(entry.template)) {
         data.daysWorked.add(entry.date);
         data.totalHours += Number(entry.hours) || 0;
+        data.totalOvertime += Number(entry.overtime) || 0;
 
+        // Verificar se é fim de semana
         const date = new Date(entry.date);
         const dayOfWeek = date.getDay();
         if (dayOfWeek === 0 || dayOfWeek === 6) {
@@ -2599,15 +2537,6 @@ if (!byWorker.has(worker)) {
           if (d >= startDate && d <= endDate) {
             const dow = d.getDay();
             if (dow !== 0 && dow !== 6) data.sickLeave++;
-          }
-        }
-      } else if (entry.template === 'Feriado') {
-        const start = new Date(entry.periodStart || entry.date);
-        const end = new Date(entry.periodEnd || entry.date);
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          if (d >= startDate && d <= endDate) {
-            const dow = d.getDay();
-            if (dow !== 0 && dow !== 6) data.holidays++;
           }
         }
       } else if (entry.template === 'Falta') {
@@ -2697,42 +2626,12 @@ if (!byWorker.has(worker)) {
         Verificar Registos
       </Button>
 
-      {(() => {
-        const [y, m] = selectedMonth.split('-').map(Number);
-        const prev = new Date(y, m - 2, 1);
-        const curr = new Date(y, m - 1, 1);
-        const monthLabel = (d) =>
-          d.toLocaleDateString('pt-PT', { month: 'short' })
-            .replace('.', '')
-            .toLowerCase();
-        const cycleLabel = `${monthLabel(prev)}/${monthLabel(curr)} ${curr.getFullYear()}`;
-
-        return (
-          <div className="relative">
-            <input
-              ref={monthInputRef}
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                if (monthInputRef.current) {
-                  monthInputRef.current.showPicker?.();
-                  monthInputRef.current.focus();
-                  monthInputRef.current.click();
-                }
-              }}
-              className="flex items-center gap-2 rounded-xl border bg-white p-2 text-sm transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
-            >
-              <span className="font-medium">{cycleLabel}</span>
-              <Icon name="calendar" className="text-slate-500" />
-            </button>
-          </div>
-        );
-      })()}
+      <input
+        type="month"
+        value={selectedMonth}
+        onChange={(e) => setSelectedMonth(e.target.value)}
+        className="rounded-xl border p-2 text-sm dark:bg-slate-900 dark:border-slate-700"
+      />
       <Button variant="secondary" onClick={exportCSV}>
         <Icon name="download" /> Exportar CSV
       </Button>
@@ -2907,8 +2806,8 @@ if (!byWorker.has(worker)) {
                     worker: selectedWorker,
                     timeEntries: workerDetail.entries,
                     cycle: {
-                      start: new Date(year, month - 2, 21),
-                      end: new Date(year, month - 1, 20),
+                      start: new Date(year, month - 1, 1),
+                      end: new Date(year, month, 0),
                     },
                   });
                   openPrintWindow(html);
@@ -4064,42 +3963,32 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const supabaseReady = supabaseConfigured;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    if (!supabaseReady) {
-      setError("Supabase não está configurado. Verifique as variáveis de ambiente.");
-      setLoading(false);
-      return;
-    }
+    // ✅ Usa o Auth.login() que já busca da tabela profiles!
+    const res = await window.Auth?.login?.(email, password);
 
-    try {
-      const res = await window.Auth?.login?.(email, password);
+    setLoading(false);
 
-      if (res?.ok) {
-        const u = res.user;
+    if (res?.ok) {
+      const u = res.user;
 
-        console.log("✅ LOGIN SUCESSO:", u);
-        console.log("✅ ROLE:", u.role);
+      console.log("✅ LOGIN SUCESSO:", u);
+      console.log("✅ ROLE:", u.role);
 
-        onLogin({
-          id: u.id,
-          email: u.email,
-          role: u.role,
-          name: u.name,
-        });
-      } else {
-        setError(res?.error || "Credenciais inválidas.");
-      }
-    } catch (err: any) {
-      console.error("Erro inesperado ao autenticar:", err);
-      setError("Erro inesperado ao autenticar. Tente novamente.");
-    } finally {
-      setLoading(false);
+      // ✅ O user já vem com role da BD!
+      onLogin({
+        id: u.id,
+        email: u.email,
+        role: u.role, // ⬅️ já validado no auth.tsx
+        name: u.name,
+      });
+    } else {
+      setError(res?.error || "Credenciais inválidas.");
     }
   };
 
@@ -4136,13 +4025,7 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
             <div className="text-red-500 text-sm">{error}</div>
           )}
 
-          {!supabaseReady && (
-            <div className="text-amber-600 bg-amber-50 border border-amber-200 text-sm rounded-lg p-2">
-              Configuração do Supabase em falta. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.
-            </div>
-          )}
-
-          <Button className="w-full" disabled={loading || !supabaseReady}>
+          <Button className="w-full" disabled={loading}>
             {loading ? "A entrar..." : "Entrar"}
           </Button>
         </form>
@@ -4176,7 +4059,6 @@ function App() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modal, setModal] = useState<any | null>(null);
-  const [fatalError, setFatalError] = useState<string | null>(null);
 
   // 👉 Função can() — PERMISSÕES
   const can = (section: keyof typeof CAN) => {
@@ -4278,38 +4160,40 @@ function App() {
   // -------------------------------------------------------------
   // 🔄 REFRESH SUPABASE AO INICIAR
   // -------------------------------------------------------------
-  useEffect(() => {
-    let cancelled = false;
+// -------------------------------------------------------------
+// 🔄 REFRESH SUPABASE AO INICIAR
+// -------------------------------------------------------------
+// -------------------------------------------------------------
+// 🔄 REFRESH SUPABASE AO INICIAR
+// -------------------------------------------------------------
+useEffect(() => {
+  let cancelled = false;
 
-    (async () => {
-      try {
-        const u = await window.Auth?.refresh?.();
+  (async () => {
+    // ✅ Agora usa o Auth.refresh() que já existe!
+    const u = await window.Auth?.refresh?.();
 
-        if (!cancelled) {
-          if (u) {
-            console.log("🔄 REFRESH USER:", u);
-            console.log("✅ ROLE:", u.role);
+    if (!cancelled) {
+      if (u) {
+        console.log("🔄 REFRESH USER:", u);
+        console.log("✅ ROLE:", u.role); // já vem da tabela profiles!
 
-            setAuth({
-              id: u.id,
-              email: u.email,
-              role: u.role,
-              name: u.name,
-            });
-          } else {
-            setAuth(null);
-          }
-        }
-      } catch (err: any) {
-        console.error("Erro ao refrescar sessão:", err);
-        if (!cancelled) setFatalError("Falhou a autenticação. Verifique a configuração do Supabase e tente novamente.");
+        setAuth({
+          id: u.id,
+          email: u.email,
+          role: u.role, // ⬅️ já vem normalizado e validado
+          name: u.name,
+        });
+      } else {
+        setAuth(null);
       }
-    })();
+    }
+  })();
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  return () => {
+    cancelled = true;
+  };
+}, []);
 
   // -------------------------------------------------------------
   // 🔁 FALLBACK AUTOMÁTICO DE VIEW
@@ -4518,20 +4402,6 @@ const visibleTimeEntries = useMemo(() => {
   // -------------------------------------------------------------
   // 🔐 GUARD — LOGIN OBRIGATÓRIO
   // -------------------------------------------------------------
-  if (fatalError) {
-    return (
-      <div className="min-h-screen grid place-items-center bg-slate-50 dark:bg-slate-950 p-4">
-        <div className="max-w-lg w-full space-y-4 rounded-2xl bg-white shadow-sm dark:bg-slate-900 dark:border dark:border-slate-800 p-6">
-          <h2 className="text-xl font-semibold">Autenticação indisponível</h2>
-          <p className="text-sm text-slate-600 dark:text-slate-300">{fatalError}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Confirme as variáveis <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_ANON_KEY</code> e tente novamente.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   if (!auth) {
     return (
       <LoginView

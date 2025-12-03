@@ -1,5 +1,5 @@
 ﻿// src/auth.tsx
-import supabase, { supabaseConfigured } from './lib/supabaseClient'
+import supabase from './lib/supabaseClient'
 
 export type AppRole = 'tecnico' | 'encarregado' | 'diretor' | 'logistica' | 'admin'
 
@@ -37,10 +37,6 @@ function storeUser(user: AppUser | null) {
 const VALID_ROLES: AppRole[] = ['tecnico', 'encarregado', 'diretor', 'logistica', 'admin']
 
 async function fetchUserProfile(userId: string, emailFallback: string): Promise<AppUser> {
-  if (!supabaseConfigured || !supabase) {
-    throw new Error('Supabase não está configurado')
-  }
-
   const { data, error } = await supabase
     .from('profiles')
     .select('name, role')
@@ -73,38 +69,24 @@ async function login(
   email: string,
   password: string
 ): Promise<{ ok: true; user: AppUser } | { ok: false; error: string }> {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+
+  if (error || !data?.user) {
+    console.error('Erro de login:', error)
+    return { ok: false, error: 'Credenciais inválidas' }
+  }
+
   try {
-    if (!supabaseConfigured || !supabase) {
-      return { ok: false, error: 'Supabase não configurado. Verifique as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.' }
-    }
-
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-
-    if (error || !data?.user) {
-      console.error('Erro de login:', error)
-      return { ok: false, error: 'Credenciais inválidas' }
-    }
-
-    try {
-      const appUser = await fetchUserProfile(data.user.id, data.user.email || email)
-      storeUser(appUser)
-      return { ok: true, user: appUser }
-    } catch (err: any) {
-      console.error(err)
-      return { ok: false, error: err?.message || 'Erro a carregar o perfil do utilizador' }
-    }
+    const appUser = await fetchUserProfile(data.user.id, data.user.email || email)
+    storeUser(appUser)
+    return { ok: true, user: appUser }
   } catch (err: any) {
-    console.error('Falha inesperada no login:', err)
-    return { ok: false, error: 'Erro inesperado ao autenticar. Tente novamente.' }
+    console.error(err)
+    return { ok: false, error: err?.message || 'Erro a carregar o perfil do utilizador' }
   }
 }
 
 async function logout(): Promise<void> {
-  if (!supabaseConfigured || !supabase) {
-    storeUser(null)
-    return
-  }
-
   try {
     await supabase.auth.signOut()
   } finally {
@@ -113,38 +95,27 @@ async function logout(): Promise<void> {
 }
 
 async function refresh(): Promise<AppUser | null> {
+  const { data, error } = await supabase.auth.getSession()
+  if (error) {
+    console.error('Erro ao obter sessão:', error)
+  }
+
+  const sess = data?.session
+  if (!sess?.user) {
+    storeUser(null)
+    return null
+  }
+
+  const currentStored = loadStoredUser()
+  if (currentStored && currentStored.id === sess.user.id) {
+    return currentStored
+  }
+
   try {
-    if (!supabaseConfigured || !supabase) {
-      storeUser(null)
-      return null
-    }
-
-    const { data, error } = await supabase.auth.getSession()
-    if (error) {
-      console.error('Erro ao obter sessão:', error)
-    }
-
-    const sess = data?.session
-    if (!sess?.user) {
-      storeUser(null)
-      return null
-    }
-
-    const currentStored = loadStoredUser()
-    if (currentStored && currentStored.id === sess.user.id) {
-      return currentStored
-    }
-
-    try {
-      const fresh = await fetchUserProfile(sess.user.id, sess.user.email || '')
-      storeUser(fresh)
-      return fresh
-    } catch {
-      storeUser(null)
-      return null
-    }
-  } catch (err) {
-    console.error('Erro inesperado ao refrescar sessão:', err)
+    const fresh = await fetchUserProfile(sess.user.id, sess.user.email || '')
+    storeUser(fresh)
+    return fresh
+  } catch {
     storeUser(null)
     return null
   }
