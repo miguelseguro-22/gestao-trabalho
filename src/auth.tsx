@@ -1,5 +1,5 @@
 ﻿// src/auth.tsx
-import supabase from './lib/supabaseClient'
+import supabase, { supabaseConfigured } from './lib/supabaseClient'
 
 export type AppRole = 'tecnico' | 'encarregado' | 'diretor' | 'logistica' | 'admin'
 
@@ -37,6 +37,10 @@ function storeUser(user: AppUser | null) {
 const VALID_ROLES: AppRole[] = ['tecnico', 'encarregado', 'diretor', 'logistica', 'admin']
 
 async function fetchUserProfile(userId: string, emailFallback: string): Promise<AppUser> {
+  if (!supabaseConfigured || !supabase) {
+    throw new Error('Supabase não está configurado')
+  }
+
   const { data, error } = await supabase
     .from('profiles')
     .select('name, role')
@@ -69,6 +73,10 @@ async function login(
   email: string,
   password: string
 ): Promise<{ ok: true; user: AppUser } | { ok: false; error: string }> {
+  if (!supabaseConfigured || !supabase) {
+    return { ok: false, error: 'Supabase não configurado. Verifique as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.' }
+  }
+
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error || !data?.user) {
@@ -87,6 +95,11 @@ async function login(
 }
 
 async function logout(): Promise<void> {
+  if (!supabaseConfigured || !supabase) {
+    storeUser(null)
+    return
+  }
+
   try {
     await supabase.auth.signOut()
   } finally {
@@ -95,6 +108,11 @@ async function logout(): Promise<void> {
 }
 
 async function refresh(): Promise<AppUser | null> {
+  if (!supabaseConfigured || !supabase) {
+    storeUser(null)
+    return null
+  }
+
   const { data, error } = await supabase.auth.getSession()
   if (error) {
     console.error('Erro ao obter sessão:', error)

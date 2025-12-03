@@ -1,4 +1,5 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react'
+import { supabaseConfigured } from './lib/supabaseClient'
 /* ---------- Helpers ---------- */
 const Icon=({name,className='w-5 h-5'})=>{
   const S={stroke:'currentColor',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'};
@@ -4063,11 +4064,18 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const supabaseReady = supabaseConfigured;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    if (!supabaseReady) {
+      setError("Supabase não está configurado. Verifique as variáveis de ambiente.");
+      setLoading(false);
+      return;
+    }
 
     // ✅ Usa o Auth.login() que já busca da tabela profiles!
     const res = await window.Auth?.login?.(email, password);
@@ -4125,7 +4133,13 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
             <div className="text-red-500 text-sm">{error}</div>
           )}
 
-          <Button className="w-full" disabled={loading}>
+          {!supabaseReady && (
+            <div className="text-amber-600 bg-amber-50 border border-amber-200 text-sm rounded-lg p-2">
+              Configuração do Supabase em falta. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.
+            </div>
+          )}
+
+          <Button className="w-full" disabled={loading || !supabaseReady}>
             {loading ? "A entrar..." : "Entrar"}
           </Button>
         </form>
