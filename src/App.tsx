@@ -880,18 +880,70 @@ const handleCSV = (file) => {
     const parsed = parseCSV(text);
     setCsvPreview(parsed);
 
-    const auto = buildAutoMap(parsed.headers.map(h => norm(h)));
-
-    // regra: em Materiais, "código" vem SEMPRE da coluna B (se existir)
-    if (section === 'materials' && parsed.headers?.[1]) {
-      auto.code = parsed.headers[1];
+    // ✅ AUTO-MAPEAR COLUNAS POR LETRA (A, B, C, ...)
+    const autoMap = {};
+    
+    if (section === 'timesheets') {
+      const colIndex = (letter) => {
+        // Converte letra de coluna (ex: "AX") para índice numérico
+        let index = 0;
+        for (let i = 0; i < letter.length; i++) {
+          index = index * 26 + (letter.charCodeAt(i) - 64);
+        }
+        return index - 1;
+      };
+      
+      // Mapear automaticamente pelas letras das colunas
+      const mapping = {
+        worker: 'AX',       // Colaborador
+        template: 'D',      // Template
+        date: 'C',          // Data
+        
+        // Trabalho Normal
+        projectNormal: 'AC',
+        supervisorNormal: 'F',
+        overtimeStart: 'V',
+        overtimeEnd: 'W',
+        overtimeCalc: 'X',
+        
+        // Fim de Semana
+        projectWeekend: 'AH',
+        supervisorWeekend: 'AF',
+        weekendStart: 'AO',
+        weekendEnd: 'AP',
+        weekendCalc: 'AQ',
+        
+        // Deslocado
+        projectShifted: 'AG',
+        
+        // Férias
+        holidayStart: 'M',
+        holidayEnd: 'N',
+        
+        // Baixa
+        sickStart: 'R',
+        sickEnd: 'T',
+        
+        notes: 'Z'
+      };
+      
+      // Converter letras para índices de coluna
+      for (const [field, letter] of Object.entries(mapping)) {
+        const idx = colIndex(letter);
+        if (parsed.headers[idx]) {
+          autoMap[field] = parsed.headers[idx];
+        }
+      }
+    } else if (section === 'materials') {
+      // Auto-mapear materiais (se necessário)
+      const auto = buildAutoMap(parsed.headers.map(h => norm(h)));
+      Object.assign(autoMap, auto);
     }
 
-    setMap(auto);
-    setStatus(`CSV (${parsed.rows.length}) · delim "${parsed.delim}"`);
+    setMap(autoMap);
+    setStatus(`CSV (${parsed.rows.length}) · AUTO-MAPEADO ✅`);
   });
 };
-
   // --- Normalização de cabeçalhos e heurísticas para o CATÁLOGO ---
 const HDR_CODE  = ['codigo','código','cod','ref','referencia','referência','artigo','cód','sku','ean','part number','pn'];
 const HDR_NAME  = ['designacao','designação','descricao','descrição','produto','artigo','nome','descr','design'];
@@ -1104,89 +1156,104 @@ const handleCatalog = (file) => {
   const normalizeDate=(v)=>{const s=String(v||'').trim();if(!s)return'';if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;const m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);if(m){let [_,d,mo,y]=m;if(y.length===2)y='20'+y;d=d.padStart(2,'0');mo=mo.padStart(2,'0');return`${y}-${mo}-${d}`;}const d=new Date(s);if(!isNaN(d))return d.toISOString().slice(0,10);return'';};
   const toNumber=(v)=>{if(v==null||v==='')return 0; const s=String(v).replace(/\./g,'').replace(',','.'); const n=parseFloat(s); return isNaN(n)?0:n};
 
-  const mapRow=(r)=>{
-    const val=k=>r[map[k]||'']??'';
+  const mapRow = (r) => {
+  const val = k => {
+    const colName = map[k];
+    if (!colName) return '';
+    return r[colName] ?? '';
+  };
+  
+  if (section === 'timesheets') {
+    const template = (val('template') || 'Trabalho Normal').trim();
+    const worker = val('worker');
+    const rawDate = val('date');
     
-    if(section==='timesheets'){
-      const template=(val('template')||'Trabalho Normal').trim();
-      const worker = val('worker');
-      const date = normalizeDate(val('date'));
+    // ✅ NORMALIZAR DATA
+    const date = normalizeDate(rawDate);
+    
+    let project = '';
+    let supervisor = '';
+    let hours = 8;
+    let overtime = 0;
+    let periodStart = '';
+    let periodEnd = '';
+    
+    // ✅ LÓGICA INTELIGENTE POR TIPO DE TEMPLATE
+    if (template.includes('Normal') || template.includes('normal')) {
+      // TRABALHO NORMAL
+      project = val('projectNormal') || val('project');
+      supervisor = val('supervisorNormal') || val('supervisor');
       
-      // Determinar obra e supervisor baseado no template
-      let project = '';
-      let supervisor = '';
-      let hours = 8;
-      let overtime = 0;
-      let periodStart = '';
-      let periodEnd = '';
-      
-      if (template === 'Trabalho Normal') {
-        project = val('projectNormal');
-        supervisor = val('supervisorNormal');
-        
-        // Calcular horas extra (se houver)
-        const startTime = val('overtimeStart');
-        const endTime = val('overtimeEnd');
-        const calcHours = val('overtimeCalc');
-        
-        if (calcHours) {
-          overtime = toNumber(calcHours);
-        } else if (startTime && endTime) {
-          // Calcular diferença entre horas
-          overtime = calculateHoursDiff(startTime, endTime);
-        }
-        
-      } else if (template.includes('Fim') || template.includes('FDS')) {
-        project = val('projectWeekend');
-        supervisor = val('supervisorWeekend');
-        
-        const startTime = val('weekendStart');
-        const endTime = val('weekendEnd');
-        const calcHours = val('weekendCalc');
-        
-        if (calcHours) {
-          hours = toNumber(calcHours);
-        } else if (startTime && endTime) {
-          hours = calculateHoursDiff(startTime, endTime);
-        }
-        
-      } else if (template.includes('Deslocad')) {
-        project = val('projectShifted');
-        supervisor = val('supervisorShifted');
-        
-      } else if (template === 'Férias') {
-        periodStart = normalizeDate(val('holidayStart'));
-        periodEnd = normalizeDate(val('holidayEnd'));
-        hours = 0;
-        overtime = 0;
-        
-      } else if (template === 'Baixa') {
-        periodStart = normalizeDate(val('sickStart'));
-        periodEnd = normalizeDate(val('sickEnd'));
-        hours = 0;
-        overtime = 0;
+      const calcExtra = val('overtimeCalc');
+      if (calcExtra) {
+        overtime = toNumber(calcExtra);
       }
       
-      return {
-        id: uid(),
-        template,
-        worker,
-        date,
-        project,
-        supervisor,
-        hours,
-        overtime,
-        periodStart,
-        periodEnd,
-        notes: val('notes')
-      };
+    } else if (template.includes('Fim') || template.includes('FDS') || template.includes('semana')) {
+      // FIM DE SEMANA
+      project = val('projectWeekend') || val('project');
+      supervisor = val('supervisorWeekend') || val('supervisor');
+      
+      const calcHours = val('weekendCalc');
+      if (calcHours) {
+        hours = toNumber(calcHours);
+      }
+      
+    } else if (template.includes('Deslocad') || template.includes('deslocad')) {
+      // TRABALHO DESLOCADO
+      project = val('projectShifted') || val('project');
+      supervisor = val('supervisorShifted') || val('supervisorNormal') || val('supervisor');
+      
+    } else if (template.includes('Férias') || template.includes('ferias')) {
+      // FÉRIAS
+      periodStart = normalizeDate(val('holidayStart'));
+      periodEnd = normalizeDate(val('holidayEnd'));
+      hours = 0;
+      overtime = 0;
+      
+    } else if (template.includes('Baixa') || template.includes('baixa')) {
+      // BAIXA
+      periodStart = normalizeDate(val('sickStart'));
+      periodEnd = normalizeDate(val('sickEnd'));
+      hours = 0;
+      overtime = 0;
+      
+    } else if (template.includes('Falta') || template.includes('falta')) {
+      // FALTA
+      hours = toNumber(val('hours')) || 8;
+      overtime = 0;
     }
     
-    if(section==='materials'){
-      // ... mantém igual
-    }
-    return {};
-  };
+    return {
+      id: uid(),
+      template,
+      worker,
+      date,
+      project,
+      supervisor,
+      hours,
+      overtime,
+      periodStart,
+      periodEnd,
+      notes: val('notes')
+    };
+  }
+  
+  if (section === 'materials') {
+    return { 
+      requestedAt: normalizeDate(val('requestedAt')) || todayISO(), 
+      project: val('project'),
+      item: cleanDesignation(val('item')),
+      code: String(val('code') || '').trim(), 
+      qty: toNumber(val('qty')) || 1, 
+      requestedBy: val('requestedBy') || '',
+      status: (val('status') || 'Pendente').replace('Encomendado', 'Aprovado'), 
+      notes: val('notes') || '' 
+    };
+  }
+  
+  return {};
+};
   
   // ✅ ADICIONAR FUNÇÃO AUXILIAR
   const calculateHoursDiff = (start, end) => {
@@ -1203,28 +1270,32 @@ const handleCatalog = (file) => {
     }
   };
 
-  const validateMapped=(o)=>{
-    const errs=[]; 
+  const validateMapped = (o) => {
+    const errs = []; 
     
-    if(section==='timesheets'){ 
-      // Colaborador sempre obrigatório
-      if(!o.worker) errs.push('colaborador');
+    if (section === 'timesheets') { 
+      // ✅ Colaborador sempre obrigatório
+      if (!o.worker) {
+        console.warn('⚠️ Registo sem colaborador:', o);
+        errs.push('colaborador');
+      }
       
-      if(['Férias','Baixa'].includes(o.template)){ 
-        if(!o.periodStart||!o.periodEnd) errs.push('período'); 
-      } else if(o.template==='Falta'){ 
-        if(!o.date) errs.push('data'); 
+      if (['Férias', 'Baixa'].includes(o.template)) { 
+        if (!o.periodStart || !o.periodEnd) errs.push('período'); 
+      } else if (o.template === 'Falta') { 
+        if (!o.date) errs.push('data'); 
       } else { 
         // Trabalho Normal, FDS, Deslocado
-        if(!o.date) errs.push('data'); 
-        if(!o.project) errs.push('projeto'); 
-        if(!o.supervisor) errs.push('encarregado'); 
+        if (!o.date) errs.push('data'); 
+        // ⬇️ Projeto e supervisor são opcionais (podem estar vazios)
+        // if (!o.project) errs.push('projeto'); 
+        // if (!o.supervisor) errs.push('encarregado'); 
       }
     } 
     
-    if(section==='materials'){ 
-      if(!o.project) errs.push('projeto'); 
-      if(!o.item) errs.push('item'); 
+    if (section === 'materials') { 
+      if (!o.project) errs.push('projeto'); 
+      if (!o.item) errs.push('item'); 
     } 
     
     return errs;
@@ -1341,6 +1412,52 @@ const base={
           </div>
 
           <div className="text-sm text-slate-600 dark:text-slate-300">Mapeia as colunas do teu CSV:</div>
+          <div className="text-sm text-slate-600 dark:text-slate-300">Mapeia as colunas do teu CSV:</div>
+          
+          {/* ✅ BOTÃO AUTO-MAPEAR */}
+          <div className="flex gap-2 mb-3">
+            <Button 
+              variant="secondary" 
+              size="sm"
+              onClick={() => {
+                // Auto-mapear por letra de coluna
+                const colIndex = (letter) => {
+                  let index = 0;
+                  for (let i = 0; i < letter.length; i++) {
+                    index = index * 26 + (letter.charCodeAt(i) - 64);
+                  }
+                  return index - 1;
+                };
+                
+                const mapping = {
+                  worker: 'AX', template: 'D', date: 'C',
+                  projectNormal: 'AC', supervisorNormal: 'F',
+                  overtimeCalc: 'X', projectWeekend: 'AH',
+                  supervisorWeekend: 'AF', weekendCalc: 'AQ',
+                  projectShifted: 'AG', holidayStart: 'M',
+                  holidayEnd: 'N', sickStart: 'R', sickEnd: 'T'
+                };
+                
+                const autoMap = {};
+                for (const [field, letter] of Object.entries(mapping)) {
+                  const idx = colIndex(letter);
+                  if (csvPreview.headers[idx]) {
+                    autoMap[field] = csvPreview.headers[idx];
+                  }
+                }
+                
+                setMap(autoMap);
+                setStatus('✅ AUTO-MAPEADO por coluna (A, B, C, ...)');
+              }}
+            >
+              <Icon name="activity" /> Auto-Mapear Colunas
+            </Button>
+            
+            <div className="text-xs text-slate-500 self-center">
+              Mapeia automaticamente: AX=Colaborador, D=Template, C=Data, AC=Obra, etc.
+            </div>
+          </div>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {(section==='timesheets'?SEC_FIELDS.timesheets:SEC_FIELDS.materials).map(f=>(
               <label key={f.k} className="text-sm">
@@ -2377,11 +2494,12 @@ const MonthlyReportView = ({ timeEntries, people }) => {
     const byWorker = new Map();
 
     entriesInMonth.forEach((entry) => {
-      // ⬇️ VALIDAÇÕES MÚLTIPLAS PARA ENCONTRAR O COLABORADOR
-const worker = 
-  entry.worker || 
-  entry.supervisor || 
-  'Desconhecido';
+      // ✅ PRIORIZAR worker, depois supervisor, depois nome da coluna
+      const worker = 
+        entry.worker || 
+        entry.supervisor || 
+        entry.colaborador ||  // ⬅️ ADICIONAR ISTO
+        'Desconhecido';
 
 // Debug: logar registos sem worker
 if (!entry.worker && !entry.supervisor) {
