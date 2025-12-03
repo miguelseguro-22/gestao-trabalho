@@ -73,24 +73,29 @@ async function login(
   email: string,
   password: string
 ): Promise<{ ok: true; user: AppUser } | { ok: false; error: string }> {
-  if (!supabaseConfigured || !supabase) {
-    return { ok: false, error: 'Supabase não configurado. Verifique as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.' }
-  }
-
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-
-  if (error || !data?.user) {
-    console.error('Erro de login:', error)
-    return { ok: false, error: 'Credenciais inválidas' }
-  }
-
   try {
-    const appUser = await fetchUserProfile(data.user.id, data.user.email || email)
-    storeUser(appUser)
-    return { ok: true, user: appUser }
+    if (!supabaseConfigured || !supabase) {
+      return { ok: false, error: 'Supabase não configurado. Verifique as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.' }
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (error || !data?.user) {
+      console.error('Erro de login:', error)
+      return { ok: false, error: 'Credenciais inválidas' }
+    }
+
+    try {
+      const appUser = await fetchUserProfile(data.user.id, data.user.email || email)
+      storeUser(appUser)
+      return { ok: true, user: appUser }
+    } catch (err: any) {
+      console.error(err)
+      return { ok: false, error: err?.message || 'Erro a carregar o perfil do utilizador' }
+    }
   } catch (err: any) {
-    console.error(err)
-    return { ok: false, error: err?.message || 'Erro a carregar o perfil do utilizador' }
+    console.error('Falha inesperada no login:', err)
+    return { ok: false, error: 'Erro inesperado ao autenticar. Tente novamente.' }
   }
 }
 
@@ -108,32 +113,38 @@ async function logout(): Promise<void> {
 }
 
 async function refresh(): Promise<AppUser | null> {
-  if (!supabaseConfigured || !supabase) {
-    storeUser(null)
-    return null
-  }
-
-  const { data, error } = await supabase.auth.getSession()
-  if (error) {
-    console.error('Erro ao obter sessão:', error)
-  }
-
-  const sess = data?.session
-  if (!sess?.user) {
-    storeUser(null)
-    return null
-  }
-
-  const currentStored = loadStoredUser()
-  if (currentStored && currentStored.id === sess.user.id) {
-    return currentStored
-  }
-
   try {
-    const fresh = await fetchUserProfile(sess.user.id, sess.user.email || '')
-    storeUser(fresh)
-    return fresh
-  } catch {
+    if (!supabaseConfigured || !supabase) {
+      storeUser(null)
+      return null
+    }
+
+    const { data, error } = await supabase.auth.getSession()
+    if (error) {
+      console.error('Erro ao obter sessão:', error)
+    }
+
+    const sess = data?.session
+    if (!sess?.user) {
+      storeUser(null)
+      return null
+    }
+
+    const currentStored = loadStoredUser()
+    if (currentStored && currentStored.id === sess.user.id) {
+      return currentStored
+    }
+
+    try {
+      const fresh = await fetchUserProfile(sess.user.id, sess.user.email || '')
+      storeUser(fresh)
+      return fresh
+    } catch {
+      storeUser(null)
+      return null
+    }
+  } catch (err) {
+    console.error('Erro inesperado ao refrescar sessão:', err)
     storeUser(null)
     return null
   }

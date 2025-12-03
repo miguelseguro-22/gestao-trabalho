@@ -4077,26 +4077,29 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
       return;
     }
 
-    // ✅ Usa o Auth.login() que já busca da tabela profiles!
-    const res = await window.Auth?.login?.(email, password);
+    try {
+      const res = await window.Auth?.login?.(email, password);
 
-    setLoading(false);
+      if (res?.ok) {
+        const u = res.user;
 
-    if (res?.ok) {
-      const u = res.user;
+        console.log("✅ LOGIN SUCESSO:", u);
+        console.log("✅ ROLE:", u.role);
 
-      console.log("✅ LOGIN SUCESSO:", u);
-      console.log("✅ ROLE:", u.role);
-
-      // ✅ O user já vem com role da BD!
-      onLogin({
-        id: u.id,
-        email: u.email,
-        role: u.role, // ⬅️ já validado no auth.tsx
-        name: u.name,
-      });
-    } else {
-      setError(res?.error || "Credenciais inválidas.");
+        onLogin({
+          id: u.id,
+          email: u.email,
+          role: u.role,
+          name: u.name,
+        });
+      } else {
+        setError(res?.error || "Credenciais inválidas.");
+      }
+    } catch (err: any) {
+      console.error("Erro inesperado ao autenticar:", err);
+      setError("Erro inesperado ao autenticar. Tente novamente.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -4173,6 +4176,7 @@ function App() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modal, setModal] = useState<any | null>(null);
+  const [fatalError, setFatalError] = useState<string | null>(null);
 
   // 👉 Função can() — PERMISSÕES
   const can = (section: keyof typeof CAN) => {
@@ -4274,40 +4278,38 @@ function App() {
   // -------------------------------------------------------------
   // 🔄 REFRESH SUPABASE AO INICIAR
   // -------------------------------------------------------------
-// -------------------------------------------------------------
-// 🔄 REFRESH SUPABASE AO INICIAR
-// -------------------------------------------------------------
-// -------------------------------------------------------------
-// 🔄 REFRESH SUPABASE AO INICIAR
-// -------------------------------------------------------------
-useEffect(() => {
-  let cancelled = false;
+  useEffect(() => {
+    let cancelled = false;
 
-  (async () => {
-    // ✅ Agora usa o Auth.refresh() que já existe!
-    const u = await window.Auth?.refresh?.();
+    (async () => {
+      try {
+        const u = await window.Auth?.refresh?.();
 
-    if (!cancelled) {
-      if (u) {
-        console.log("🔄 REFRESH USER:", u);
-        console.log("✅ ROLE:", u.role); // já vem da tabela profiles!
+        if (!cancelled) {
+          if (u) {
+            console.log("🔄 REFRESH USER:", u);
+            console.log("✅ ROLE:", u.role);
 
-        setAuth({
-          id: u.id,
-          email: u.email,
-          role: u.role, // ⬅️ já vem normalizado e validado
-          name: u.name,
-        });
-      } else {
-        setAuth(null);
+            setAuth({
+              id: u.id,
+              email: u.email,
+              role: u.role,
+              name: u.name,
+            });
+          } else {
+            setAuth(null);
+          }
+        }
+      } catch (err: any) {
+        console.error("Erro ao refrescar sessão:", err);
+        if (!cancelled) setFatalError("Falhou a autenticação. Verifique a configuração do Supabase e tente novamente.");
       }
-    }
-  })();
+    })();
 
-  return () => {
-    cancelled = true;
-  };
-}, []);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // -------------------------------------------------------------
   // 🔁 FALLBACK AUTOMÁTICO DE VIEW
@@ -4516,6 +4518,20 @@ const visibleTimeEntries = useMemo(() => {
   // -------------------------------------------------------------
   // 🔐 GUARD — LOGIN OBRIGATÓRIO
   // -------------------------------------------------------------
+  if (fatalError) {
+    return (
+      <div className="min-h-screen grid place-items-center bg-slate-50 dark:bg-slate-950 p-4">
+        <div className="max-w-lg w-full space-y-4 rounded-2xl bg-white shadow-sm dark:bg-slate-900 dark:border dark:border-slate-800 p-6">
+          <h2 className="text-xl font-semibold">Autenticação indisponível</h2>
+          <p className="text-sm text-slate-600 dark:text-slate-300">{fatalError}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Confirme as variáveis <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_ANON_KEY</code> e tente novamente.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (!auth) {
     return (
       <LoginView
