@@ -855,6 +855,8 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
       // FÉRIAS E BAIXA
       {k:'holidayStart',label:'Férias Início (Coluna M)',opt:true},
       {k:'holidayEnd',label:'Férias Fim (Coluna N)',opt:true},
+      {k:'sickStart',label:'Baixa Início (Coluna R)',opt:true},
+      {k:'sickEnd',label:'Baixa Fim (Coluna S)',opt:true},
       {k:'sickDays',label:'Dias de Baixa (Coluna T)',opt:true},
       
       {k:'notes',label:'Observações',opt:true}
@@ -897,8 +899,10 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     holidayStart:['ferias inicio','m'],
     holidayEnd:['ferias fim','n'],
     holidayFlag:['feriado','feriad','aw'],
-    
+
     // Baixa
+    sickStart:['baixa inicio','inicio baixa','r'],
+    sickEnd:['baixa fim','fim baixa','s'],
     sickDays:['dias baixa','baixa dias','t'],
     
     notes:['observações','notas','notes','obs'],
@@ -953,7 +957,7 @@ const handleCSV = (file) => {
           overtimeCalc: 'L', projectWeekend: 'AH',
           supervisorWeekend: 'AF', weekendCalc: 'AQ',
           projectShifted: 'AG', holidayStart: 'M',
-          holidayEnd: 'N', sickDays: 'T',
+          holidayEnd: 'N', sickStart: 'R', sickEnd: 'S', sickDays: 'T',
           holidayFlag: 'AW'
         };
       
@@ -1222,7 +1226,7 @@ const handleCatalog = (file) => {
     const rawDate = val('date') || val('weekendStart') || val('overtimeStart') || val('holidayStart');
 
     // ✅ NORMALIZAR DATA
-    const date = normalizeDate(rawDate);
+    let date = normalizeDate(rawDate);
     
     let project = '';
     let supervisor = '';
@@ -1294,17 +1298,22 @@ const handleCatalog = (file) => {
 
     } else if (template.includes('Baixa') || template.includes('baixa')) {
       // BAIXA
+      const sickStart = normalizeDate(val('sickStart')) || normalizeDate(val('holidayStart')) || date;
+      const sickEndInput = normalizeDate(val('sickEnd'));
       const sickDays = Math.max(0, toNumber(val('sickDays')));
-      periodStart = normalizeDate(val('date')) || normalizeDate(val('holidayStart'));
+
+      periodStart = sickStart;
       periodEnd = (() => {
-        if (!periodStart) return '';
+        if (sickEndInput) return sickEndInput;
+        if (!sickStart) return '';
         if (sickDays > 0) {
-          const end = new Date(periodStart);
+          const end = new Date(sickStart);
           end.setDate(end.getDate() + sickDays - 1);
           return normalizeDate(end.toISOString().slice(0, 10));
         }
-        return periodStart;
+        return sickStart;
       })();
+      date = periodStart || date;
       hours = 0;
       overtime = 0;
 
@@ -1535,7 +1544,7 @@ const base={
                   overtimeCalc: 'L', projectWeekend: 'AH',
                   supervisorWeekend: 'AF', weekendCalc: 'AQ',
                   projectShifted: 'AG', holidayStart: 'M',
-                  holidayEnd: 'N', sickDays: 'T'
+                  holidayEnd: 'N', sickStart: 'R', sickEnd: 'S', sickDays: 'T'
                 };
                 
                 const autoMap = {};
