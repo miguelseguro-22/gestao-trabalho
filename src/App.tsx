@@ -1234,6 +1234,7 @@ const handleCatalog = (file) => {
     let overtime = 0;
     let periodStart = '';
     let periodEnd = '';
+    let sickDays = 0;
     const feriadoFlagRaw = val('holidayFlag');
     const feriadoFlag = norm(feriadoFlagRaw || '');
     const feriadoFalse = new Set(['', '0', 'nao', 'não', 'no', 'false', 'n', 'f']);
@@ -1300,7 +1301,7 @@ const handleCatalog = (file) => {
       // BAIXA
       const sickStart = normalizeDate(val('sickStart')) || normalizeDate(val('holidayStart')) || date;
       const sickEndInput = normalizeDate(val('sickEnd'));
-      const sickDays = Math.max(0, toNumber(val('sickDays')));
+      sickDays = Math.max(0, toNumber(val('sickDays')));
 
       periodStart = sickStart;
       periodEnd = (() => {
