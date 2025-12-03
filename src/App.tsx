@@ -131,7 +131,7 @@ const saveState=(state)=>{try{localStorage.setItem(LS_KEY,JSON.stringify(state))
 const clearState=()=>{try{localStorage.removeItem(LS_KEY)}catch{}};
 
 const CLOUD_STATE_TABLE='app_state'
-const CLOUD_ROW_ID='shared'
+const CLOUD_ROW_ID=import.meta.env.VITE_CLOUD_ROW_ID||'shared'
 const fetchCloudState=async(rowId:string=CLOUD_ROW_ID)=>{
   if(!supabaseReady||!supabase)return null
   try{
@@ -4474,7 +4474,7 @@ function App() {
   const [modal, setModal] = useState<any | null>(null);
   const cloudSaveTimer = useRef<any>(null)
   const [supabaseActive] = useState(() => supabaseReady)
-  const cloudKey = useMemo(() => (auth?.email?.toLowerCase?.() || CLOUD_ROW_ID), [auth])
+  const cloudKey = useMemo(() => CLOUD_ROW_ID, [])
   const latestStampRef = useRef<string | null>(cloudStamp)
 
   // 👉 Função can() — PERMISSÕES
