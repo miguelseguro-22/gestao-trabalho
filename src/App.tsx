@@ -519,6 +519,8 @@ const normalizeISODate = (v) => {
 const timeEntrySignature = (t) => {
   const primaryDate = normalizeISODate(t.date || t.periodStart || '');
   const endDate = normalizeISODate(t.periodEnd || t.date || '');
+  const hours = Math.round(((Number(t.hours) || 0) + Number.EPSILON) * 100) / 100;
+  const overtime = Math.round(((Number(t.overtime) || 0) + Number.EPSILON) * 100) / 100;
 
   return [
     normText(t.worker || t.supervisor || ''),
@@ -527,9 +529,8 @@ const timeEntrySignature = (t) => {
     normText(t.supervisor || ''),
     primaryDate,
     endDate,
-    Number(t.hours) || 0,
-    Number(t.overtime) || 0,
-    normText(t.notes || ''),
+    hours,
+    overtime,
   ].join('||');
 };
 const dedupTimeEntries = (entries = []) => {
@@ -838,14 +839,17 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
       {k:'overtimeCalc',label:'Extra Calculado (Coluna X)',opt:true},
       
       // FIM DE SEMANA
-      {k:'projectWeekend',label:'Obra FDS (Coluna AH)',opt:true},
-      {k:'supervisorWeekend',label:'Encarregado FDS (Coluna AF)',opt:true},
-      {k:'weekendStart',label:'FDS Início (Coluna AO)',opt:true},
-      {k:'weekendEnd',label:'FDS Fim (Coluna AP)',opt:true},
-      {k:'weekendCalc',label:'FDS Calculado (Coluna AQ)',opt:true},
-      
-      // TRABALHO DESLOCADO
-      {k:'projectShifted',label:'Obra Deslocada (Coluna AG)',opt:true},
+    {k:'projectWeekend',label:'Obra FDS (Coluna AH)',opt:true},
+    {k:'supervisorWeekend',label:'Encarregado FDS (Coluna AF)',opt:true},
+    {k:'weekendStart',label:'FDS Início (Coluna AO)',opt:true},
+    {k:'weekendEnd',label:'FDS Fim (Coluna AP)',opt:true},
+    {k:'weekendCalc',label:'FDS Calculado (Coluna AQ)',opt:true},
+
+      // FERIADO
+      {k:'holidayFlag',label:'Marcador Feriado (Coluna AW)',opt:true},
+
+    // TRABALHO DESLOCADO
+    {k:'projectShifted',label:'Obra Deslocada (Coluna AG)',opt:true},
       {k:'supervisorShifted',label:'Encarregado Deslocado (Coluna F)',opt:true},
       
       // FÉRIAS E BAIXA
@@ -893,6 +897,7 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     // Férias
     holidayStart:['ferias inicio','m'],
     holidayEnd:['ferias fim','n'],
+    holidayFlag:['feriado','feriad','aw'],
     
     // Baixa
     sickStart:['baixa inicio','r'],
@@ -950,7 +955,8 @@ const handleCSV = (file) => {
         overtimeCalc: 'X', projectWeekend: 'AH',
         supervisorWeekend: 'AF', weekendCalc: 'AQ',
         projectShifted: 'AG', holidayStart: 'M',
-        holidayEnd: 'N', sickStart: 'R', sickEnd: 'T'
+        holidayEnd: 'N', sickStart: 'R', sickEnd: 'T',
+        holidayFlag: 'AW'
       };
       
       for (const [field, letter] of Object.entries(mapping)) {
@@ -1226,6 +1232,8 @@ const handleCatalog = (file) => {
     let overtime = 0;
     let periodStart = '';
     let periodEnd = '';
+    const feriadoFlag = norm(val('holidayFlag') || '');
+    const isFeriadoFlag = !!feriadoFlag && !['0', 'nao', 'não', 'no'].includes(feriadoFlag);
 
     // ✅ LÓGICA INTELIGENTE POR TIPO DE TEMPLATE
     const projectFromAC = val('projectNormal');
@@ -1235,9 +1243,17 @@ const handleCatalog = (file) => {
     const weekendProject = projectFromAH || '';
     const shiftedProject = projectFromAG || '';
 
+    if (isFeriadoFlag) {
+      template = 'Feriado';
+    }
+
+    const pickNormalProject = () => baseProject || weekendProject || shiftedProject || val('project');
+    const pickWeekendProject = () => weekendProject || baseProject || shiftedProject || val('project');
+    const pickShiftedProject = () => projectFromAG || weekendProject || baseProject || val('project');
+
     if (template.includes('Normal') || template.includes('normal')) {
       // TRABALHO NORMAL
-      project = baseProject || weekendProject || shiftedProject || val('project');
+      project = pickNormalProject();
       supervisor = val('supervisorNormal') || val('supervisor');
 
       const calcExtra = val('overtimeCalc');
@@ -1247,17 +1263,17 @@ const handleCatalog = (file) => {
       
     } else if (template.includes('Fim') || template.includes('FDS') || template.includes('semana')) {
       // FIM DE SEMANA
-      project = weekendProject || baseProject || shiftedProject || val('project');
+      project = pickWeekendProject();
       supervisor = val('supervisorWeekend') || val('supervisor');
 
-      const calcHours = val('weekendCalc');
+      const calcHours = val('weekendCalc') || val('overtimeCalc');
       if (calcHours) {
         hours = toNumber(calcHours);
       }
-      
+
     } else if (template.includes('Deslocad') || template.includes('deslocad')) {
       // TRABALHO DESLOCADO
-      project = shiftedProject || weekendProject || baseProject || val('project');
+      project = pickShiftedProject();
       supervisor = val('supervisorShifted') || val('supervisorNormal') || val('supervisor');
       
     } else if (template.includes('Férias') || template.includes('ferias')) {
@@ -1275,7 +1291,8 @@ const handleCatalog = (file) => {
       overtime = 0;
 
     } else if (template === 'Feriado') {
-      hours = 0;
+      project = pickWeekendProject();
+      hours = toNumber(val('weekendCalc') || val('overtimeCalc')) || 0;
       overtime = 0;
 
     } else if (template.includes('Falta') || template.includes('falta')) {
