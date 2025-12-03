@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 /* ---------- Helpers ---------- */
 const Icon=({name,className='w-5 h-5'})=>{
   const S={stroke:'currentColor',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'};
@@ -2480,7 +2480,24 @@ const MonthlyReportView = ({ timeEntries, people }) => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+  const monthInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedWorker, setSelectedWorker] = useState(null);
+
+  const monthCycleLabel = useMemo(() => {
+    const base = new Date(`${selectedMonth}-01T00:00:00`);
+    if (Number.isNaN(base.getTime())) return 'Período';
+
+    const prev = new Date(base);
+    prev.setMonth(prev.getMonth() - 1);
+
+    const fmt = (date: Date) =>
+      new Intl.DateTimeFormat('pt-PT', { month: 'short' })
+        .format(date)
+        .replace('.', '')
+        .toLowerCase();
+
+    return `${fmt(prev)}/${fmt(base)} ${base.getFullYear()}`;
+  }, [selectedMonth]);
 
   // Calcular estatísticas por colaborador
   const stats = useMemo(() => {
@@ -2668,12 +2685,30 @@ if (!byWorker.has(worker)) {
         Verificar Registos
       </Button>
 
-      <input
-        type="month"
-        value={selectedMonth}
-        onChange={(e) => setSelectedMonth(e.target.value)}
-        className="rounded-xl border p-2 text-sm dark:bg-slate-900 dark:border-slate-700"
-      />
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => {
+            const el = monthInputRef.current;
+            if (el?.showPicker) {
+              el.showPicker();
+            } else {
+              el?.click();
+            }
+          }}
+          className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium dark:bg-slate-900 dark:border-slate-700"
+        >
+          <span className="capitalize">{monthCycleLabel}</span>
+          <Icon name="calendar" className="w-4 h-4" />
+        </button>
+        <input
+          ref={monthInputRef}
+          type="month"
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(e.target.value)}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        />
+      </div>
       <Button variant="secondary" onClick={exportCSV}>
         <Icon name="download" /> Exportar CSV
       </Button>
