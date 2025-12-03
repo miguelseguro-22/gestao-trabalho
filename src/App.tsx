@@ -1339,6 +1339,7 @@ const handleCatalog = (file) => {
       overtime,
       periodStart,
       periodEnd,
+      sickDays,
       notes: val('notes')
     };
   }
@@ -2694,15 +2695,36 @@ const MonthlyReportView = ({ timeEntries, people }) => {
       }
 
       if (entry.template === 'Baixa') {
-        const start = new Date(entry.periodStart || entry.date);
-        const end = new Date(entry.periodEnd || entry.date);
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const ymd = d.toISOString().slice(0, 10);
-          const dow = d.getDay();
-          if (d >= startDate && d <= endDate && dow !== 0 && dow !== 6 && !holidaySet.has(ymd)) {
-            worker.sickLeave++;
+        const parseSafeDate = (iso?: string) => {
+          if (!iso) return null;
+          const d = new Date(iso);
+          return isNaN(d.getTime()) ? null : d;
+        };
+
+        const start =
+          parseSafeDate(entry.periodStart || entry.date) ||
+          parseSafeDate(entry.date);
+
+        let end = parseSafeDate(entry.periodEnd) || null;
+
+        if (!end && start && entry.sickDays) {
+          const tmp = new Date(start);
+          tmp.setDate(tmp.getDate() + Math.max(0, Number(entry.sickDays) || 0) - 1);
+          end = tmp;
+        }
+
+        const finalEnd = end || start;
+
+        if (start && finalEnd) {
+          for (let d = new Date(start); d <= finalEnd; d.setDate(d.getDate() + 1)) {
+            const ymd = d.toISOString().slice(0, 10);
+            const dow = d.getDay();
+            if (d >= startDate && d <= endDate && dow !== 0 && dow !== 6 && !holidaySet.has(ymd)) {
+              worker.sickLeave++;
+            }
           }
         }
+
         return;
       }
 
