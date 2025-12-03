@@ -2511,21 +2511,14 @@ if (!byWorker.has(worker)) {
 
       // ✅ ACEITAR QUALQUER VARIAÇÃO DE "TRABALHO NORMAL"
       if (isNormalWork(entry.template)) {
-  data.daysWorked.add(entry.date);
-  data.totalHours += Number(entry.hours) || 0;
   
-  const date = new Date(entry.date);
-  const dayOfWeek = date.getDay();
-  if (dayOfWeek === 0 || dayOfWeek === 6) {
-    data.totalOvertimeWeekend += (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
-  }
-}
-        // Verificar se é fim de semana
+      data.daysWorked.add(entry.date);
+        data.totalHours += Number(entry.hours) || 0;
+
         const date = new Date(entry.date);
         const dayOfWeek = date.getDay();
         if (dayOfWeek === 0 || dayOfWeek === 6) {
           data.totalOvertimeWeekend += (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
-          }
         }
       } else if (entry.template === 'Férias') {
         const start = new Date(entry.periodStart || entry.date);
