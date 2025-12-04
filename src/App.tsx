@@ -694,15 +694,30 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
   };
   const AUTO_KEYS={ date:['data','date','dia'], requestedAt:['data','pedido','data pedido','request date'],
     project:['projeto','project','obra','site'],
-    projectNormal:['obra trabalho normal','local de trabalho','obra ac','coluna ac','local obra (ac)'],
-    projectWeekend:['obra fim de semana','obra fds','fim de semana','obra ah','coluna ah','local obra (ah)'],
-    projectDisplaced:['deslocacao','deslocação','obra deslocada','local de deslocacao','local deslocação','coluna ag','local obra (ag)'],
+    projectNormal:['obra trabalho normal','local de trabalho','obra ac','coluna ac','local obra (ac)','local de trabalho obra'],
+    projectWeekend:['obra fim de semana','obra fds','fim de semana','obra ah','coluna ah','local obra (ah)','local fim de semana'],
+    projectDisplaced:['deslocacao','deslocação','obra deslocada','local de deslocacao','local deslocação','coluna ag','local obra (ag)','local de deslocacao (ag)'],
     supervisor:['encarregado','supervisor','chefe','lider'],
     hours:['horas','hours'], overtime:['extra','overtime','horas extra'], item:['item','material','produto'],
     qty:['quantidade','qty','qtd','quantity'], requestedBy:['requisitante','solicitante','quem pediu','requested by'],
     status:['estado','status','situação'], notes:['observações','notas','notes','obs'] };
-  const norm=(s)=>String(s||'').trim().toLowerCase();
-  const buildAutoMap=(headers)=>{const m={};const pick=k=>{const c=AUTO_KEYS[k]||[];const f=headers.find(h=>c.includes(norm(h)));if(f)m[k]=f;};Object.keys(AUTO_KEYS).forEach(pick);return m;};
+  const norm=(s)=>String(s||'')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g,' ')
+    .trim();
+  const buildAutoMap=(headers)=>{
+    const m={};
+    const headersNorm=headers.map(h=>({ raw:h, norm:norm(h) }));
+    const matches=(h,c)=>c.some(p=>h===p||h.includes(p)||p.includes(h));
+    const pick=k=>{
+      const c=AUTO_KEYS[k]||[];
+      const found=headersNorm.find(h=>matches(h.norm,c));
+      if(found) m[k]=found.raw;
+    };
+    Object.keys(AUTO_KEYS).forEach(pick);
+    return m;
+  };
 
   function parseCSV(text){
     const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
@@ -726,7 +741,7 @@ const handleCSV = (file) => {
     const parsed = parseCSV(text);
     setCsvPreview(parsed);
 
-    const auto = buildAutoMap(parsed.headers.map(h => norm(h)));
+    const auto = buildAutoMap(parsed.headers);
 
     // regra: em Materiais, "código" vem SEMPRE da coluna B (se existir)
     if (section === 'materials' && parsed.headers?.[1]) {
