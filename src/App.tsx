@@ -560,7 +560,12 @@ const CycleCalendar = ({ timeEntries, onDayClick }) => {
   },[start,end]);
   const wd = countWeekdaysInclusive(start, end);
   const isToday = (d) => { const t=new Date();t.setHours(0,0,0,0); const x=new Date(d);x.setHours(0,0,0,0); return t.getTime()===x.getTime(); };
-  const click = (d) => { if (onDayClick && d >= start && d <= end) onDayClick(d.toISOString().slice(0,10)); };
+  const click = (d) => {
+    if (!onDayClick || d < start || d > end) return;
+    const iso = d.toISOString().slice(0, 10);
+    const hasEntries = (dayTypes.get(iso)?.size || 0) > 0;
+    onDayClick(iso, hasEntries);
+  };
 
   return (
     <div className="space-y-3">
@@ -2767,18 +2772,6 @@ const visibleTimeEntries = React.useMemo(() => {
     };
   }, []);
 
-  if (!auth) {
-    return (
-      <LoginView
-        onLogin={(u) => {
-          setAuth(u);
-          setView(defaultViewForRole(u.role));
-        }}
-      />
-    );
-  }
-
-
 const visibleOrders = React.useMemo(() => {
   if (auth?.role === 'logistica' || auth?.role === 'admin') {
     return orders;
@@ -2810,8 +2803,11 @@ const TimesheetsView = () => (
       }
     />
     <Card className="p-4">
-      <CycleCalendar timeEntries={visibleTimeEntries}
-        onDayClick={(iso) => setModal({ name: 'day-actions', dateISO: iso })}
+      <CycleCalendar
+        timeEntries={visibleTimeEntries}
+        onDayClick={(iso, hasEntries) => {
+          setModal({ name: hasEntries ? 'day-details' : 'day-actions', dateISO: iso });
+        }}
       />
     </Card>
 
@@ -3159,6 +3155,18 @@ const DashboardView = () => (
   const openReport = (p) => {
     if (can('obraReport')) { setProjectFocus(p); setView('obra-report'); }
   };
+
+
+  if (!auth) {
+    return (
+      <LoginView
+        onLogin={(u) => {
+          setAuth(u);
+          setView(defaultViewForRole(u.role));
+        }}
+      />
+    );
+  }
 
 
   return(
