@@ -670,7 +670,10 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     timesheets:[
       {k:'template',label:'template (Trabalho Normal/Férias/Baixa/Falta)',opt:true},
       {k:'date',label:'data (yyyy-mm-dd)'},
-      {k:'project',label:'projeto/obra',opt:true},
+      {k:'project',label:'obra (fallback genérico)',opt:true},
+      {k:'projectNormal',label:'obra Trabalho Normal (coluna AC)',opt:true},
+      {k:'projectWeekend',label:'obra Trabalho Fim de Semana (coluna AH)',opt:true},
+      {k:'projectDisplaced',label:'obra Deslocada (coluna AG)',opt:true},
       {k:'supervisor',label:'encarregado',opt:true},
       {k:'hours',label:'horas',opt:true},
       {k:'overtime',label:'extra',opt:true},
@@ -690,7 +693,11 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     ]
   };
   const AUTO_KEYS={ date:['data','date','dia'], requestedAt:['data','pedido','data pedido','request date'],
-    project:['projeto','project','obra','site'], supervisor:['encarregado','supervisor','chefe','lider'],
+    project:['projeto','project','obra','site'],
+    projectNormal:['obra trabalho normal','local de trabalho','obra ac','coluna ac','local obra (ac)'],
+    projectWeekend:['obra fim de semana','obra fds','fim de semana','obra ah','coluna ah','local obra (ah)'],
+    projectDisplaced:['deslocacao','deslocação','obra deslocada','local de deslocacao','local deslocação','coluna ag','local obra (ag)'],
+    supervisor:['encarregado','supervisor','chefe','lider'],
     hours:['horas','hours'], overtime:['extra','overtime','horas extra'], item:['item','material','produto'],
     qty:['quantidade','qty','qtd','quantity'], requestedBy:['requisitante','solicitante','quem pediu','requested by'],
     status:['estado','status','situação'], notes:['observações','notas','notes','obs'] };
@@ -952,7 +959,18 @@ const handleCatalog = (file) => {
       const date=normalizeDate(val('date'));
       const periodStart=normalizeDate(val('periodStart'));
       const periodEnd=normalizeDate(val('periodEnd'));
-      return {id:uid(),template,date,project:val('project'),supervisor:val('supervisor'),hours:toNumber(val('hours')),overtime:toNumber(val('overtime')),periodStart,periodEnd,notes:val('notes')};
+      const projectNormal=val('projectNormal');
+      const projectWeekend=val('projectWeekend');
+      const projectDisplaced=val('projectDisplaced');
+      const projectFallback=val('project');
+      const isWeekend=(()=>{
+        if(date){const dow=new Date(date).getDay(); if(dow===0||dow===6) return true;}
+        return /fim\s*de\s*semana|fds/i.test(template);
+      })();
+      const project=isWeekend
+        ? (projectWeekend||projectNormal||projectFallback||projectDisplaced||'')
+        : (projectNormal||projectFallback||projectWeekend||projectDisplaced||'');
+      return {id:uid(),template,date,project,supervisor:val('supervisor'),hours:toNumber(val('hours')),overtime:toNumber(val('overtime')),periodStart,periodEnd,notes:val('notes')};
     }
     if(section==='materials'){
       return { requestedAt:normalizeDate(val('requestedAt'))||todayISO(), project:val('project'),
