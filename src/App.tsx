@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { supabase, supabaseReady } from './lib/supabaseClient'
+﻿import React, { useState, useEffect, useMemo } from 'react';
+// ... (resto dos imports que o teu projeto usa)
+
+
+
 /* ---------- Helpers ---------- */
 const Icon=({name,className='w-5 h-5'})=>{
   const S={stroke:'currentColor',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'};
@@ -32,32 +35,9 @@ case 'building':return<svg viewBox="0 0 24 24" className={className}><rect {...S
     default:return null;
   }
 };
-
-
-// ---------------------------------------------------------------
-// 🧭 COMPONENTE DE NAVEGAÇÃO
-// ---------------------------------------------------------------
-function NavItem({ 
-  id, 
-  icon, 
-  label, 
-  setView 
-}: { 
-  id: string; 
-  icon: string; 
-  label: string; 
-  setView: (v: any) => void; 
-}) {
-  return (
-    <button
-      onClick={() => setView(id)}
-      className="flex items-center gap-3 w-full px-3 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition"
-    >
-      <Icon name={icon} className="w-5 h-5" />
-      <span className="text-sm">{label}</span>
-    </button>
-  );
-}
+// 💸 RH por colaborador
+const DEFAULT_HOURLY_RATE = 12.5;
+const DEFAULT_OT_MULTIPLIER = 1.5;
 
 // ===== People: migração e util =====
 const migratePeople = (src) => {
@@ -70,6 +50,8 @@ const migratePeople = (src) => {
   }
   return out;
 };
+
+// devolve as 4 taxas com fallback sensato
 const personRates = (people, name, prefs) => {
   const p = people?.[name];
   const r = p?.rates;
@@ -82,119 +64,26 @@ const personRates = (people, name, prefs) => {
 
 const currency=n=>new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'}).format(n||0);
 
-// ✅ NORMALIZAR TEMPLATES
-const normalizeTemplate = (template) => {
-  if (!template) return 'Trabalho Normal';
-  
-  const t = String(template).toLowerCase().trim();
-  
-  if (t.includes('trabalho') || t.includes('normal') || t.includes('horário')) {
-    return 'Trabalho Normal';
-  }
-  if (t.includes('férias') || t.includes('ferias')) {
-    return 'Férias';
-  }
-  if (t.includes('baixa')) {
-    return 'Baixa';
-  }
-  if (t.includes('falta')) {
-    return 'Falta';
-  }
-  if (t.includes('fim') || t.includes('fds') || t.includes('semana')) {
-    return 'Trabalho FDS';
-  }
-  if (t.includes('deslocad')) {
-    return 'Trabalho Deslocado';
-  }
-  
-  return template; // retorna original se não reconhecer
-};
-
-// ✅ VERIFICAR SE É TRABALHO NORMAL
-const isNormalWork = (template) => {
-  const t = String(template || '').toLowerCase();
-  return t.includes('trabalho') || t.includes('normal') || t.includes('horário');
-};
-
+// Requisitantes fixos
 const REQUESTER_SUGGESTIONS = ['Paulo Silva','Paulo Carujo','Hélder Pinto','António Sousa','André Sequeira','Alexandre Pires','Laura Luz','Márcio Batista','Cláudio Alves','José Duarte'];
 
 const uid=()=>Math.random().toString(36).slice(2,9);
 const todayISO=()=>new Date().toISOString().slice(0,10);
-const fmtDate = (d) => {
-  const parsed = new Date(d);
-  if (!d || Number.isNaN(parsed.getTime())) return 'Data inválida';
-  return parsed.toLocaleDateString('pt-PT');
-};
+const fmtDate=d=>new Date(d).toLocaleDateString('pt-PT');
 const mondayIndex=date=>(date.getDay()+6)%7;
 const startOfWeek=d=>{const x=new Date(d);const i=mondayIndex(x);x.setDate(x.getDate()-i);x.setHours(0,0,0,0);return x;};
 function getCycle(offset=0){const now=new Date();const endMonthRaw=now.getMonth()+offset;const endYear=now.getFullYear()+Math.floor(endMonthRaw/12);const endMonth=((endMonthRaw%12)+12)%12;const end=new Date(endYear,endMonth,20);end.setHours(23,59,59,999);let startMonth=endMonth-1,startYear=endYear;if(startMonth<0){startMonth=11;startYear--}const start=new Date(startYear,startMonth,21);start.setHours(0,0,0,0);return{start,end}}
 
+// CSV utils
 const LS_KEY='wm_platform_import_v1';
 const loadState=()=>{try{const raw=localStorage.getItem(LS_KEY);if(!raw)return null;const s=JSON.parse(raw);if(Array.isArray(s.activity))s.activity=s.activity.map(a=>({...a,ts:new Date(a.ts)}));return s}catch{return null}};
 const saveState=(state)=>{try{localStorage.setItem(LS_KEY,JSON.stringify(state))}catch{}};
 const clearState=()=>{try{localStorage.removeItem(LS_KEY)}catch{}};
-
-const CLOUD_STATE_TABLE='app_state'
-const CLOUD_ROW_ID=import.meta.env.VITE_CLOUD_ROW_ID||'shared'
-const fetchCloudState=async(rowId:string=CLOUD_ROW_ID)=>{
-  if(!supabaseReady||!supabase)return null
-  try{
-    const {data,error}=await supabase
-      .from(CLOUD_STATE_TABLE)
-      .select('payload,updated_at')
-      .eq('id',rowId)
-      .single()
-    if(error){
-      console.warn('Falha a carregar estado da cloud',error)
-      return null
-    }
-    return {payload:data?.payload||null,updatedAt:data?.updated_at||null}
-  }catch(err){
-    console.warn('Erro inesperado ao carregar estado da cloud',err)
-    return null
-  }
-}
-const saveCloudState=async(payload,rowId:string=CLOUD_ROW_ID)=>{
-  if(!supabaseReady||!supabase)return
-  try{
-    const updatedAt=payload?.updatedAt||new Date().toISOString()
-    await supabase.from(CLOUD_STATE_TABLE).upsert({id:rowId,payload,updated_at:updatedAt})
-  }catch(err){
-    console.warn('Falha ao gravar estado na cloud',err)
-  }
-}
 const toCSV=(headers,rows)=>{const esc=v=>`"${String(v??'').replace(/"/g,'""')}"`;return[headers.join(','),...rows.map(r=>r.map(esc).join(','))].join('\r\n')};
 const download=(filename,content,mime='text/csv')=>{const blob=new Blob([content],{type:mime});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url)};
 const guessDelimiter=line=>{const sc=(line.match(/;/g)||[]).length,cc=(line.match(/,/g)||[]).length;return sc>cc?';':','};
 function splitCSVLine(line,delim){const cells=[];let cur='',inQ=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch=='"'){ if(inQ&&line[i+1]=='"'){cur+='"';i++;} else inQ=!inQ; } else if(ch===delim && !inQ){cells.push(cur);cur='';} else cur+=ch;}cells.push(cur);return cells.map(c=>c.trim());}
 function parseCatalogCSV(text){const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l=>l.trim());if(!lines.length)return[];const delim=guessDelimiter(lines[0]);return lines.map(ln=>splitCSVLine(ln,delim));}
-
-
-function orderToEmailText(o, priceOf, codeOf) {
-  const linhas = o.items.map(it => {
-    const p   = priceOf(it.name);
-    const c   = codeOf(it.name, o.project) || '';
-    const qty = Number(it.qty) || 0;
-    const sub = p * qty;
-
-    return `- ${it.name}${c ? ` [${c}]` : ''} × ${qty} @ ${p.toFixed(2)}€ = ${sub.toFixed(2)}€`;
-  });
-
-  const total = o.items.reduce(
-    (s, it) => s + priceOf(it.name) * (Number(it.qty) || 0),
-    0
-  );
-
-  return [
-    `Pedido de Material — ${o.project}`,
-    `Requisitante: ${o.requestedBy || '—'} · Data: ${o.requestedAt}`,
-    ``,
-    ...linhas,
-    ``,
-    `Total estimado: ${total.toFixed(2)} €`,
-    o.notes ? `Notas: ${o.notes}` : ''
-  ].join('\n');
-}
 
 
 
@@ -212,196 +101,23 @@ function printOrderHTML(o, priceOf, codeOf){
     </tr>`;
   }).join('');
 
-  const total = o.items.reduce((s,it)=>s+priceOf(it.name)*(Number(it.qty)||0),0);
-
-return `<!doctype html><html><head><meta charset="utf-8"/><title>Pedido ${o.id}</title><style>body{font-family:system-ui,Arial;padding:24px;color:#0f172a}h1{margin:0 0 12px 0;font-size:20px}.meta{margin-bottom:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #cbd5e1;padding:8px}th{text-align:left;background:#f8fafc}.right{text-align:right}</style></head><body><h1>Pedido de Material</h1><div class="meta"><div><b>Obra:</b> ${o.project}</div><div><b>Requisitante:</b> ${o.requestedBy||'—'}</div><div><b>Data:</b> ${o.requestedAt}</div><div><b>ID:</b> ${o.id}</div>${o.notes?`<div style="grid-column:span 2"><b>Notas:</b> ${o.notes}</div>`:''}</div><table><tr><th>Item</th><th>Código</th><th class="right">Qtd</th><th class="right">Preço</th><th class="right">Subtotal</th></tr>${rows}<tr><th colspan="4" class="right">Total</th><th class="right">${total.toFixed(2)} €</th></tr></table></body></html>`;
-}
-
-function printTimesheetReportHTML({ worker, cycle, rows }) {
-  const fmt = fmtDate;
-  const totalExtras = rows.reduce((s,r)=>s+(r.extras||0),0);
-  const uteis  = rows.filter(r=>!['Sábado','Domingo'].includes(r.dia)).length;
-  const fds    = rows.length - uteis;
-  const ferias = rows.filter(r=>r.situ==='Férias').length;
-  const baixas = rows.filter(r=>r.situ==='Baixa').length;
-  const semReg = rows.filter(r=>r.situ==='Sem Registo').length;
-  const trs = rows.map(r=>`<tr><td>${fmt(r.data)}</td><td>${r.dia}</td><td>${r.situ}</td><td style="text-align:right">${r.horas||'—'}</td><td style="text-align:right">${r.extras||'—'}</td><td>${r.local}</td></tr>`).join('');
-  return `<!doctype html><html><head><meta charset="utf-8"/><title>Resumo do Registo — ${worker||'Colaborador'}</title><style>body { font-family: system-ui, Arial, sans-serif; padding: 24px; color:#0f172a }h1 { margin:0 0 12px 0; font-size:20px }.muted{color:#64748b}table{ width:100%; border-collapse:collapse; margin-top:16px }th,td{ padding:8px 10px; border-bottom:1px solid #e2e8f0; font-size:12px }th{text-align:left; background:#f8fafc}.box{ margin-top:16px; padding:12px; border:1px solid #e2e8f0; border-radius:10px }.grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px }</style></head><body><h1>Resumo do Registo: ${fmt(cycle.start)} - ${fmt(cycle.end)}</h1><div class="muted">Olá ${worker||'—'}, segue abaixo o resumo do seu registo das horas.</div><table><tr><th>Data</th><th>Dia da Semana</th><th>Situação Atual</th><th>Horas</th><th>Extras</th><th>Local de Trabalho</th></tr>${trs}</table><div class="box grid"><div><b>Total de dias úteis:</b> ${uteis}</div><div><b>Dias de fim de semana:</b> ${fds}</div><div><b>Feriados:</b> 0</div><div><b>Baixas:</b> ${baixas}</div><div><b>Férias:</b> ${ferias}</div><div><b>Dias sem registo:</b> ${semReg}</div><div><b>Total de horas extras:</b> ${totalExtras}h</div></div></body></html>`;
-}
-
-
-  // ---------------------------------------------------------------
-// 📊 CONSTRUIR LINHAS DO RELATÓRIO POR DIA
-// ---------------------------------------------------------------
-function buildTimesheetCycleRows({ worker, timeEntries, cycle }) {
-  const { start, end } = cycle;
-  const rows = [];
-  const dayName = d => d.toLocaleDateString('pt-PT', { weekday: 'long' });
-
-  const byDay = new Map();
-  for (const t of timeEntries) {
-    if (worker && t.worker && t.worker !== worker) continue;
-    
-    const dates = (t.template === 'Férias' || t.template === 'Baixa')
-      ? (() => {
-          const a = new Date(t.periodStart || t.date);
-          const b = new Date(t.periodEnd || t.date);
-          a.setHours(0, 0, 0, 0);
-          b.setHours(0, 0, 0, 0);
-          const out = [];
-          for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
-            out.push(d.toISOString().slice(0, 10));
-          }
-          return out;
-        })()
-      : [new Date(t.date).toISOString().slice(0, 10)];
-
-    for (const iso of dates) {
-      if (!byDay.has(iso)) byDay.set(iso, []);
-      byDay.get(iso).push(t);
-    }
-  }
-
-  const cur = new Date(start);
-  cur.setHours(0, 0, 0, 0);
-  const last = new Date(end);
-  last.setHours(0, 0, 0, 0);
-  
-  while (cur <= last) {
-    const iso = cur.toISOString().slice(0, 10);
-    const dow = cur.getDay();
-    const weekend = (dow === 0 || dow === 6);
-
-    let situ = weekend ? 'Fim de Semana' : 'Sem Registo';
-    let horas = 0, extras = 0, local = '—';
-
-    const reg = byDay.get(iso) || [];
-    if (reg.length) {
-      const t = reg[0];
-      if (t.template === 'Trabalho Normal') {
-        situ = 'Trabalho - Horário Normal';
-        horas = Number(t.hours || 0);
-        extras = Number(t.overtime || 0);
-        local = t.project || '—';
-      } else if (t.template === 'Férias') {
-        situ = 'Férias';
-      } else if (t.template === 'Baixa') {
-        situ = 'Baixa';
-      } else if (t.template === 'Falta') {
-        situ = 'Falta';
-      }
-    }
-
-    const diaFormatado = dayName(cur);
-    rows.push({
-      data: iso,
-      dia: diaFormatado.charAt(0).toUpperCase() + diaFormatado.slice(1),
-      situ,
-      horas,
-      extras,
-      local
-    });
-
-    cur.setDate(cur.getDate() + 1);
-  }
-
-  return rows;
-}
-
-// ---------------------------------------------------------------
-// 📊 GERAR RELATÓRIO PESSOAL EM HTML
-// ---------------------------------------------------------------
-function generatePersonalTimesheetReport({ worker, timeEntries, cycle }) {
-  const { start, end } = cycle;
-  const rows = buildTimesheetCycleRows({ worker, timeEntries, cycle });
-
-  const fmt = fmtDate;
-  
-  const totalExtras = rows.reduce((s, r) => s + (r.extras || 0), 0);
-  const uteis = rows.filter(r => !['Sábado', 'Domingo'].includes(r.dia)).length;
-  const fds = rows.filter(r => ['Sábado', 'Domingo'].includes(r.dia)).length;
-  const feriados = rows.filter(r => r.situ === 'Feriado').length;
-  const ferias = rows.filter(r => r.situ === 'Férias').length;
-  const baixas = rows.filter(r => r.situ === 'Baixa').length;
-  const semReg = rows.filter(r => r.situ === 'Sem Registo' && !['Sábado', 'Domingo'].includes(r.dia)).length;
-
-  const diasPorPreencher = rows.filter(r => 
-    r.situ === 'Sem Registo' && 
-    !['Sábado', 'Domingo'].includes(r.dia)
-  );
-
-  const detalheDiario = rows.map(r => {
-    const isUtilSemReg = r.situ === 'Sem Registo' && !['Sábado', 'Domingo'].includes(r.dia);
-    const bgColor = isUtilSemReg ? 'background: #fef3c7;' : '';
-    return `<tr style="${bgColor}">
-      <td style="padding:8px;border-bottom:1px solid #e5e7eb">${fmt(r.data)}</td>
-      <td style="padding:8px;border-bottom:1px solid #e5e7eb">${r.dia}</td>
-      <td style="padding:8px;border-bottom:1px solid #e5e7eb">${r.situ}</td>
-      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">${r.horas || '—'}</td>
-      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">${r.extras || '—'}</td>
-      <td style="padding:8px;border-bottom:1px solid #e5e7eb">${r.local}</td>
-    </tr>`;
-  }).join('');
-
-  const tabelaPorPreencher = diasPorPreencher.length > 0 ? `
-    <div style="margin-bottom:24px;padding:16px;background:#fef3c7;border-radius:8px;border-left:4px solid #f59e0b">
-      <h2 style="margin:0 0 12px 0;font-size:16px;color:#92400e">POR PREENCHER — ${diasPorPreencher.length} dias</h2>
-      <p style="margin:0 0 12px 0;font-size:14px;color:#78350f;font-weight:600">Dias por preencher</p>
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="background:#fbbf24;color:#78350f">
-          <th style="padding:8px;text-align:left;font-weight:600;font-size:12px">Data</th>
-          <th style="padding:8px;text-align:left;font-weight:600;font-size:12px">Dia da Semana</th>
-        </tr></thead>
-        <tbody>${diasPorPreencher.map(r => `
-          <tr>
-            <td style="padding:6px 8px;font-size:12px;color:#78350f">${fmt(r.data)}</td>
-            <td style="padding:6px 8px;font-size:12px;color:#78350f">${r.dia}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>` : '';
-
-  return `<!doctype html>
-<html><head><meta charset="utf-8"/><title>Resumo do Registo</title>
-<style>
-body{font-family:system-ui,Arial;padding:40px;color:#0f172a;max-width:900px;margin:0 auto;background:#f8fafc}
-.container{background:#fff;padding:32px;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
-h1{margin:0 0 8px 0;font-size:24px}
-.subtitle{color:#64748b;font-size:16px;margin-bottom:24px}
-.greeting{font-size:14px;color:#64748b;margin-bottom:32px}
-h2{font-size:18px;margin:32px 0 16px 0;color:#1e293b;border-bottom:2px solid #e2e8f0;padding-bottom:8px}
-table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}
-th{text-align:left;background:#f1f5f9;padding:10px 8px;font-weight:600;color:#475569;border-bottom:2px solid #cbd5e1}
-td{padding:8px;border-bottom:1px solid #e5e7eb}
-.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:24px}
-.stat-box{padding:16px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0}
-.stat-label{font-size:12px;color:#64748b;margin-bottom:4px}
-.stat-value{font-size:24px;font-weight:700;color:#0f172a}
-.legend{margin-top:24px;padding:12px 16px;background:#fef3c7;border-radius:8px;font-size:12px;color:#78350f;border-left:4px solid #f59e0b}
-@media print{body{padding:20px;background:#fff}.container{box-shadow:none}}
-</style></head><body><div class="container">
-<h1>Resumo do Registo</h1>
-<div class="subtitle">${fmt(start)} - ${fmt(end)}</div>
-<div class="greeting">Olá <strong>${worker || '—'}</strong>,</div>
-${tabelaPorPreencher}
-<h2>Detalhe diário</h2>
-<table><thead><tr>
-<th>Data</th><th>Dia da Semana</th><th>Situação Atual</th>
-<th style="text-align:right">Horas</th><th style="text-align:right">Extras</th>
-<th>Local de Trabalho</th>
-</tr></thead><tbody>${detalheDiario}</tbody></table>
-<h2>Resumo Estatístico</h2>
-<div class="stats-grid">
-<div class="stat-box"><div class="stat-label">Total de dias úteis</div><div class="stat-value">${uteis}</div></div>
-<div class="stat-box"><div class="stat-label">Dias de fim de semana</div><div class="stat-value">${fds}</div></div>
-<div class="stat-box"><div class="stat-label">Feriados</div><div class="stat-value">${feriados}</div></div>
-<div class="stat-box"><div class="stat-label">Baixas</div><div class="stat-value">${baixas}</div></div>
-<div class="stat-box"><div class="stat-label">Férias</div><div class="stat-value">${ferias}</div></div>
-<div class="stat-box"><div class="stat-label">Dias por preencher</div><div class="stat-value">${semReg}</div></div>
-<div class="stat-box" style="grid-column:span 3"><div class="stat-label">Total de horas extra</div><div class="stat-value">${totalExtras}h</div></div>
-</div>
-<div class="legend"><strong>Legenda:</strong> linhas a amarelo = dias úteis sem registo.</div>
-</div></body></html>`;
+  function orderToEmailText(o, priceOf, codeOf) {
+  const linhas = o.items.map(it=>{
+    const p = priceOf(it.name);
+    const c = codeOf(it.name, o.project) || '';
+    const sub = p * (Number(it.qty)||0);
+    return `- ${it.name}${c?` [${c}]`:''} × ${it.qty} @ ${p.toFixed(2)}€ = ${sub.toFixed(2)}€`;
+  });
+  const total = o.items.reduce((s,it)=> s + priceOf(it.name)*(Number(it.qty)||0), 0);
+  return [
+    `Pedido de Material — ${o.project}`,
+    `Requisitante: ${o.requestedBy||'—'} · Data: ${o.requestedAt}`,
+    ``,
+    ...linhas,
+    ``,
+    `Total estimado: ${total.toFixed(2)} €`,
+    o.notes ? `Notas: ${o.notes}` : ''
+  ].join('\n');
 }
 
 function openPrintWindow(html) {
@@ -415,6 +131,7 @@ function openPrintWindow(html) {
       return true;
     }
   } catch {}
+  // Fallback: descarrega o HTML se a popup for bloqueada
   try {
     const blob = new Blob([html], { type: 'text/html' });
     const url  = URL.createObjectURL(blob);
@@ -428,6 +145,126 @@ function openPrintWindow(html) {
 }
 
 
+
+function buildTimesheetCycleRows({ worker, timeEntries, cycle }) {
+  const { start, end } = cycle;
+  const rows = [];
+  const dayName = d => d.toLocaleDateString('pt-PT', { weekday: 'long' });
+
+  // index por dia (para acesso rápido)
+  const byDay = new Map();
+  for (const t of timeEntries) {
+    if (worker && t.worker && t.worker !== worker) continue;
+    const dates = (t.template==='Férias' || t.template==='Baixa')
+      ? (() => {
+          const a = new Date(t.periodStart || t.date);
+          const b = new Date(t.periodEnd   || t.date);
+          a.setHours(0,0,0,0); b.setHours(0,0,0,0);
+          const out = [];
+          for (let d=new Date(a); d<=b; d.setDate(d.getDate()+1)) out.push(d.toISOString().slice(0,10));
+          return out;
+        })()
+      : [new Date(t.date).toISOString().slice(0,10)];
+
+    for (const iso of dates) {
+      if (!byDay.has(iso)) byDay.set(iso, []);
+      byDay.get(iso).push(t);
+    }
+  }
+
+  // varrer dia-a-dia
+  const cur = new Date(start); cur.setHours(0,0,0,0);
+  const last = new Date(end);  last.setHours(0,0,0,0);
+  while (cur <= last) {
+    const iso = cur.toISOString().slice(0,10);
+    const dow = cur.getDay();
+    const weekend = (dow === 0 || dow === 6);
+
+    let situ = weekend ? 'Fim de Semana' : 'Sem Registo';
+    let horas = 0, extras = 0, local = '—';
+
+    const reg = byDay.get(iso) || [];
+    if (reg.length) {
+      const t = reg[0];
+      if (t.template === 'Trabalho Normal') {
+        situ  = 'Trabalho - Horário Normal';
+        horas = Number(t.hours||0);
+        extras= Number(t.overtime||0);
+        local = t.project || '—';
+      } else if (t.template === 'Férias') {
+        situ = 'Férias';
+      } else if (t.template === 'Baixa') {
+        situ = 'Baixa';
+      } else if (t.template === 'Falta') {
+        situ = 'Falta';
+      }
+    }
+
+    rows.push({
+      data: iso,
+      dia: dayName(cur).charAt(0).toUpperCase() + dayName(cur).slice(1),
+      situ, horas, extras, local
+    });
+
+    cur.setDate(cur.getDate()+1);
+  }
+
+  return rows;
+}
+
+function printTimesheetReportHTML({ worker, cycle, rows }) {
+  const fmt = iso => new Date(iso).toLocaleDateString('pt-PT');
+  const totalExtras = rows.reduce((s,r)=>s+(r.extras||0),0);
+
+  const uteis  = rows.filter(r=>!['Sábado','Domingo'].includes(r.dia)).length;
+  const fds    = rows.length - uteis;
+  const ferias = rows.filter(r=>r.situ==='Férias').length;
+  const baixas = rows.filter(r=>r.situ==='Baixa').length;
+  const semReg = rows.filter(r=>r.situ==='Sem Registo').length;
+
+  const trs = rows.map(r=>`
+    <tr>
+      <td>${fmt(r.data)}</td>
+      <td>${r.dia}</td>
+      <td>${r.situ}</td>
+      <td style="text-align:right">${r.horas||'—'}</td>
+      <td style="text-align:right">${r.extras||'—'}</td>
+      <td>${r.local}</td>
+    </tr>
+  `).join('');
+
+  return `<!doctype html><html><head><meta charset="utf-8"/>
+  <title>Resumo do Registo — ${worker||'Colaborador'}</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; padding: 24px; color:#0f172a }
+    h1 { margin:0 0 12px 0; font-size:20px }
+    .muted{color:#64748b}
+    table{ width:100%; border-collapse:collapse; margin-top:16px }
+    th,td{ padding:8px 10px; border-bottom:1px solid #e2e8f0; font-size:12px }
+    th{text-align:left; background:#f8fafc}
+    .box{ margin-top:16px; padding:12px; border:1px solid #e2e8f0; border-radius:10px }
+    .grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px }
+  </style></head><body>
+    <h1>Resumo do Registo: ${fmt(cycle.start)} - ${fmt(cycle.end)}</h1>
+    <div class="muted">Olá ${worker||'—'}, segue abaixo o resumo do seu registo das horas.</div>
+
+    <table>
+      <tr><th>Data</th><th>Dia da Semana</th><th>Situação Atual</th><th>Horas</th><th>Extras</th><th>Local de Trabalho</th></tr>
+      ${trs}
+    </table>
+
+    <div class="box grid">
+      <div><b>Total de dias úteis:</b> ${uteis}</div>
+      <div><b>Dias de fim de semana:</b> ${fds}</div>
+      <div><b>Feriados:</b> 0</div>
+      <div><b>Baixas:</b> ${baixas}</div>
+      <div><b>Férias:</b> ${ferias}</div>
+      <div><b>Dias sem registo:</b> ${semReg}</div>
+      <div><b>Total de horas extras:</b> ${totalExtras}h</div>
+    </div>
+  </body></html>`;
+}
+
 // (opcional) CSV — renomeada para não colidir
 function exportTimesheetCycleCSV(entries = []) {
   const { start, end } = getCycle(0);
@@ -435,9 +272,73 @@ function exportTimesheetCycleCSV(entries = []) {
   const rows = (entries||[])
     .filter(t => t.template === 'Trabalho Normal' && inRange(t.date))
     .map(t => [t.date, t.worker || t.supervisor || '', t.project || '', Number(t.hours)||0, Number(t.overtime)||0]);
-  const csv = toCSV(['Data','Colaborador','Obra','Horas','Extra'], rows);
+  const csv = toCSV(['Data','Colaborador','Projeto','Horas','Extra'], rows);
   download(`relatorio_timesheets_${todayISO()}.csv`, csv);
 }
+
+// HTML imprimível — esta é a que o botão deve chamar
+function printTimesheetCycleReport(entries = []) {
+  const { start, end } = getCycle(0);
+  const inRange = (iso) => {
+    if (!iso) return false;
+    const d = new Date(iso); d.setHours(0,0,0,0);
+    const a = new Date(start), b = new Date(end);
+    a.setHours(0,0,0,0); b.setHours(0,0,0,0);
+    return d >= a && d <= b;
+  };
+
+  const rows = (entries||[])
+    .filter(t => t.template === 'Trabalho Normal' && inRange(t.date))
+    .sort((a,b) =>
+      (a.date||'').localeCompare(b.date||'') ||
+      (a.worker||a.supervisor||'').localeCompare(b.worker||b.supervisor||'')
+    );
+
+  const totH  = rows.reduce((s,t)=> s + (Number(t.hours)||0), 0);
+  const totOT = rows.reduce((s,t)=> s + (Number(t.overtime)||0), 0);
+
+  const tr = rows.map(t => `
+    <tr>
+      <td>${t.date||'—'}</td>
+      <td>${t.worker||t.supervisor||'—'}</td>
+      <td>${t.project||'—'}</td>
+      <td style="text-align:right">${Number(t.hours||0).toFixed(2)}</td>
+      <td style="text-align:right">${Number(t.overtime||0).toFixed(2)}</td>
+      <td>${t.notes ? String(t.notes).replace(/</g,'&lt;') : ''}</td>
+    </tr>
+  `).join('');
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"/>
+  <title>Registo de Horas — ${start.toLocaleDateString('pt-PT')} a ${end.toLocaleDateString('pt-PT')}</title>
+  <style>
+    body{font:14px/1.4 system-ui,Segoe UI,Roboto,Arial;padding:24px;color:#0f172a}
+    h1{margin:0 0 8px;font-size:20px}
+    .muted{color:#64748b;margin-bottom:14px}
+    table{width:100%;border-collapse:collapse}
+    th,td{border:1px solid #cbd5e1;padding:8px}
+    th{text-align:left;background:#f8fafc}
+    tfoot td{font-weight:600;background:#f1f5f9}
+    .right{text-align:right}
+  </style></head><body>
+    <h1>Registo de Horas (ciclo 21→20)</h1>
+    <div class="muted">${start.toLocaleDateString('pt-PT')} – ${end.toLocaleDateString('pt-PT')}</div>
+    <table>
+      <thead>
+        <tr><th>Data</th><th>Colaborador</th><th>Projeto</th><th class="right">Horas</th><th class="right">Extra</th><th>Obs.</th></tr>
+      </thead>
+      <tbody>${tr || '<tr><td colspan="6" style="text-align:center;color:#64748b">Sem registos no intervalo.</td></tr>'}</tbody>
+      <tfoot>
+        <tr><td colspan="3" class="right">Totais</td><td class="right">${totH.toFixed(2)}</td><td class="right">${totOT.toFixed(2)}</td><td></td></tr>
+      </tfoot>
+    </table>
+  </body></html>`;
+
+  openPrintWindow(html);
+}
+
+
+
+
 
 // ---- RELATÓRIO: Registo de horas do ciclo 21→20 ----
 function printTimesheetCycleReport(entries = []) {
@@ -450,6 +351,7 @@ function printTimesheetCycleReport(entries = []) {
     return d >= a && d <= b;
   };
 
+  // só “Trabalho Normal” (ajusta se quiseres incluir Férias/Baixa/Falta)
   const rows = entries
     .filter(t => t.template === 'Trabalho Normal' && inRange(t.date))
     .sort((a,b) =>
@@ -487,7 +389,7 @@ function printTimesheetCycleReport(entries = []) {
     <div class="muted">${start.toLocaleDateString('pt-PT')} – ${end.toLocaleDateString('pt-PT')}</div>
     <table>
       <thead>
-        <tr><th>Data</th><th>Colaborador</th><th>Obra</th><th class="right">Horas</th><th class="right">Extra</th><th>Obs.</th></tr>
+        <tr><th>Data</th><th>Colaborador</th><th>Projeto</th><th class="right">Horas</th><th class="right">Extra</th><th>Obs.</th></tr>
       </thead>
       <tbody>${tr || '<tr><td colspan="6" style="text-align:center;color:#64748b">Sem registos no intervalo.</td></tr>'}</tbody>
       <tfoot>
@@ -503,14 +405,42 @@ function printTimesheetCycleReport(entries = []) {
   setTimeout(()=>{ try{ w.print(); }catch{} }, 100);
 }
 
+
+
+  const total = o.items.reduce((s,it)=>s+priceOf(it.name)*(Number(it.qty)||0),0);
+
+  return `<!doctype html><html><head><meta charset="utf-8"/>
+  <title>Pedido ${o.id}</title>
+  <style>/* estilos iguais aos de cima */</style>
+  </head><body>
+    <!-- conteúdo igual ao de cima, sem a tag <script> -->
+    <h1>Pedido de Material</h1>
+    <div class="meta">
+      <div><b>Projeto:</b> ${o.project}</div>
+      <div><b>Requisitante:</b> ${o.requestedBy||'—'}</div>
+      <div><b>Data:</b> ${o.requestedAt}</div>
+      <div><b>ID:</b> ${o.id}</div>
+      ${o.notes?`<div><b>Notas:</b> ${o.notes}</div>`:''}
+    </div>
+    <table>
+      <tr><th>Item</th><th>Código</th><th class="right">Qtd</th><th class="right">Preço</th><th class="right">Subtotal</th></tr>
+      ${rows}
+      <tr><th colspan="4" class="right">Total</th><th class="right">${total.toFixed(2)} €</th></tr>
+    </table>
+  </body></html>`;
+}
+
 function printOrder(o, priceOf, codeOf){
   const w = window.open('', '_blank');
   w.document.write(printOrderHTML(o, priceOf, codeOf));
   w.document.close();
+  // dá um microtempo para render e imprime
   w.focus?.();
   setTimeout(() => { try { w.print(); } catch {} }, 100);
 }
 
+
+// Leitura com fallback UTF-8 → Windows-1252 (para evitar "Abraadeira")
 function readFileWithFallback(file, onText) {
   const r1 = new FileReader();
   r1.onload = () => {
@@ -526,6 +456,8 @@ function readFileWithFallback(file, onText) {
   r1.readAsText(file, 'utf-8');
 }
 
+
+// limpeza / normalização
 const cleanDesignation = s => String(s||'')
   .replace(/^\uFEFF/, '')                 // tira BOM, se houver
   .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // remove control chars (inclui U+008D)
@@ -534,51 +466,6 @@ const cleanDesignation = s => String(s||'')
   .trim();
 const normText = s => String(s||'').trim().toLowerCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-const normalizeISODate = (v) => {
-  const s = String(v || '').trim();
-  if (!s) return '';
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
-  if (m) {
-    let [_, d, mo, y] = m;
-    if (y.length === 2) y = '20' + y;
-    d = d.padStart(2, '0');
-    mo = mo.padStart(2, '0');
-    return `${y}-${mo}-${d}`;
-  }
-  const d = new Date(s);
-  if (!isNaN(d)) return d.toISOString().slice(0, 10);
-  return '';
-};
-const timeEntrySignature = (t) => {
-  const primaryDate = normalizeISODate(t.date || t.periodStart || '');
-  const endDate = normalizeISODate(t.periodEnd || t.date || '');
-  const hours = Math.round(((Number(t.hours) || 0) + Number.EPSILON) * 100) / 100;
-  const overtime = Math.round(((Number(t.overtime) || 0) + Number.EPSILON) * 100) / 100;
-
-  return [
-    normText(t.worker || t.supervisor || ''),
-    normText(t.template || ''),
-    normText(t.project || ''),
-    normText(t.supervisor || ''),
-    primaryDate,
-    endDate,
-    hours,
-    overtime,
-  ].join('||');
-};
-const dedupTimeEntries = (entries = []) => {
-  const seen = new Set();
-  const out = [];
-  for (const t of entries) {
-    const key = timeEntrySignature(t);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(t);
-  }
-  return out;
-};
 const parseEUPriceString = (s) => { if(!s) return NaN; const t=String(s).replace(/[^\d,.\-]/g,'').replace(/\.(?=.*\.)/g,'').replace(',', '.'); const n=parseFloat(t); return isNaN(n)?NaN:n; };
 const pickPriceFromColumns = (cols) => { let p = NaN; if(cols[3]!=null && cols[3]!==''){ p = parseEUPriceString(cols[3]); } if(!isFinite(p)){ p = parseEUPriceString(cols[2]); } if(!isFinite(p)) p = 0; return Math.round(p*10000)/10000; };
 
@@ -644,173 +531,49 @@ const KpiCard = ({ icon, title, value, subtitle, onClick }) => (
 );
 
 
-const CalendarLegend = () => {
-  const items = [
-    { color: 'bg-emerald-600', label: 'Trabalho Normal' },
-    { color: 'bg-violet-600', label: 'Férias' },
-    { color: 'bg-rose-600', label: 'Baixa' },
-    { color: 'bg-amber-600', label: 'Falta' },
-  ];
-
-  return (
-    <div className="flex flex-wrap items-center gap-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border dark:border-slate-800">
-      <div className="text-xs font-medium text-slate-600 dark:text-slate-400">
-        Legenda:
-      </div>
-      {items.map((item) => (
-        <div key={item.label} className="flex items-center gap-2">
-          <div className={`w-4 h-4 rounded ${item.color}`} />
-          <span className="text-xs text-slate-700 dark:text-slate-300">
-            {item.label}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-};
-
+/* ---------- Calendário ---------- */
 const TYPE_FILL_BG = { 'Trabalho Normal':'bg-emerald-600','Férias':'bg-violet-600','Baixa':'bg-rose-600','Falta':'bg-amber-600' };
 const TYPE_COLORS = TYPE_FILL_BG;
-const isValidDateValue = (d) => d instanceof Date && !Number.isNaN(d.getTime());
-const getHolidayDatesInRange = (entries = [], start, end) => {
-  if (!start || !end) return new Set();
-  const holidaySet = new Set();
-
-  const normalizeISO = (raw) => {
-    if (!raw) return null;
-    const d = new Date(raw);
-    if (!isValidDateValue(d)) return null;
-    return d.toISOString().slice(0, 10);
-  };
-
-  const inRange = (iso) => {
-    if (!iso) return false;
-    const d = new Date(iso);
-    if (!isValidDateValue(d)) return false;
-    return d >= start && d <= end;
-  };
-
-  entries.forEach((t) => {
-    if (t.template !== 'Feriado') return;
-    const iso = normalizeISO(t.date || t.periodStart || t.periodEnd);
-    if (iso && inRange(iso)) holidaySet.add(iso);
-  });
-
-  return holidaySet;
-};
-
-const countWeekdaysInclusive = (start, end, holidaySet = new Set()) => {
-  const cur = new Date(start);
-  cur.setHours(0, 0, 0, 0);
-  const last = new Date(end);
-  last.setHours(0, 0, 0, 0);
-  let c = 0;
-  while (cur <= last) {
-    const d = cur.getDay();
-    const iso = cur.toISOString().slice(0, 10);
-    if (d !== 0 && d !== 6 && !holidaySet.has(iso)) c++;
-    cur.setDate(cur.getDate() + 1);
-  }
-  return c;
-};
-const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
+const countWeekdaysInclusive=(start,end)=>{const cur=new Date(start);cur.setHours(0,0,0,0);const last=new Date(end);last.setHours(0,0,0,0);let c=0;while(cur<=last){const d=cur.getDay();if(d!==0&&d!==6)c++;cur.setDate(cur.getDate()+1)}return c}
+const CycleCalendar = ({ timeEntries, onDayClick }) => {
   const [offset, setOffset] = useState(0);
   const { start, end } = useMemo(()=>getCycle(offset),[offset]);
   const dayTypes = useMemo(()=>{
     const m=new Map(); const push=(iso,t)=>{if(!m.has(iso))m.set(iso,new Set()); m.get(iso).add(t);};
-    const toDay = (val) => {
-      const d = new Date(val);
-      if (!isValidDateValue(d)) return null;
-      d.setHours(0,0,0,0);
-      return d;
-    };
     timeEntries.forEach(t=>{
       const inRange=d=>(d>=start&&d<=end);
-
-      if (t.template === 'Férias' || t.template === 'Baixa') { // ⬅️ JÁ VEM NORMALIZADO
-        const s = toDay(t.periodStart||t.date), e = toDay(t.periodEnd||t.date);
-        if (!s || !e) return;
-        const cur=new Date(s);const last=new Date(e);
+      if(t.template==='Férias'||t.template==='Baixa'){
+        const s=new Date(t.periodStart||t.date),e=new Date(t.periodEnd||t.date);
+        const cur=new Date(s);cur.setHours(0,0,0,0);const last=new Date(e);last.setHours(0,0,0,0);
         while(cur<=last){if(inRange(cur)) push(cur.toISOString().slice(0,10),t.template); cur.setDate(cur.getDate()+1);}
       }else{
-        const d=toDay(t.date); if(!d) return; if(inRange(d)) push(d.toISOString().slice(0,10),t.template);
+        const d=new Date(t.date); if(inRange(d)) push(d.toISOString().slice(0,10),t.template);
       }
     });
     return m;
   },[timeEntries,start,end]);
-  const dayInfo = useMemo(() => {
-    const m = new Map();
-    const add = (iso, project, overtime) => {
-      if (!m.has(iso)) m.set(iso, { projects: new Set(), overtime: 0 });
-      const cur = m.get(iso);
-      if (project) cur.projects.add(project);
-      const ot = Number(overtime) || 0;
-      if (ot) cur.overtime = Number((cur.overtime || 0) + ot);
-    };
-
-    const toDay = (val) => {
-      const d = new Date(val);
-      if (!isValidDateValue(d)) return null;
-      d.setHours(0,0,0,0);
-      return d;
-    };
-
-    timeEntries.forEach((t) => {
-      if (t.template !== 'Trabalho Normal') return;
-      const d = toDay(t.date);
-      if (!d || !(d >= start && d <= end)) return;
-      const iso = d.toISOString().slice(0, 10);
-      add(iso, t.project || t.projectNormal || '', t.overtime);
-    });
-
-    return m;
-  }, [timeEntries, start, end]);
   const days = useMemo(()=>{
     const first=(()=>{const d=new Date(start);const diff=mondayIndex(d);d.setDate(d.getDate()-diff);return d})();
     const last=(()=>{const d=new Date(end);const diff=6-mondayIndex(d);d.setDate(d.getDate()+diff);d.setHours(0,0,0,0);return d})();
     const arr=[]; for(let d=new Date(first);d<=last;d.setDate(d.getDate()+1)) arr.push(new Date(d));
     return arr;
   },[start,end]);
-  const holidays = useMemo(()=>getHolidayDatesInRange(timeEntries,start,end),[timeEntries,start,end]);
-  const wd = countWeekdaysInclusive(start, end, holidays);
+  const wd = countWeekdaysInclusive(start, end);
   const isToday = (d) => { const t=new Date();t.setHours(0,0,0,0); const x=new Date(d);x.setHours(0,0,0,0); return t.getTime()===x.getTime(); };
   const click = (d) => { if (onDayClick && d >= start && d <= end) onDayClick(d.toISOString().slice(0,10)); };
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-  <div className="font-medium dark:text-slate-100">
-    Ciclo: {start.toLocaleDateString('pt-PT')} – {end.toLocaleDateString('pt-PT')} · {dayTypes.size}/{wd} dias úteis
-  </div>
-  <div className="flex gap-2">
-    {/* Botões de navegação existentes */}
-    <Button variant="secondary" onClick={() => setOffset(o => o - 1)}>
-      <Icon name="chev-left" />
-    </Button>
-    <Button variant="secondary" onClick={() => setOffset(0)}>Hoje</Button>
-    <Button variant="secondary" onClick={() => setOffset(o => o + 1)}>
-      <Icon name="chev-right" />
-    </Button>
-
-    {/* ✅ BOTÃO CORRIGIDO */}
-<Button 
-  variant="secondary"
-  onClick={() => {
-    const html = generatePersonalTimesheetReport({
-      worker: auth?.name,
-      timeEntries: timeEntries, // ⬅️ USA timeEntries (que já vem como prop)
-      cycle: { start, end }
-    });
-    openPrintWindow(html);
-  }}
->
-  <Icon name="download" /> Relatório
-</Button>
-  </div>
-</div>
-
-        {/* ✅ ADICIONA ESTA LINHA */}
-    <CalendarLegend />
+        <div className="font-medium dark:text-slate-100">
+          Ciclo: {start.toLocaleDateString('pt-PT')} – {end.toLocaleDateString('pt-PT')} · {dayTypes.size}/{wd} dias úteis
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setOffset(o => o - 1)}><Icon name="chev-left" /></Button>
+          <Button variant="secondary" onClick={() => setOffset(0)}>Hoje</Button>
+          <Button variant="secondary" onClick={() => setOffset(o => o + 1)}><Icon name="chev-right" /></Button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-7 text-xs text-slate-500 dark:text-slate-400 px-1">
         {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d => (<div key={d} className="py-1">{d}</div>))}
@@ -835,16 +598,6 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
               ringToday
             ].join(' ')}>
               <div className={`text-xs ${has ? 'text-white' : ''}`}>{d.getDate()}</div>
-              {inCycle && has && dayInfo.has(iso) && (
-                <div className="mt-1 text-[11px] leading-tight text-white/90">
-                  <div className="truncate">
-                    {Array.from(dayInfo.get(iso)?.projects || []).join(', ') || '—'}
-                  </div>
-                  {Number(dayInfo.get(iso)?.overtime || 0) > 0 && (
-                    <div className="text-white font-semibold">+{Number(dayInfo.get(iso)?.overtime || 0)}h extra</div>
-                  )}
-                </div>
-              )}
             </button>
           );
         })}
@@ -892,7 +645,7 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate})=>{
             <div className="flex gap-2"><Button variant="secondary" size="sm" onClick={()=>onDuplicate(t)}>Duplicar</Button><Button size="sm" onClick={()=>onEdit(t)}>Editar</Button></div>
           </div>
           <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            {t.template==='Trabalho Normal'?<>Obra: <span className="font-medium text-slate-700 dark:text-slate-200">{t.project||'-'}</span> · Encarregado: {t.supervisor||'-'} · Horas: {t.hours||0} (+{t.overtime||0})</> : t.template==='Falta'?<>Motivo: {t.notes||'-'}</> : <>Período: {t.periodStart} → {t.periodEnd}</>}
+            {t.template==='Trabalho Normal'?<>Projeto: <span className="font-medium text-slate-700 dark:text-slate-200">{t.project||'-'}</span> · Encarregado: {t.supervisor||'-'} · Horas: {t.hours||0} (+{t.overtime||0})</> : t.template==='Falta'?<>Motivo: {t.notes||'-'}</> : <>Período: {t.periodStart} → {t.periodEnd}</>}
           </div>
         </div>
       ))}
@@ -907,8 +660,6 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
   const [csvPreview,setCsvPreview]=useState({headers:[],rows:[],delim:','});
   const [map,setMap]=useState({});
   const [jsonPreview,setJsonPreview]=useState(null);
-  const [shareText,setShareText]=useState('');
-  const [shareOut,setShareOut]=useState('');
   const [status,setStatus]=useState('');
 
   // NOVO: catálogo em memória até escolher Juntar/Substituir
@@ -917,43 +668,19 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
 
   const SEC_FIELDS={
     timesheets:[
-      {k:'worker',label:'Colaborador (Coluna AX)'},
-      {k:'template',label:'Template (Coluna D - Trabalho Normal/Férias/Baixa/Falta)'},
-      {k:'date',label:'Data (Coluna C - yyyy-mm-dd)'},
-      
-      // TRABALHO NORMAL
-      {k:'projectNormal',label:'Obra Normal (Coluna AC)',opt:true},
-      {k:'supervisorNormal',label:'Encarregado Normal (Coluna F)',opt:true},
-      {k:'overtimeStart',label:'Extra Início (Coluna V)',opt:true},
-      {k:'overtimeEnd',label:'Extra Fim (Coluna W)',opt:true},
-      {k:'overtimeCalc',label:'Horas Extra (Coluna L)',opt:true},
-      
-      // FIM DE SEMANA
-    {k:'projectWeekend',label:'Obra FDS (Coluna AH)',opt:true},
-    {k:'supervisorWeekend',label:'Encarregado FDS (Coluna AF)',opt:true},
-    {k:'weekendStart',label:'FDS Início (Coluna AO)',opt:true},
-    {k:'weekendEnd',label:'FDS Fim (Coluna AP)',opt:true},
-    {k:'weekendCalc',label:'FDS Calculado (Coluna AQ)',opt:true},
-
-      // FERIADO
-      {k:'holidayFlag',label:'Marcador Feriado (Coluna AW)',opt:true},
-
-    // TRABALHO DESLOCADO
-    {k:'projectShifted',label:'Obra Deslocada (Coluna AG)',opt:true},
-      {k:'supervisorShifted',label:'Encarregado Deslocado (Coluna F)',opt:true},
-      
-      // FÉRIAS E BAIXA
-      {k:'holidayStart',label:'Férias Início (Coluna M)',opt:true},
-      {k:'holidayEnd',label:'Férias Fim (Coluna N)',opt:true},
-      {k:'sickStart',label:'Baixa Início (Coluna R)',opt:true},
-      {k:'sickEnd',label:'Baixa Fim (Coluna S)',opt:true},
-      {k:'sickDays',label:'Dias de Baixa (Coluna T)',opt:true},
-      
-      {k:'notes',label:'Observações',opt:true}
+      {k:'template',label:'template (Trabalho Normal/Férias/Baixa/Falta)',opt:true},
+      {k:'date',label:'data (yyyy-mm-dd)'},
+      {k:'project',label:'projeto/obra',opt:true},
+      {k:'supervisor',label:'encarregado',opt:true},
+      {k:'hours',label:'horas',opt:true},
+      {k:'overtime',label:'extra',opt:true},
+      {k:'periodStart',label:'início período',opt:true},
+      {k:'periodEnd',label:'fim período',opt:true},
+      {k:'notes',label:'observações',opt:true}
     ],
     materials:[
       {k:'requestedAt',label:'data pedido'},
-      {k:'project',label:'Obra'},
+      {k:'project',label:'projeto/obra'},
       {k:'item',label:'item/material'},
       { k:'code',  label:'código (opcional)', opt:true },   // ⬅️ adicionar
       {k:'qty',label:'quantidade'},
@@ -962,55 +689,11 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
       {k:'notes',label:'observações',opt:true}
     ]
   };
-  const AUTO_KEYS={ 
-    worker:['colaborador','worker','ax'],
-    template:['template','tipo','d'],
-    date:['data','date','dia','c'],
-    
-    // Trabalho Normal
-    projectNormal:['obra','project','ac','obra normal'],
-    supervisorNormal:['encarregado','supervisor','f'],
-    overtimeStart:['extra inicio','overtime start','v'],
-    overtimeEnd:['extra fim','overtime end','w'],
-    overtimeCalc:['horas extra','extra','extra calculado','overtime calc','l','coluna l'],
-    
-    // Fim de Semana
-    projectWeekend:['obra fds','obra fim semana','ah'],
-    supervisorWeekend:['encarregado fds','af'],
-    weekendStart:['fds inicio','ao'],
-    weekendEnd:['fds fim','ap'],
-    weekendCalc:['fds calculado','aq'],
-    
-    // Deslocado
-    projectShifted:['obra deslocada','ag'],
-    supervisorShifted:['encarregado deslocado'],
-    
-    // Férias
-    holidayStart:['ferias inicio','m'],
-    holidayEnd:['ferias fim','n'],
-    holidayFlag:['feriado','feriad','aw'],
-
-    // Baixa
-    sickStart:[
-      'baixa inicio','inicio baixa','r',
-      'duracao da baixa - inicio','duração da baixa - inicio','duracao baixa inicio','duração baixa inicio'
-    ],
-    sickEnd:[
-      'baixa fim','fim baixa','s',
-      'duracao da baixa - fim','duração da baixa - fim','duracao baixa fim','duração baixa fim'
-    ],
-    sickDays:['dias baixa','baixa dias','t'],
-    
-    notes:['observações','notas','notes','obs'],
-    
-    // Materials (mantém)
-    requestedAt:['data','pedido','data pedido','request date'],
-    project:['obra','projeto','project','site'],
-    item:['item','material','produto'],
-    qty:['quantidade','qty','qtd','quantity'], 
-    requestedBy:['requisitante','solicitante','quem pediu','requested by'],
-    status:['estado','status','situação']
-  };
+  const AUTO_KEYS={ date:['data','date','dia'], requestedAt:['data','pedido','data pedido','request date'],
+    project:['projeto','project','obra','site'], supervisor:['encarregado','supervisor','chefe','lider'],
+    hours:['horas','hours'], overtime:['extra','overtime','horas extra'], item:['item','material','produto'],
+    qty:['quantidade','qty','qtd','quantity'], requestedBy:['requisitante','solicitante','quem pediu','requested by'],
+    status:['estado','status','situação'], notes:['observações','notas','notes','obs'] };
   const norm=(s)=>String(s||'').trim().toLowerCase();
   const buildAutoMap=(headers)=>{const m={};const pick=k=>{const c=AUTO_KEYS[k]||[];const f=headers.find(h=>c.includes(norm(h)));if(f)m[k]=f;};Object.keys(AUTO_KEYS).forEach(pick);return m;};
 
@@ -1030,48 +713,24 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     return {headers,rows,delim};
   }
 
+// --- handleCSV (SUBSTITUI o corpo pela versão com fallback) ---
 const handleCSV = (file) => {
   readFileWithFallback(file, (text) => {
     const parsed = parseCSV(text);
     setCsvPreview(parsed);
 
-    // ✅ AUTO-MAPEAR COLUNAS POR LETRA
-    const autoMap = {};
-    
-    if (section === 'timesheets') {
-      const colIndex = (letter) => {
-        let index = 0;
-        for (let i = 0; i < letter.length; i++) {
-          index = index * 26 + (letter.charCodeAt(i) - 64);
-        }
-        return index - 1;
-      };
-      
-        const mapping = {
-          worker: 'AX', template: 'D', date: 'C',
-          projectNormal: 'AC', supervisorNormal: 'F',
-          overtimeCalc: 'L', projectWeekend: 'AH',
-          supervisorWeekend: 'AF', weekendCalc: 'AQ',
-          projectShifted: 'AG', holidayStart: 'M',
-          holidayEnd: 'N', sickStart: 'R', sickEnd: 'S', sickDays: 'T',
-          holidayFlag: 'AW'
-        };
-      
-      for (const [field, letter] of Object.entries(mapping)) {
-        const idx = colIndex(letter);
-        if (parsed.headers[idx]) {
-          autoMap[field] = parsed.headers[idx];
-        }
-      }
-    } else if (section === 'materials') {
-      const auto = buildAutoMap(parsed.headers.map(h => norm(h)));
-      Object.assign(autoMap, auto);
+    const auto = buildAutoMap(parsed.headers.map(h => norm(h)));
+
+    // regra: em Materiais, "código" vem SEMPRE da coluna B (se existir)
+    if (section === 'materials' && parsed.headers?.[1]) {
+      auto.code = parsed.headers[1];
     }
 
-    setMap(autoMap);
-    setStatus(`CSV (${parsed.rows.length}) · AUTO-MAPEADO ✅`);
+    setMap(auto);
+    setStatus(`CSV (${parsed.rows.length}) · delim "${parsed.delim}"`);
   });
 };
+
   // --- Normalização de cabeçalhos e heurísticas para o CATÁLOGO ---
 const HDR_CODE  = ['codigo','código','cod','ref','referencia','referência','artigo','cód','sku','ean','part number','pn'];
 const HDR_NAME  = ['designacao','designação','descricao','descrição','produto','artigo','nome','descr','design'];
@@ -1211,17 +870,9 @@ const handleCatalog = (file) => {
 
     // tenta detetar se a 1ª linha é cabeçalho
     const hdr = rowsRaw[0] || [];
-    const hasHeader = (() => {
-  const h0 = String(hdr[0] || '').toLowerCase();
-  const h1 = String(hdr[1] || '').toLowerCase();
-  
-  return (
-    /ref|refer|descr|design|produto|artigo/.test(h0) ||
-    /cod|c[oó]digo|code|sku|ean/.test(h1) ||
-    HDR_NAME.some(h => h0.includes(h)) ||
-    HDR_CODE.some(h => h1.includes(h))
-  );
-})();
+    const hasHeader =
+      /ref|refer|descr|design|produto|artigo/i.test(String(hdr[0] || '')) ||
+      /cod|c[oó]digo|code|sku|ean/i.test(String(hdr[1] || ''));
 
     // se houver cabeçalho, começa na linha 1; senão começa na 0
     const startIdx = hasHeader ? 1 : 0;
@@ -1269,6 +920,8 @@ const handleCatalog = (file) => {
 
 
  
+
+  // dedup por nome+família normalizados
   const catalogKey = (r) => `${normText(cleanDesignation(r.name))}||${normText(r.family||'')}`;
   const dedupCatalog = (arr) => {
     const seen=new Set(); const out=[];
@@ -1289,242 +942,33 @@ const handleCatalog = (file) => {
     onClose();
   };
 
-  const normalizeDate = normalizeISODate;
+  const normalizeDate=(v)=>{const s=String(v||'').trim();if(!s)return'';if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;const m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);if(m){let [_,d,mo,y]=m;if(y.length===2)y='20'+y;d=d.padStart(2,'0');mo=mo.padStart(2,'0');return`${y}-${mo}-${d}`;}const d=new Date(s);if(!isNaN(d))return d.toISOString().slice(0,10);return'';};
   const toNumber=(v)=>{if(v==null||v==='')return 0; const s=String(v).replace(/\./g,'').replace(',','.'); const n=parseFloat(s); return isNaN(n)?0:n};
 
-  const mapRow = (r) => {
-  const val = k => {
-    const colName = map[k];
-    if (!colName) return '';
-    return r[colName] ?? '';
-  };
-  
-  if (section === 'timesheets') {
-    let template = (val('template') || 'Trabalho Normal').trim();
-    
-    // ✅ NORMALIZAR TEMPLATES
-    if (template.includes('Trabalho') || template.includes('Normal') || template.includes('normal')) {
-      template = 'Trabalho Normal';
-    } else if (template.includes('Férias') || template.includes('ferias')) {
-      template = 'Férias';
-    } else if (template.includes('Baixa') || template.includes('baixa')) {
-      template = 'Baixa';
-    } else if (template.includes('Falta') || template.includes('falta')) {
-      template = 'Falta';
-    } else if (template.includes('Fim') || template.includes('FDS') || template.includes('semana')) {
-      template = 'Trabalho FDS';
-    } else if (template.includes('Deslocad') || template.includes('deslocad')) {
-      template = 'Trabalho Deslocado';
-    } else if (template.includes('Feriad') || template.includes('feriad')) {
-      template = 'Feriado';
+  const mapRow=(r)=>{
+    const val=k=>r[map[k]||'']??'';
+    if(section==='timesheets'){
+      const template=(val('template')||'Trabalho Normal').trim();
+      const date=normalizeDate(val('date'));
+      const periodStart=normalizeDate(val('periodStart'));
+      const periodEnd=normalizeDate(val('periodEnd'));
+      return {id:uid(),template,date,project:val('project'),supervisor:val('supervisor'),hours:toNumber(val('hours')),overtime:toNumber(val('overtime')),periodStart,periodEnd,notes:val('notes')};
     }
-    const worker = val('worker');
-    const rawDate = val('date') || val('weekendStart') || val('overtimeStart') || val('holidayStart');
-
-    // ✅ NORMALIZAR DATA
-    let date = normalizeDate(rawDate);
-    
-    let project = '';
-    let supervisor = '';
-    let hours = 0;
-    let overtime = 0;
-    let periodStart = '';
-    let periodEnd = '';
-    let sickDays = 0;
-    const feriadoFlagRaw = val('holidayFlag');
-    const feriadoFlag = norm(feriadoFlagRaw || '');
-    const feriadoFalse = new Set(['', '0', 'nao', 'não', 'no', 'false', 'n', 'f']);
-    const feriadoTrue = ['1', 'sim', 's', 'yes', 'y', 'feriado', 'feriad', 'fer', 'feri', 'holiday'];
-    const isFeriadoFlag = feriadoFlag && !feriadoFalse.has(feriadoFlag) && feriadoTrue.some(t => feriadoFlag === t || feriadoFlag.includes(t));
-
-    // ✅ LÓGICA INTELIGENTE POR TIPO DE TEMPLATE
-    const projectFromAC = val('projectNormal');
-    const projectFromAH = val('projectWeekend');
-    const projectFromAG = val('projectShifted');
-    const baseProject = projectFromAC || '';
-    const weekendProject = projectFromAH || '';
-    const shiftedProject = projectFromAG || '';
-
-    const extraHours = toNumber(val('overtimeCalc'));
-    const weekendHours = toNumber(val('weekendCalc'));
-    const isWeekendDate = (() => {
-      const d = date ? new Date(date) : null;
-      return d ? d.getDay() === 0 || d.getDay() === 6 : false;
-    })();
-
-    if (isWeekendDate && template === 'Trabalho Normal') {
-      template = 'Trabalho FDS';
+    if(section==='materials'){
+      return { requestedAt:normalizeDate(val('requestedAt'))||todayISO(), project:val('project'),
+        item:cleanDesignation(val('item')),code:String(val('code')||'').trim(), qty:toNumber(val('qty'))||1, requestedBy:val('requestedBy')||'',
+        status:(val('status')||'Pendente').replace('Encomendado','Aprovado'), notes:val('notes')||'' };
     }
-
-    if (isFeriadoFlag) {
-      template = 'Feriado';
-    }
-
-    const pickNormalProject = () => baseProject || weekendProject || shiftedProject || val('project');
-    const pickWeekendProject = () => weekendProject || baseProject || shiftedProject || val('project');
-    const pickShiftedProject = () => projectFromAG || weekendProject || baseProject || val('project');
-
-    if (template.includes('Normal') || template.includes('normal')) {
-      // TRABALHO NORMAL
-      project = pickNormalProject();
-      supervisor = val('supervisorNormal') || val('supervisor');
-
-      hours = hours || 0;
-      overtime = extraHours || toNumber(val('overtimeStart') && val('overtimeEnd') ? calculateHoursDiff(val('overtimeStart'), val('overtimeEnd')) : 0);
-
-    } else if (template.includes('Fim') || template.includes('FDS') || template.includes('semana')) {
-      // FIM DE SEMANA
-      project = pickWeekendProject();
-      supervisor = val('supervisorWeekend') || val('supervisor');
-
-      hours = weekendHours || hours || 0;
-
-    } else if (template.includes('Deslocad') || template.includes('deslocad')) {
-      // TRABALHO DESLOCADO
-      project = pickShiftedProject();
-      supervisor = val('supervisorShifted') || val('supervisorNormal') || val('supervisor');
-
-      hours = hours || 0;
-
-    } else if (template.includes('Férias') || template.includes('ferias')) {
-      // FÉRIAS
-      periodStart = normalizeDate(val('holidayStart'));
-      periodEnd = normalizeDate(val('holidayEnd')) || periodStart;
-      hours = 0;
-      overtime = 0;
-
-    } else if (template.includes('Baixa') || template.includes('baixa')) {
-      // BAIXA — priorizar o período e não o dia de registo
-      const sickStartRaw = normalizeDate(val('sickStart'));
-      const sickEndRaw = normalizeDate(val('sickEnd'));
-      sickDays = Math.max(0, toNumber(val('sickDays')));
-
-      // Derivar datas mesmo que o utilizador só preencha parte
-      const derivedStart = (() => {
-        if (sickStartRaw) return sickStartRaw;
-        if (sickEndRaw && sickDays > 0) {
-          const end = new Date(sickEndRaw);
-          end.setDate(end.getDate() - Math.max(0, sickDays - 1));
-          return normalizeDate(end.toISOString().slice(0, 10));
-        }
-        return '';
-      })();
-
-      const derivedEnd = (() => {
-        if (sickEndRaw) return sickEndRaw;
-        if (derivedStart && sickDays > 0) {
-          const end = new Date(derivedStart);
-          end.setDate(end.getDate() + sickDays - 1);
-          return normalizeDate(end.toISOString().slice(0, 10));
-        }
-        return derivedStart || '';
-      })();
-
-      periodStart = derivedStart || normalizeDate(val('holidayStart')) || date;
-      periodEnd = derivedEnd || periodStart;
-      date = periodStart || periodEnd || date;
-      hours = 0;
-      overtime = 0;
-
-    } else if (template === 'Feriado') {
-      project = pickWeekendProject();
-      hours = weekendHours || hours || 0;
-      overtime = 0;
-
-    } else if (template.includes('Falta') || template.includes('falta')) {
-      // FALTA
-      hours = toNumber(val('hours')) || 8;
-      overtime = 0;
-    }
-    
-    return {
-      id: uid(),
-      template,
-      worker,
-      date,
-      project,
-      supervisor,
-      hours,
-      overtime,
-      periodStart,
-      periodEnd,
-      sickDays,
-      notes: val('notes')
-    };
-  }
-  
-  if (section === 'materials') {
-    return { 
-      requestedAt: normalizeDate(val('requestedAt')) || todayISO(), 
-      project: val('project'),
-      item: cleanDesignation(val('item')),
-      code: String(val('code') || '').trim(), 
-      qty: toNumber(val('qty')) || 1, 
-      requestedBy: val('requestedBy') || '',
-      status: (val('status') || 'Pendente').replace('Encomendado', 'Aprovado'), 
-      notes: val('notes') || '' 
-    };
-  }
-  
-  return {};
-};
-  
-  // ✅ ADICIONAR FUNÇÃO AUXILIAR
-  const calculateHoursDiff = (start, end) => {
-    try {
-      const [h1, m1] = start.split(':').map(Number);
-      const [h2, m2] = end.split(':').map(Number);
-      
-      let minutes = (h2 * 60 + m2) - (h1 * 60 + m1);
-      if (minutes < 0) minutes += 24 * 60; // passa meia-noite
-      
-      return Math.round((minutes / 60) * 100) / 100;
-    } catch {
-      return 0;
-    }
+    return {};
   };
 
-  const validateMapped = (o) => {
-    const errs = []; 
-    
-    if (section === 'timesheets') { 
-      // ✅ Colaborador sempre obrigatório
-      if (!o.worker) {
-        console.warn('⚠️ Registo sem colaborador:', o);
-        errs.push('colaborador');
-      }
-      
-      if (['Férias', 'Baixa'].includes(o.template)) { 
-        if (!o.periodStart || !o.periodEnd) errs.push('período'); 
-      } else if (o.template === 'Falta') { 
-        if (!o.date) errs.push('data'); 
-      } else { 
-        // Trabalho Normal, FDS, Deslocado
-        if (!o.date) errs.push('data'); 
-        // ⬇️ Obra e supervisor são opcionais (podem estar vazios)
-        // if (!o.project) errs.push('obra');
-        // if (!o.supervisor) errs.push('encarregado');
-      }
-    }
-
-    if (section === 'materials') {
-      if (!o.project) errs.push('obra');
-      if (!o.item) errs.push('item');
-    }
-    
-    return errs;
-  };
+  const validateMapped=(o)=>{const errs=[]; if(section==='timesheets'){ if(['Férias','Baixa'].includes(o.template)){ if(!o.periodStart||!o.periodEnd) errs.push('período'); } else if(o.template==='Falta'){ if(!o.date) errs.push('data'); } else { if(!o.date) errs.push('data'); if(!o.project) errs.push('projeto'); if(!o.supervisor) errs.push('encarregado'); }} if(section==='materials'){ if(!o.project) errs.push('projeto'); if(!o.item) errs.push('item'); } return errs;};
 
   const importCSV=(mode)=>{
     const mapped=csvPreview.rows.map(mapRow);
     const valOk=mapped.filter(o=>validateMapped(o).length===0);
     if(!valOk.length){addToast('Nenhuma linha válida.','err');return;}
-    if (section === 'timesheets') {
-      setters.setTimeEntries((cur) => {
-        const next = mode === 'replace' ? valOk : [...valOk, ...cur];
-        return dedupTimeEntries(next);
-      });
-    }
+    if(section==='timesheets'){ setters.setTimeEntries(cur=>mode==='replace'?valOk:[...valOk,...cur]); }
     if(section==='materials'){
       const orders = valOk.map(x => ({
   id: uid(),
@@ -1541,46 +985,9 @@ const handleCatalog = (file) => {
   };
 
   const exportBackup=()=>{ const all=setters.get(); download(`backup_${todayISO()}.json`, JSON.stringify(all,null,2),'application/json'); };
-  const shareEncode=(obj)=> btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
-  const shareDecode=(code)=> JSON.parse(decodeURIComponent(escape(atob(code))));
-  const buildPreview=(obj)=>{
-    const info={
-      timeEntries: obj.timeEntries?.length||0,
-      orders: (obj.orders||obj.materials)?.length||0,
-      projects: obj.projects?.length||0,
-      activity: obj.activity?.length||0,
-      catalog: obj.catalog?.length||0
-    };
-    return {obj,info};
-  };
-  const shareFromLocal=()=>{
-    try{
-      const all=setters.get();
-      const code=shareEncode(all);
-      setShareOut(code);
-      navigator.clipboard?.writeText(code).then(()=>setStatus('Código copiado para a área de transferência.'),()=>{});
-      setStatus('Código gerado — copia/cola no outro dispositivo.');
-    }catch(err){
-      console.warn('Falha ao gerar código de partilha',err);
-      setStatus('Não foi possível gerar o código.');
-    }
-  };
-  const loadShareCode=()=>{
-    if(!shareText.trim()){setStatus('Cola primeiro um código.');return false;}
-    try{
-      const obj=shareDecode(shareText.trim());
-      setJsonPreview(buildPreview(obj));
-      setStatus('Código pronto — usa Substituir ou Juntar.');
-      return true;
-    }catch(err){
-      console.warn('Código de partilha inválido',err);
-      setStatus('Código inválido.');
-      return false;
-    }
-  };
-  const importBackup=(mode)=>{
-    if(!jsonPreview){ addToast('Carrega um JSON primeiro.','warn'); return; }
-    const obj=jsonPreview.obj; const safeArr=a=>Array.isArray(a)?a:[];
+const importBackup=(mode)=>{
+  if(!jsonPreview){ addToast('Carrega um JSON primeiro.','warn'); return; }
+  const obj=jsonPreview.obj; const safeArr=a=>Array.isArray(a)?a:[];
 const base={
   timeEntries: safeArr(obj.timeEntries),
   orders:     safeArr(obj.orders||obj.materials),
@@ -1668,52 +1075,6 @@ const base={
           </div>
 
           <div className="text-sm text-slate-600 dark:text-slate-300">Mapeia as colunas do teu CSV:</div>
-          <div className="text-sm text-slate-600 dark:text-slate-300">Mapeia as colunas do teu CSV:</div>
-          
-          {/* ✅ BOTÃO AUTO-MAPEAR */}
-          <div className="flex gap-2 mb-3">
-            <Button 
-              variant="secondary" 
-              size="sm"
-              onClick={() => {
-                // Auto-mapear por letra de coluna
-                const colIndex = (letter) => {
-                  let index = 0;
-                  for (let i = 0; i < letter.length; i++) {
-                    index = index * 26 + (letter.charCodeAt(i) - 64);
-                  }
-                  return index - 1;
-                };
-                
-                const mapping = {
-                  worker: 'AX', template: 'D', date: 'C',
-                  projectNormal: 'AC', supervisorNormal: 'F',
-                  overtimeCalc: 'L', projectWeekend: 'AH',
-                  supervisorWeekend: 'AF', weekendCalc: 'AQ',
-                  projectShifted: 'AG', holidayStart: 'M',
-                  holidayEnd: 'N', sickStart: 'R', sickEnd: 'S', sickDays: 'T'
-                };
-                
-                const autoMap = {};
-                for (const [field, letter] of Object.entries(mapping)) {
-                  const idx = colIndex(letter);
-                  if (csvPreview.headers[idx]) {
-                    autoMap[field] = csvPreview.headers[idx];
-                  }
-                }
-                
-                setMap(autoMap);
-                setStatus('✅ AUTO-MAPEADO por coluna (A, B, C, ...)');
-              }}
-            >
-              <Icon name="activity" /> Auto-Mapear Colunas
-            </Button>
-            
-            <div className="text-xs text-slate-500 self-center">
-              Mapeia automaticamente: AX=Colaborador, D=Template, C=Data, AC=Obra, etc.
-            </div>
-          </div>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {(section==='timesheets'?SEC_FIELDS.timesheets:SEC_FIELDS.materials).map(f=>(
               <label key={f.k} className="text-sm">
@@ -1772,7 +1133,14 @@ const base={
                 reader.onload=()=>{
                   try{
                     const obj=JSON.parse(reader.result);
-                    setJsonPreview(buildPreview(obj));
+                    const info={
+                      timeEntries: obj.timeEntries?.length||0,
+                      orders: (obj.orders||obj.materials)?.length||0,
+                      projects: obj.projects?.length||0,
+                      activity: obj.activity?.length||0,
+                      catalog: obj.catalog?.length||0
+                    };
+                    setJsonPreview({obj,info});
                     setStatus('Backup JSON pronto');
                   }catch{
                     setStatus('JSON inválido');
@@ -1787,14 +1155,11 @@ const base={
           {jsonPreview&&(
             <Card className="p-3">
               <div className="text-sm">
-                <div className="font-semibold">Resumo</div>
-                <div className="text-slate-600 dark:text-slate-300 text-xs space-y-1 mt-1">
-                  <div>Registos de horas: {jsonPreview.info.timeEntries}</div>
-                  <div>Encomendas: {jsonPreview.info.orders}</div>
-                  <div>Obras: {jsonPreview.info.projects}</div>
-                  <div>Atividade: {jsonPreview.info.activity}</div>
-                  <div>Catálogo: {jsonPreview.info.catalog}</div>
-                </div>
+                Conteúdo: {
+                  Object.entries(jsonPreview.info)
+                    .map(([k,v])=>`${k}:${v}`)
+                    .join(' · ')
+                }
               </div>
               <div className="mt-3 flex gap-2 justify-end">
                 <Button variant="secondary" onClick={()=>importBackup('append')}>
@@ -1806,32 +1171,6 @@ const base={
               </div>
             </Card>
           )}
-
-          <Card className="p-3 space-y-3">
-            <div className="text-sm font-medium">Sincronização sem servidor</div>
-            <div className="text-xs text-slate-500 leading-relaxed">
-              Os registos ficam guardados no dispositivo; para vê-los noutro equipamento tens de os levar manualmente.
-              Gera o código abaixo no dispositivo de origem e cola-o no destino (por exemplo, do computador para o telemóvel),
-              depois escolhe <strong>Importar (Substituir)</strong> para ficarem idênticos.
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <div className="text-xs text-slate-500">Gera um código offline com todos os dados atuais e copia-o para colar no outro dispositivo.</div>
-                <Button variant="secondary" onClick={shareFromLocal}><Icon name="download"/> Gerar código</Button>
-                {shareOut && (
-                  <textarea value={shareOut} readOnly className="w-full h-28 text-xs rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700" />
-                )}
-              </div>
-              <div className="space-y-2">
-                <div className="text-xs text-slate-500">Cola aqui um código copiado de outro dispositivo e depois escolhe Substituir.</div>
-                <textarea value={shareText} onChange={e=>setShareText(e.target.value)} className="w-full h-28 text-xs rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700" placeholder="cola aqui o código gerado" />
-                <div className="flex gap-2 justify-end">
-                  <Button variant="secondary" onClick={loadShareCode}>Validar código</Button>
-                  <Button variant="danger" onClick={()=>{ if(loadShareCode()) importBackup('replace'); }}>Importar (Substituir)</Button>
-                </div>
-              </div>
-            </div>
-          </Card>
         </div>
       )}
     </div>
@@ -1914,6 +1253,7 @@ const price  = (() => {
   );
 };
 
+// === PriceCompareModal ===
 const PriceCompareModal = ({ open, onClose, suppliers }) => {
   const [q,setQ]=useState('');
   const norm = s => normText(cleanDesignation(s));
@@ -1949,6 +1289,7 @@ const PriceCompareModal = ({ open, onClose, suppliers }) => {
   );
 };
 
+/* ---------- Gestão de Obras ---------- */
 const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport }) => {
   const empty = { id: null, name: '', manager: '', type: 'Eletricidade', family: '' };
   const [form, setForm] = useState(empty);
@@ -2069,6 +1410,7 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport }) => {
   );
 };
 
+// 🔁 substituir a função buildCatalogMaps
 const buildCatalogMaps = (catalog) => {
   const byNameFamily   = new Map();           // "nome||fam" -> price (number)
   const byCodeFamily   = new Map();           // "codigo||fam" -> {name, price}
@@ -2119,12 +1461,15 @@ const buildCatalogMaps = (catalog) => {
   };
 };
 
-const MaterialForm=({onSubmit,catalogMaps,projects,auth})=>{ // ⬅️ ADICIONA auth aqui
+/* ---------- Formulário de Materiais ---------- */
+const MaterialForm=({onSubmit,catalogMaps,projects})=>{
   const [project,setProject]=useState('');
+  const [requestedBy,setReqBy]=useState('');
   const [items,setItems]=useState([{name:'',qty:1}]);
   const [errors,setErrors]=useState({});
   const [openSuggestItem,setOpenSuggestItem]=useState(null);
   const [openSuggestProj,setOpenSuggestProj]=useState(false);
+  const [openSuggestReq,setOpenSuggestReq]=useState(false);
 
   const addRow=()=>setItems(a=>[...a,{name:'',qty:1}]);
   const updateRow=(i,k,v)=>setItems(a=>a.map((r,idx)=>idx===i?{...r,[k]:v}:r));
@@ -2168,6 +1513,10 @@ const MaterialForm=({onSubmit,catalogMaps,projects,auth})=>{ // ⬅️ ADICIONA 
     }
     return out;
   };
+  const suggestRequesters=(q)=>{
+    const s=normText(q);
+    return REQUESTER_SUGGESTIONS.filter(n=>normText(n).startsWith(s)).slice(0,8);
+  };
 
   const onTypeItem = (i, raw) => {
     updateRow(i, 'name', raw);
@@ -2176,17 +1525,11 @@ const MaterialForm=({onSubmit,catalogMaps,projects,auth})=>{ // ⬅️ ADICIONA 
   const submit=()=>{
     const e={};
     const valid=items.map(r=>({name:cleanDesignation(r.name),qty:Number(r.qty||0)})).filter(r=>r.name&&r.qty>0);
-    if(!project.trim())e.project='Obra é obrigatória.';
+    if(!project.trim())e.project='Obra/Projeto é obrigatório.';
+    if(!requestedBy.trim())e.requestedBy='Requisitante é obrigatório.';
     if(valid.length===0)e.items='Adiciona pelo menos um item.';
-    setErrors(e); 
-    if(Object.keys(e).length) return;
-    
-    // ✅ Preenche automaticamente com o utilizador logado
-    onSubmit({ 
-      project: project.trim(), 
-      requestedBy: auth?.name || 'Desconhecido', // ⬅️ PREENCHE AUTOMATICAMENTE
-      items: valid 
-    });
+    setErrors(e); if(Object.keys(e).length) return;
+    onSubmit({ project:project.trim(), requestedBy:requestedBy.trim(), items:valid });
   };
 
   return(
@@ -2242,9 +1585,8 @@ const MaterialForm=({onSubmit,catalogMaps,projects,auth})=>{ // ⬅️ ADICIONA 
           {errors.items&&<div className="text-xs text-rose-600 mt-1">{errors.items}</div>}
         </div>
 
-        {/* ✅ APENAS O CAMPO OBRA */}
         <div className="space-y-3">
-          <label className="text-sm">Obra
+          <label className="text-sm">Obra/Projeto
             <input
               className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.project?'border-rose-400':''}`}
               placeholder="Escreve o nome da obra"
@@ -2266,16 +1608,31 @@ const MaterialForm=({onSubmit,catalogMaps,projects,auth})=>{ // ⬅️ ADICIONA 
                 ))}
               </div>
             )}
-            {errors.project && <div className="text-xs text-rose-600 mt-1">{errors.project}</div>}
           </label>
 
-          {/* ✅ MOSTRA QUEM ESTÁ A PEDIR (READ-ONLY) */}
-          <div className="text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border dark:border-slate-700">
-            <div className="text-xs mb-1">Requisitante:</div>
-            <div className="font-medium text-slate-700 dark:text-slate-200">
-              {auth?.name || 'Desconhecido'}
-            </div>
-          </div>
+          <label className="text-sm">Requisitante
+            <input
+              className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.requestedBy?'border-rose-400':''}`}
+              placeholder="Nome do encarregado"
+              value={requestedBy}
+              onFocus={()=>setOpenSuggestReq(true)}
+              onBlur={()=>setTimeout(()=>setOpenSuggestReq(false),100)}
+              onChange={e=>setReqBy(e.target.value)}
+            />
+            {openSuggestReq&&(
+              <div className="mt-1 rounded-xl border bg-white dark:bg-slate-900 dark:border-slate-700 shadow max-h-44 overflow-auto">
+                {suggestRequesters(requestedBy).map(n=>(
+                  <button
+                    key={n}
+                    className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                    onMouseDown={(e)=>{e.preventDefault();setReqBy(n);}}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            )}
+          </label>
         </div>
       </div>
       <div className="pt-2 flex justify-end"><Button onClick={submit}>Submeter Pedido</Button></div>
@@ -2381,7 +1738,7 @@ const LogisticsView = ({ orders, moveOrderStatus, setOrderPatch, setModal, downl
   );
 
   const exportCSV=()=> {
-    const headers=['ID','Data','Obra','Requisitante','Estado','Total','Itens'];
+    const headers=['ID','Data','Projeto','Requisitante','Estado','Total','Itens'];
     const rows=filtered.map(o=>[
       o.id,
       o.requestedAt,
@@ -2737,992 +2094,6 @@ const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
 };
 
 
-// ============================================================
-// 📊 RELATÓRIO MENSAL DE COLABORADORES (ADMIN)
-// ============================================================
-const MonthlyReportView = ({ timeEntries, people }) => {
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
-  const monthInputRef = useRef<HTMLInputElement | null>(null);
-  const [selectedWorker, setSelectedWorker] = useState(null);
-
-  const monthCycleLabel = useMemo(() => {
-    const base = new Date(`${selectedMonth}-01T00:00:00`);
-    if (Number.isNaN(base.getTime())) return 'Período';
-
-    const prev = new Date(base);
-    prev.setMonth(prev.getMonth() - 1);
-
-    const fmt = (date: Date) =>
-      new Intl.DateTimeFormat('pt-PT', { month: 'short' })
-        .format(date)
-        .replace('.', '')
-        .toLowerCase();
-
-    return `${fmt(prev)}/${fmt(base)} ${base.getFullYear()}`;
-  }, [selectedMonth]);
-
-  // Calcular estatísticas por colaborador
-  const stats = useMemo(() => {
-    const [year, month] = selectedMonth.split('-').map(Number);
-    const startDate = new Date(year, month - 2, 21);
-    const endDate = new Date(year, month - 1, 20);
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
-
-    const allEntries = dedupTimeEntries(timeEntries);
-
-    // Contar dias úteis do mês
-    const entriesInMonth = allEntries.filter((t) => {
-      if (t.template === 'Férias' || t.template === 'Baixa') {
-        const start = new Date(t.periodStart || t.date);
-        const end = new Date(t.periodEnd || t.date);
-        return !(end < startDate || start > endDate);
-      }
-      const d = new Date(t.date);
-      return d >= startDate && d <= endDate;
-    });
-
-    const holidaySet = getHolidayDatesInRange(entriesInMonth, startDate, endDate);
-    const workDays = countWeekdaysInclusive(startDate, endDate, holidaySet);
-
-    // ✅ DEBUG: Mostrar templates encontrados
-    console.log('📊 Templates no mês:', {
-      total: entriesInMonth.length,
-      templates: [...new Set(entriesInMonth.map(t => t.template))],
-      porTipo: entriesInMonth.reduce((acc, t) => {
-        acc[t.template] = (acc[t.template] || 0) + 1;
-        return acc;
-      }, {})
-    });
-
-    // Agrupar por colaborador
-    const byWorker = new Map();
-
-    const ensureWorker = (name) => {
-      if (!byWorker.has(name)) {
-        byWorker.set(name, {
-          name,
-          days: new Map(),
-          totalHours: 0,
-          totalOvertime: 0,
-          totalOvertimeWeekend: 0,
-          feriadoHours: 0,
-          deslocHours: 0,
-          totalAbsenceHours: 0,
-          holidays: 0,
-          sickLeave: 0,
-          absences: 0,
-          entries: [],
-        });
-      }
-      return byWorker.get(name);
-    };
-
-    const addDay = (worker, iso) => {
-      if (!iso) return null;
-      const d = new Date(iso);
-      if (isNaN(d.getTime())) return null;
-      d.setHours(0, 0, 0, 0);
-      const ymd = d.toISOString().slice(0, 10);
-      if (!worker.days.has(ymd)) {
-        worker.days.set(ymd, {
-          hours: 0,
-          overtime: 0,
-          weekendHours: 0,
-          holidayHours: 0,
-          deslocHours: 0,
-          hasNormalWork: false,
-          isWeekend: d.getDay() === 0 || d.getDay() === 6,
-        });
-      }
-      return { rec: worker.days.get(ymd), ymd };
-    };
-
-    entriesInMonth.forEach((entry) => {
-      const workerName = entry.worker || entry.supervisor || entry.colaborador || 'Desconhecido';
-      const worker = ensureWorker(workerName);
-      worker.entries.push(entry);
-
-      const hours = Number(entry.hours) || 0;
-      const overtime = Number(entry.overtime) || 0;
-
-      if (entry.template === 'Férias') {
-        const start = new Date(entry.periodStart || entry.date);
-        const end = new Date(entry.periodEnd || entry.date);
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const ymd = d.toISOString().slice(0, 10);
-          const dow = d.getDay();
-          if (d >= startDate && d <= endDate && dow !== 0 && dow !== 6 && !holidaySet.has(ymd)) {
-            worker.holidays++;
-          }
-        }
-        return;
-      }
-
-      if (entry.template === 'Baixa') {
-        const parseSafeDate = (iso?: string) => {
-          if (!iso) return null;
-          const d = new Date(iso);
-          return isNaN(d.getTime()) ? null : d;
-        };
-
-        const start =
-          parseSafeDate(entry.periodStart || entry.date) ||
-          parseSafeDate(entry.date);
-
-        let end = parseSafeDate(entry.periodEnd) || null;
-
-        if (!end && start && entry.sickDays) {
-          const tmp = new Date(start);
-          tmp.setDate(tmp.getDate() + Math.max(0, Number(entry.sickDays) || 0) - 1);
-          end = tmp;
-        }
-
-        const finalEnd = end || start;
-
-        if (start && finalEnd) {
-          for (let d = new Date(start); d <= finalEnd; d.setDate(d.getDate() + 1)) {
-            const ymd = d.toISOString().slice(0, 10);
-            const dow = d.getDay();
-            if (d >= startDate && d <= endDate && dow !== 0 && dow !== 6 && !holidaySet.has(ymd)) {
-              worker.sickLeave++;
-            }
-          }
-        }
-
-        return;
-      }
-
-      if (entry.template === 'Falta') {
-        worker.absences++;
-        worker.totalAbsenceHours += hours || 8;
-        return;
-      }
-
-      const dayInfo = addDay(worker, entry.date);
-      if (!dayInfo) return;
-      const { rec, ymd } = dayInfo;
-
-      const isWeekend = rec.isWeekend;
-      const isHoliday = holidaySet.has(ymd);
-      const isDesloc = String(entry.template || '').toLowerCase().includes('desloc');
-      const isFeriadoTpl = String(entry.template || '').toLowerCase().includes('feriado');
-      const isFimSemanaTpl = String(entry.template || '').toLowerCase().includes('fim');
-
-      rec.hours += hours;
-      rec.overtime += overtime;
-      rec.hasNormalWork = rec.hasNormalWork || isNormalWork(entry.template);
-
-      if (isWeekend || isFimSemanaTpl) {
-        rec.weekendHours += hours + overtime;
-      }
-
-      if (isHoliday || isFeriadoTpl) {
-        rec.holidayHours += hours + overtime;
-      }
-
-      if (isDesloc) {
-        rec.deslocHours += hours + overtime;
-      }
-
-      // Contabilizar horas globais
-      worker.totalHours += hours;
-      worker.totalOvertime += overtime;
-    });
-
-    // Converter para array e calcular presença
-    return Array.from(byWorker.values())
-      .map((worker) => {
-        let daysWorked = 0;
-        let weekendHours = 0;
-        let feriadoHours = 0;
-        let deslocHours = 0;
-
-        worker.days.forEach((rec, ymd) => {
-          const isHoliday = holidaySet.has(ymd);
-          if (rec.hasNormalWork && !rec.isWeekend && !isHoliday) {
-            daysWorked++;
-          }
-          weekendHours += rec.weekendHours;
-          feriadoHours += rec.holidayHours;
-          deslocHours += rec.deslocHours;
-        });
-
-        const presence = workDays > 0 ? Math.round((daysWorked / workDays) * 100) : 0;
-
-        return {
-          ...worker,
-          workDays,
-          daysWorked,
-          totalOvertimeWeekend: weekendHours,
-          feriadoHours,
-          deslocHours,
-          presence: `${presence}%`,
-        };
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [timeEntries, selectedMonth]);
-
-  // Detalhe do colaborador selecionado
-  const workerDetail = useMemo(() => {
-    if (!selectedWorker) return null;
-    return stats.find((s) => s.name === selectedWorker);
-  }, [selectedWorker, stats]);
-
-  // Exportar CSV
-  const exportCSV = () => {
-    const headers = [
-      'Colaborador',
-      'Dias Úteis',
-      'Dias Trabalhados',
-      'Faltas',
-      'Férias',
-      'Baixa',
-      'Horas Extra (h)',
-      'FDS (h)',
-      'Feriado (h)',
-      'Horas Deslocadas (h)',
-      'Presença',
-    ];
-
-    const rows = stats.map((s) => [
-      s.name,
-      s.workDays,
-      s.daysWorked,
-      s.absences || 0,
-      s.holidays || 0,
-      s.sickLeave || 0,
-      s.totalOvertime || 0,
-      s.totalOvertimeWeekend || 0,
-      s.feriadoHours || 0,
-      s.deslocHours || 0,
-      s.presence,
-    ]);
-
-    const csv = toCSV(headers, rows);
-    download(`relatorio_mensal_${selectedMonth}.csv`, csv);
-  };
-
-  return (
-    <section className="space-y-4">
-      <PageHeader
-  icon="calendar"
-  title="Relatório Mensal de Colaboradores"
-  subtitle="Visão detalhada de presença e horas trabalhadas"
-  actions={
-    <div className="flex gap-2">
-      {/* ⬇️ BOTÃO TEMPORÁRIO DE MIGRAÇÃO */}
-      <Button
-        variant="secondary"
-        onClick={() => {
-          // Corrigir registos sem worker
-          const fixed = timeEntries.map((entry) => {
-            if (!entry.worker && !entry.supervisor) {
-              // Tentar descobrir pelo auth atual ou deixar pendente
-              return { ...entry, worker: 'Pendente de atribuição' };
-            }
-            return entry;
-          });
-
-          setTimeEntries(dedupTimeEntries(fixed));
-          addToast(`${fixed.length} registos verificados`, 'ok');
-        }}
-      >
-        Verificar Registos
-      </Button>
-
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => {
-            const el = monthInputRef.current;
-            if (el?.showPicker) {
-              el.showPicker();
-            } else {
-              el?.click();
-            }
-          }}
-          className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium dark:bg-slate-900 dark:border-slate-700"
-        >
-          <span className="capitalize">{monthCycleLabel}</span>
-          <Icon name="calendar" className="w-4 h-4" />
-        </button>
-        <input
-          ref={monthInputRef}
-          type="month"
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        />
-      </div>
-      <Button variant="secondary" onClick={exportCSV}>
-        <Icon name="download" /> Exportar CSV
-      </Button>
-    </div>
-  }
-/>
-
-      {/* Tabela Principal */}
-      <Card className="p-4">
-        <div className="overflow-auto rounded-xl border dark:border-slate-800">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900/50">
-              <tr>
-                <th className="px-3 py-2 text-left">Colaborador</th>
-                <th className="px-3 py-2 text-center">Dias Úteis</th>
-                <th className="px-3 py-2 text-center">Dias trabalhados</th>
-                <th className="px-3 py-2 text-center">Faltas</th>
-                <th className="px-3 py-2 text-center">Férias</th>
-                <th className="px-3 py-2 text-center">Baixa</th>
-                <th className="px-3 py-2 text-center">Horas Extra (h)</th>
-                <th className="px-3 py-2 text-center">FDS (h)</th>
-                <th className="px-3 py-2 text-center">Feriado (h)</th>
-                <th className="px-3 py-2 text-center">Horas deslocadas (h)</th>
-                <th className="px-3 py-2 text-center">Presença</th>
-                <th className="px-3 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.length === 0 && (
-                <tr>
-                  <td colSpan="12" className="px-3 py-8 text-center text-slate-500">
-                    Sem registos para este mês
-                  </td>
-                </tr>
-              )}
-
-              {stats.map((worker) => (
-                <tr
-                  key={worker.name}
-                  className="border-t dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                >
-                  <td className="px-3 py-2 font-medium">{worker.name}</td>
-                  <td className="px-3 py-2 text-center">{worker.workDays}</td>
-                  <td className="px-3 py-2 text-center">{worker.daysWorked}</td>
-                  <td className="px-3 py-2 text-center">
-  {worker.absences > 0 ? (
-    <div>
-      <div>{worker.absences} dia{worker.absences > 1 ? 's' : ''}</div>
-      <div className="text-xs text-slate-500">
-        ({worker.totalAbsenceHours || 0}h)
-      </div>
-    </div>
-  ) : '—'}
-</td>
-                  <td className="px-3 py-2 text-center">{worker.holidays || '—'}</td>
-                  <td className="px-3 py-2 text-center">{worker.sickLeave || '—'}</td>
-                  <td className="px-3 py-2 text-center">{worker.totalOvertime || '—'}</td>
-                  <td className="px-3 py-2 text-center">{worker.totalOvertimeWeekend || '—'}</td>
-                  <td className="px-3 py-2 text-center">{worker.feriadoHours || '—'}</td>
-                  <td className="px-3 py-2 text-center">{worker.deslocHours || '—'}</td>
-                  <td className="px-3 py-2 text-center">
-                    <Badge
-                      tone={
-                        parseInt(worker.presence) >= 95
-                          ? 'emerald'
-                          : parseInt(worker.presence) >= 80
-                          ? 'amber'
-                          : 'rose'
-                      }
-                    >
-                      {worker.presence}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <Button variant="secondary" size="sm" onClick={() => setSelectedWorker(worker.name)}>
-                      Ver Detalhes
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* Modal de Detalhe do Colaborador */}
-      <Modal
-        open={!!selectedWorker}
-        title={`Registos de ${selectedWorker} — ${new Date(selectedMonth + '-01').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' })}`}
-        onClose={() => setSelectedWorker(null)}
-        wide
-      >
-        {workerDetail && (
-          <div className="space-y-4">
-            {/* Resumo */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="rounded-xl border p-3 dark:border-slate-800">
-                <div className="text-xs text-slate-500">Dias Trabalhados</div>
-                <div className="text-2xl font-semibold mt-1">{workerDetail.daysWorked}</div>
-              </div>
-              <div className="rounded-xl border p-3 dark:border-slate-800">
-                <div className="text-xs text-slate-500">Horas Totais</div>
-                <div className="text-2xl font-semibold mt-1">{workerDetail.totalHours}h</div>
-              </div>
-              <div className="rounded-xl border p-3 dark:border-slate-800">
-                <div className="text-xs text-slate-500">Horas Extra</div>
-                <div className="text-2xl font-semibold mt-1">{workerDetail.totalOvertime}h</div>
-              </div>
-              <div className="rounded-xl border p-3 dark:border-slate-800">
-                <div className="text-xs text-slate-500">Presença</div>
-                <div className="text-2xl font-semibold mt-1">{workerDetail.presence}</div>
-              </div>
-            </div>
-
-            {/* Tabela de Registos */}
-            <div className="overflow-auto rounded-xl border dark:border-slate-800">
-              <table className="min-w-full text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-900/50">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Data</th>
-                    <th className="px-3 py-2 text-left">Tipo</th>
-                    <th className="px-3 py-2 text-left">Obra</th>
-                    <th className="px-3 py-2 text-right">Horas</th>
-                    <th className="px-3 py-2 text-right">Extra</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {workerDetail.entries
-                    .sort((a, b) => (b.date || b.periodStart || '').localeCompare(a.date || a.periodStart || ''))
-                    .map((entry) => (
-                      <tr key={entry.id} className="border-t dark:border-slate-800">
-                        <td className="px-3 py-2">
-                          {entry.template === 'Trabalho Normal' || entry.template === 'Falta'
-                            ? fmtDate(entry.date)
-                            : `${fmtDate(entry.periodStart)} → ${fmtDate(entry.periodEnd)}`}
-                        </td>
-                        <td className="px-3 py-2">
-                          <Badge
-                            tone={
-                              entry.template === 'Trabalho Normal'
-                                ? 'emerald'
-                                : entry.template === 'Férias'
-                                ? 'blue'
-                                : entry.template === 'Baixa'
-                                ? 'rose'
-                                : 'amber'
-                            }
-                          >
-                            {entry.template}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-2">{entry.project || '—'}</td>
-                        <td className="px-3 py-2 text-right">
-  {entry.template === 'Falta' 
-    ? `${entry.hours || 8}h (falta)` 
-    : entry.hours || '—'}
-</td>
-<td className="px-3 py-2 text-right">{entry.overtime || '—'}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Botão de Exportar */}
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  const [year, month] = selectedMonth.split('-').map(Number);
-                  const html = generatePersonalTimesheetReport({
-                    worker: selectedWorker,
-                    timeEntries: workerDetail.entries,
-                    cycle: {
-                      start: new Date(year, month - 1, 1),
-                      end: new Date(year, month, 0),
-                    },
-                  });
-                  openPrintWindow(html);
-                }}
-              >
-                <Icon name="download" /> Exportar Relatório PDF
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
-    </section>
-  );
-};
-
-// ============================================================
-// 👤 PERFIL DO COLABORADOR (TÉCNICO/ENCARREGADO/DIRETOR)
-// ============================================================
-const ProfileView = ({ timeEntries, auth, people }) => {
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [detailModal, setDetailModal] = useState(null); // ⬅️ ADICIONA ISTO
-  // Filtrar registos do ano do colaborador
-  const myEntries = useMemo(() => {
-    return timeEntries.filter((t) => {
-      const year = new Date(t.date || t.periodStart).getFullYear();
-      return year === selectedYear && (t.worker === auth?.name || t.supervisor === auth?.name);
-    });
-  }, [timeEntries, selectedYear, auth?.name]);
-
-  // Calcular estatísticas
-// Calcular estatísticas
-  // Calcular estatísticas
-  const stats = useMemo(() => {
-    let totalHours = 0;
-    let totalOvertime = 0;
-    let daysWorked = new Set();
-    let holidayDays = 0;
-    let sickDays = 0;
-    let absenceDays = 0;
-    const projectHours = new Map();
-    
-    const holidayEntries = [];
-    const sickEntries = [];
-    const absenceEntries = [];
-
-    myEntries.forEach((entry) => {
-      if (isNormalWork(entry.template)) { // ⬅️ USA A FUNÇÃO HELPER
-        totalHours += Number(entry.hours) || 0;
-        totalOvertime += Number(entry.overtime) || 0;
-        daysWorked.add(entry.date);
-
-        const project = entry.project || 'Sem obra';
-        const hours = (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
-        projectHours.set(project, (projectHours.get(project) || 0) + hours);
-        
-      } else if (entry.template === 'Férias') {
-        const start = new Date(entry.periodStart || entry.date);
-        const end = new Date(entry.periodEnd || entry.date);
-        let days = 0;
-        
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dow = d.getDay();
-          if (dow !== 0 && dow !== 6) {
-            holidayDays++;
-            days++;
-          }
-        }
-        
-        holidayEntries.push({
-          start: entry.periodStart || entry.date,
-          end: entry.periodEnd || entry.date,
-          days,
-          notes: entry.notes || '',
-        });
-        
-      } else if (entry.template === 'Baixa') {
-        const start = new Date(entry.periodStart || entry.date);
-        const end = new Date(entry.periodEnd || entry.date);
-        let days = 0;
-        
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dow = d.getDay();
-          if (dow !== 0 && dow !== 6) {
-            sickDays++;
-            days++;
-          }
-        }
-        
-        sickEntries.push({
-          start: entry.periodStart || entry.date,
-          end: entry.periodEnd || entry.date,
-          days,
-          notes: entry.notes || '',
-        });
-        
-      } else if (entry.template === 'Falta') {
-        absenceDays++;
-        
-        absenceEntries.push({
-          date: entry.date,
-          notes: entry.notes || '',
-        });
-      }
-    });
-
-    const projectsArray = Array.from(projectHours.entries())
-      .map(([name, hours]) => ({ name, hours }))
-      .sort((a, b) => b.hours - a.hours)
-      .slice(0, 5);
-
-    return {
-      totalHours,
-      totalOvertime,
-      daysWorked: daysWorked.size,
-      holidayDays,
-      sickDays,
-      absenceDays,
-      projects: projectsArray,
-      holidayEntries,
-      sickEntries,
-      absenceEntries,
-    };
-  }, [myEntries]);
-
-  // Cores para o gráfico (paleta moderna)
-  const colors = [
-    '#3b82f6', // blue-500
-    '#8b5cf6', // violet-500
-    '#ec4899', // pink-500
-    '#f59e0b', // amber-500
-    '#10b981', // emerald-500
-  ];
-
-  // Calcular percentagens para o gráfico
-  const total = stats.projects.reduce((sum, p) => sum + p.hours, 0);
-  let currentAngle = 0;
-
-  return (
-    <section className="space-y-4">
-      <PageHeader
-        icon="user"
-        title={`Perfil de ${auth?.name || 'Colaborador'}`}
-        subtitle="Estatísticas pessoais e análise de desempenho"
-        actions={
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="rounded-xl border p-2 text-sm dark:bg-slate-900 dark:border-slate-700"
-          >
-            {[2025, 2024, 2023].map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
-        }
-      />
-
-      {/* KPIs Principais */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-5 bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-          <div className="text-sm opacity-90">Dias Trabalhados</div>
-          <div className="text-4xl font-bold mt-2">{stats.daysWorked}</div>
-          <div className="text-sm opacity-80 mt-1">dias em {selectedYear}</div>
-        </Card>
-
-        <Card className="p-5 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
-  <div className="text-sm opacity-90">Horas Totais</div>
-  <div className="text-4xl font-bold mt-2">{stats.totalHours}h</div>
-  <div className="text-sm opacity-80 mt-1">horas trabalhadas</div>
-</Card>
-
-        <Card className="p-5 bg-gradient-to-br from-violet-500 to-violet-600 text-white">
-          <div className="text-sm opacity-90">Férias Gozadas</div>
-          <div className="text-4xl font-bold mt-2">{stats.holidayDays}</div>
-          <div className="text-sm opacity-80 mt-1">dias de férias</div>
-        </Card>
-
-        <Card className="p-5 bg-gradient-to-br from-amber-500 to-amber-600 text-white">
-          <div className="text-sm opacity-90">Baixas/Faltas</div>
-          <div className="text-4xl font-bold mt-2">{stats.sickDays + stats.absenceDays}</div>
-          <div className="text-sm opacity-80 mt-1">
-            {stats.sickDays}b · {stats.absenceDays}f
-          </div>
-        </Card>
-      </div>
-
-      {/* Grid: Gráfico + Detalhe */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Gráfico de Pizza (Obras) */}
-        <Card className="p-6">
-          <h3 className="font-semibold text-lg mb-4">Distribuição por Obra</h3>
-
-          {stats.projects.length === 0 ? (
-            <div className="text-center py-12 text-slate-500">
-              Sem registos de trabalho em {selectedYear}
-            </div>
-          ) : (
-            <>
-              {/* SVG Gráfico Circular */}
-              <div className="flex justify-center mb-6">
-                <svg width="240" height="240" viewBox="0 0 240 240">
-                  {/* Círculo de fundo */}
-                  <circle cx="120" cy="120" r="100" fill="#f1f5f9" className="dark:fill-slate-800" />
-
-                  {/* Fatias do gráfico */}
-                  {stats.projects.map((project, index) => {
-                    const percentage = (project.hours / total) * 100;
-                    const angle = (percentage / 100) * 360;
-
-                    const startX = 120 + 100 * Math.cos((currentAngle - 90) * (Math.PI / 180));
-                    const startY = 120 + 100 * Math.sin((currentAngle - 90) * (Math.PI / 180));
-
-                    currentAngle += angle;
-
-                    const endX = 120 + 100 * Math.cos((currentAngle - 90) * (Math.PI / 180));
-                    const endY = 120 + 100 * Math.sin((currentAngle - 90) * (Math.PI / 180));
-
-                    const largeArc = angle > 180 ? 1 : 0;
-
-                    const path = [
-                      `M 120 120`,
-                      `L ${startX} ${startY}`,
-                      `A 100 100 0 ${largeArc} 1 ${endX} ${endY}`,
-                      `Z`,
-                    ].join(' ');
-
-                    return <path key={index} d={path} fill={colors[index]} />;
-                  })}
-
-                  {/* Círculo central (donut) */}
-                  <circle cx="120" cy="120" r="60" fill="white" className="dark:fill-slate-900" />
-
-                  {/* Texto central */}
-                  <text
-                    x="120"
-                    y="115"
-                    textAnchor="middle"
-                    className="text-2xl font-bold fill-slate-800 dark:fill-slate-200"
-                  >
-                    {stats.totalHours}h
-                  </text>
-                  <text
-                    x="120"
-                    y="135"
-                    textAnchor="middle"
-                    className="text-sm fill-slate-500 dark:fill-slate-400"
-                  >
-                    Total
-                  </text>
-                </svg>
-              </div>
-
-              {/* Legenda */}
-              <div className="space-y-2">
-                {stats.projects.map((project, index) => {
-                  const percentage = ((project.hours / total) * 100).toFixed(1);
-                  return (
-                    <div key={index} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-4 h-4 rounded"
-                          style={{ backgroundColor: colors[index] }}
-                        />
-                        <span className="text-sm font-medium truncate max-w-[200px]">
-                          {project.name}
-                        </span>
-                      </div>
-                      <div className="text-sm text-slate-500">
-                        {project.hours}h · {percentage}%
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </Card>
-
-        {/* Card de Férias */}
-        <Card className="p-6">
-          <h3 className="font-semibold text-lg mb-4">Resumo de Férias {selectedYear}</h3>
-
-          <div className="space-y-4">
-            {/* Barra de Progresso */}
-            <div>
-              <div className="flex justify-between text-sm mb-2">
-                <span className="text-slate-600 dark:text-slate-300">Dias Gozados</span>
-                <span className="font-semibold">
-                  {stats.holidayDays} / 22 dias
-                </span>
-              </div>
-              <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-500 to-violet-500 transition-all duration-500"
-                  style={{ width: `${Math.min((stats.holidayDays / 22) * 100, 100)}%` }}
-                />
-              </div>
-              <div className="text-xs text-slate-500 mt-1">
-                Restam {Math.max(22 - stats.holidayDays, 0)} dias disponíveis
-              </div>
-            </div>
-
-            {/* Estatísticas */}
-            <div className="grid grid-cols-2 gap-3 mt-6">
-              {/* Férias - CLICÁVEL */}
-              <button
-                onClick={() => setDetailModal({ type: 'Férias', entries: stats.holidayEntries })}
-                className="rounded-xl border p-4 dark:border-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors text-left"
-              >
-                <div className="text-xs text-slate-500">Férias Gozadas</div>
-                <div className="text-2xl font-bold text-blue-600 mt-1">
-                  {stats.holidayDays}
-                </div>
-                <div className="text-xs text-blue-600 mt-1">👁️ Ver detalhes</div>
-              </button>
-
-              <div className="rounded-xl border p-4 dark:border-slate-800">
-                <div className="text-xs text-slate-500">Dias Disponíveis</div>
-                <div className="text-2xl font-bold text-emerald-600 mt-1">
-                  {Math.max(22 - stats.holidayDays, 0)}
-                </div>
-              </div>
-
-              <button
-                onClick={() => setDetailModal({ type: 'Baixa', entries: stats.sickEntries })}
-                className="rounded-xl border p-4 dark:border-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/10 transition-colors text-left"
-              >
-                <div className="text-xs text-slate-500">Baixas</div>
-                <div className="text-2xl font-bold text-rose-600 mt-1">
-                  {stats.sickDays}
-                </div>
-                <div className="text-xs text-rose-600 mt-1">👁️ Ver detalhes</div>
-              </button>
-
-              <button
-                onClick={() => setDetailModal({ type: 'Falta', entries: stats.absenceEntries })}
-                className="rounded-xl border p-4 dark:border-slate-800 hover:bg-amber-50 dark:hover:bg-amber-900/10 transition-colors text-left"
-              >
-                <div className="text-xs text-slate-500">Faltas</div>
-                <div className="text-2xl font-bold text-amber-600 mt-1">
-                  {stats.absenceDays}
-                </div>
-                <div className="text-xs text-amber-600 mt-1">👁️ Ver detalhes</div>
-              </button>
-            </div>
-
-            {/* Alertas */}
-            {stats.holidayDays < 5 && (
-              <div className="mt-4 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                <div className="text-sm text-blue-800 dark:text-blue-200">
-                  💡 <b>Dica:</b> Ainda tens {22 - stats.holidayDays} dias de férias disponíveis!
-                </div>
-              </div>
-            )}
-
-            {stats.holidayDays >= 22 && (
-              <div className="mt-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
-                <div className="text-sm text-emerald-800 dark:text-emerald-200">
-                  ✅ <b>Parabéns!</b> Gozaste todas as tuas férias em {selectedYear}.
-                </div>
-              </div>
-            )}
-          </div>
-        </Card>
-      </div>
-
-      {/* Tabela de Registos Recentes */}
-      <Card className="p-4">
-        <h3 className="font-semibold text-lg mb-3">Últimos 10 Registos</h3>
-        <div className="overflow-auto rounded-xl border dark:border-slate-800">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900/50">
-              <tr>
-                <th className="px-3 py-2 text-left">Data</th>
-                <th className="px-3 py-2 text-left">Tipo</th>
-                <th className="px-3 py-2 text-left">Obra</th>
-                <th className="px-3 py-2 text-right">Horas</th>
-                <th className="px-3 py-2 text-right">Extra</th>
-              </tr>
-            </thead>
-            <tbody>
-              {myEntries
-                .slice(0, 10)
-                .sort((a, b) => (b.date || b.periodStart || '').localeCompare(a.date || a.periodStart || ''))
-                .map((entry) => (
-                  <tr key={entry.id} className="border-t dark:border-slate-800">
-                    <td className="px-3 py-2">
-                      {entry.template === 'Trabalho Normal' || entry.template === 'Falta'
-                        ? fmtDate(entry.date)
-                        : `${fmtDate(entry.periodStart)} → ${fmtDate(entry.periodEnd)}`}
-                    </td>
-                    <td className="px-3 py-2">
-                      <Badge
-                        tone={
-                          entry.template === 'Trabalho Normal'
-                            ? 'emerald'
-                            : entry.template === 'Férias'
-                            ? 'blue'
-                            : entry.template === 'Baixa'
-                            ? 'rose'
-                            : 'amber'
-                        }
-                      >
-                        {entry.template}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-2">{entry.project || '—'}</td>
-                    <td className="px-3 py-2 text-right">{entry.hours || '—'}</td>
-                    <td className="px-3 py-2 text-right">{entry.overtime || '—'}</td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* Modal de Detalhes */}
-      {detailModal && (
-        <div 
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          onClick={() => setDetailModal(null)}
-        >
-          <Card 
-            className="max-w-2xl w-full max-h-[80vh] overflow-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold">
-                  Detalhes: {detailModal.type} em {selectedYear}
-                </h3>
-                <button
-                  onClick={() => setDetailModal(null)}
-                  className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-                >
-                  <Icon name="x" />
-                </button>
-              </div>
-
-              {detailModal.entries.length === 0 ? (
-                <div className="text-center py-8 text-slate-500">
-                  Sem registos de {detailModal.type.toLowerCase()} em {selectedYear}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {detailModal.type === 'Falta' ? (
-                    // FALTAS (uma linha por dia)
-                    detailModal.entries.map((entry, i) => (
-                      <div key={i} className="rounded-lg border p-4 dark:border-slate-800">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-semibold">{fmtDate(entry.date)}</div>
-                            {entry.notes && (
-                              <div className="text-sm text-slate-500 mt-1">{entry.notes}</div>
-                            )}
-                          </div>
-                          <Badge tone="amber">1 dia</Badge>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    // FÉRIAS E BAIXAS (períodos)
-                    detailModal.entries.map((entry, i) => (
-                      <div key={i} className="rounded-lg border p-4 dark:border-slate-800">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="font-semibold">
-                            {fmtDate(entry.start)} → {fmtDate(entry.end)}
-                          </div>
-                          <Badge tone={detailModal.type === 'Férias' ? 'blue' : 'rose'}>
-                            {entry.days} {entry.days === 1 ? 'dia' : 'dias'}
-                          </Badge>
-                        </div>
-                        {entry.notes && (
-                          <div className="text-sm text-slate-500">{entry.notes}</div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          </Card>
-        </div>
-      )}
-    </section>
-  );
-};
-
 /* ---------- Relatório de Obra ---------- */
 const ProjectReportView = ({
   project, orders, timeEntries, catalogMaps, projects,
@@ -3753,9 +2124,7 @@ const ProjectReportView = ({
     return d>=a && d<=b;
   };
 
-  const ts = timeEntries.filter(t => 
-    isNormalWork(t.template) && t.project === project.name && inRange(t.date)
-  );
+  const ts = timeEntries.filter(t => t.template==='Trabalho Normal' && t.project===project.name && inRange(t.date));
   const ord = orders.filter(o => o.project===project.name && inRange(o.requestedAt) && statusFilter.has(o.status));
 
  const labor = ts.map(t=>{
@@ -3892,87 +2261,13 @@ const ProjectReportView = ({
   );
 };
 
-// ---------------------------------------------------------------
-// 🎨 DROPDOWN PERSONALIZADO
-// ---------------------------------------------------------------
-const CustomSelect = ({ 
-  value, 
-  onChange, 
-  options = [], 
-  placeholder = "Selecionar...",
-  className = "",
-  error = false
-}) => {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState(value || "");
-
-  const filtered = useMemo(() => {
-    if (!search) return options.slice(0, 8);
-    const s = normText(search);
-    return options
-      .filter(opt => normText(opt).includes(s))
-      .slice(0, 8);
-  }, [search, options]);
-
-  const selectOption = (opt) => {
-    setSearch(opt);
-    onChange(opt);
-    setOpen(false);
-  };
-
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        value={search}
-        onChange={(e) => {
-          setSearch(e.target.value);
-          onChange(e.target.value);
-        }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 200)}
-        placeholder={placeholder}
-        className={`w-full rounded-xl border p-2.5 dark:bg-slate-900 dark:border-slate-700 transition
-          focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none
-          ${error ? 'border-rose-400 focus:ring-rose-400' : ''}
-          ${className}`}
-      />
-
-      {open && filtered.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full rounded-xl border shadow-lg 
-                        bg-white dark:bg-slate-900 dark:border-slate-700 
-                        max-h-64 overflow-auto">
-          {filtered.map((opt, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                selectOption(opt);
-              }}
-              className="block w-full text-left px-4 py-2.5 text-sm
-                         hover:bg-indigo-50 dark:hover:bg-slate-800 
-                         transition-colors first:rounded-t-xl last:rounded-b-xl"
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ---------------------------------------------------------------
-// 📝 FORM DE TIMESHEET (CORRIGIDO)
-// ---------------------------------------------------------------
+/* ---------- Form de Timesheet ---------- */
 const TimesheetTemplateForm = ({
   onSubmit,
   initial,
   peopleNames = [],
   projectNames = [],
-  supervisorNames = [],
-  auth
+  supervisorNames = []
 }) => {
   const isEdit = Boolean(initial?.id);
   const [step, setStep] = useState(initial?.template ? 2 : 1);
@@ -3985,143 +2280,39 @@ const TimesheetTemplateForm = ({
     worker: initial?.worker || '',
     hours: initial?.hours ?? 8,
     overtime: initial?.overtime ?? 0,
-    weekendStartTime: initial?.weekendStartTime || '',
-    weekendEndTime: initial?.weekendEndTime || '',
-    extraStartTime: initial?.extraStartTime || '',
-    extraEndTime: initial?.extraEndTime || '',
     periodStart: initial?.periodStart || initial?.date || todayISO(),
     periodEnd: initial?.periodEnd || initial?.date || todayISO(),
     notes: initial?.notes || ''
   });
   const [errors, setErrors] = useState({});
 
-  const isWeekendDate = (iso?: string) => {
-    if (!iso) return false;
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return false;
-    const dow = d.getDay();
-    return dow === 0 || dow === 6;
-  };
-
-  const diffHours = (start?: string, end?: string) => {
-    if (!start || !end) return 0;
-    const [sh, sm] = start.split(':').map(Number);
-    const [eh, em] = end.split(':').map(Number);
-    if ([sh, sm, eh, em].some((v) => Number.isNaN(v))) return 0;
-    const mins = eh * 60 + em - (sh * 60 + sm);
-    return mins > 0 ? Math.round((mins / 60) * 100) / 100 : 0;
-  };
-
-  const isWeekendDay = isWeekendDate(form.date);
-  const weekendComputedHours = isWeekendDay
-    ? diffHours(form.weekendStartTime, form.weekendEndTime)
-    : 0;
-  const overtimeComputedHours = !isWeekendDay
-    ? diffHours(form.extraStartTime, form.extraEndTime)
-    : 0;
-
   const next = () => setStep(2);
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const validate = t => {
     const e = {};
-
-    const weekend = isWeekendDate(t.date);
-
-    // Trabalho Normal: precisa data, obra, supervisor, horas válidas
-    if (t.template === 'Trabalho Normal') {
+    if (t.template === 'Trabalho Normal' || t.template === 'Falta') {
       if (!t.date) e.date = 'Data é obrigatória.';
-      if (!t.project) e.project = 'Obra é obrigatória.';
-      if (!t.supervisor) e.supervisor = 'Encarregado é obrigatório.';
-      if (weekend) {
-        if (!t.weekendStartTime) e.weekendStartTime = 'Hora inicial obrigatória.';
-        if (!t.weekendEndTime) e.weekendEndTime = 'Hora final obrigatória.';
-        if (!e.weekendStartTime && !e.weekendEndTime && diffHours(t.weekendStartTime, t.weekendEndTime) <= 0) {
-          e.weekendEndTime = 'Fim tem de ser após início.';
-        }
-      } else {
-        if (t.hours < 0) e.hours = 'Horas inválidas.';
-        if ((t.extraStartTime || t.extraEndTime) && diffHours(t.extraStartTime, t.extraEndTime) <= 0) {
-          e.extraEndTime = 'Fim tem de ser após início.';
-        }
-      }
+      if (!t.worker) e.worker = 'Colaborador é obrigatório.';
     }
-    
-    // Férias e Baixa: só precisam do período
+    if (t.template === 'Trabalho Normal') {
+      if (!t.project) e.project = 'Projeto/Obra é obrigatório.';
+      if (!t.supervisor) e.supervisor = 'Encarregado é obrigatório.';
+      if (t.hours < 0) e.hours = 'Horas inválidas.';
+      if (t.overtime < 0) e.overtime = 'Extra inválido.';
+    }
     if (t.template === 'Férias' || t.template === 'Baixa') {
       if (!t.periodStart) e.periodStart = 'Início obrigatório.';
       if (!t.periodEnd) e.periodEnd = 'Fim obrigatório.';
       if (t.periodStart && t.periodEnd && new Date(t.periodStart) > new Date(t.periodEnd))
         e.periodEnd = 'Fim anterior ao início.';
     }
-    
-    // Falta: só precisa da data
-    if (t.template === 'Falta') {
-      if (!t.date) e.date = 'Data é obrigatória.';
-    }
-    
     return e;
   };
 
   const submit = () => {
     const adjusted = { ...form };
-
-    // ⬇️ SEMPRE PREENCHER WORKER (CRÍTICO!)
-    adjusted.worker = auth?.name || adjusted.worker || 'Desconhecido';
-
-    console.log('📝 Submetendo timesheet:', {
-      worker: adjusted.worker,
-      authName: auth?.name,
-      date: adjusted.date,
-      template,
-    });
-    
-    // Limpar campos desnecessários conforme o template
-    if (template === 'Férias') {
-      adjusted.hours = 0;
-      adjusted.overtime = 0;
-      adjusted.project = '';
-      adjusted.supervisor = '';
-      adjusted.date = adjusted.periodStart; // usar início como data
-    }
-
-    if (template === 'Baixa') {
-      adjusted.hours = 0;
-      adjusted.overtime = 0;
-      adjusted.project = '';
-      adjusted.supervisor = '';
-      adjusted.date = adjusted.periodStart;
-    }
-
-    if (template === 'Trabalho Normal') {
-      const weekendHours = isWeekendDay ? weekendComputedHours : 0;
-      const otHours = !isWeekendDay ? overtimeComputedHours : 0;
-
-      adjusted.weekendStartTime = form.weekendStartTime || '';
-      adjusted.weekendEndTime = form.weekendEndTime || '';
-      adjusted.extraStartTime = form.extraStartTime || '';
-      adjusted.extraEndTime = form.extraEndTime || '';
-
-      if (isWeekendDay) {
-        adjusted.hours = weekendHours;
-        adjusted.overtime = 0;
-      } else {
-        adjusted.overtime = otHours;
-      }
-    }
-
-    if (template === 'Falta') {
-  // Se não especificar horas, assume dia completo (8h)
-  if (!adjusted.hours || adjusted.hours === 0) {
-    adjusted.hours = 8;
-  }
-  adjusted.overtime = 0;
-  adjusted.project = '';
-  adjusted.supervisor = '';
-  adjusted.periodStart = '';
-  adjusted.periodEnd = '';
-}
-    
+    if (template !== 'Trabalho Normal') { adjusted.hours = 0; adjusted.overtime = 0; }
     const payload = { ...adjusted, template };
     const e = validate(payload);
     setErrors(e);
@@ -4142,10 +2333,10 @@ const TimesheetTemplateForm = ({
               >
                 <div className="font-medium">{t}</div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  {t==='Trabalho Normal'&&'Obra + Encarregado + Horas'}
-                  {t==='Férias'&&'Período de férias'}
-                  {t==='Baixa'&&'Período de baixa médica'}
-                  {t==='Falta'&&'Data da falta'}
+                  {t==='Trabalho Normal'&&'Data + Obra + Encarregado + Horas (+ Extra)'}
+                  {t==='Férias'&&'Período (início/fim)'}
+                  {t==='Baixa'&&'Período (início/fim) + Notas'}
+                  {t==='Falta'&&'Data + Observação'}
                 </div>
               </button>
             ))}
@@ -4156,9 +2347,7 @@ const TimesheetTemplateForm = ({
       {step === 2 && (
         <form onSubmit={(e)=>{ e.preventDefault(); submit(); }} className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            
-            {/* DATA (para Trabalho Normal e Falta) */}
-            {(template === 'Trabalho Normal' || template === 'Falta') && (
+            {(template==='Trabalho Normal' || template==='Falta') && (
               <label className="text-sm">
                 Data
                 <input
@@ -4171,181 +2360,117 @@ const TimesheetTemplateForm = ({
               </label>
             )}
 
-            {/* OBRA (só para Trabalho Normal) */}
-            {template === 'Trabalho Normal' && (
+            {template==='Trabalho Normal' && (
               <label className="text-sm">
-                Obra
-                <div className="mt-1">
-                  <CustomSelect
-                    value={form.project}
-                    onChange={(v) => update('project', v)}
-                    options={projectNames}
-                    placeholder="Ex.: Obra #204"
-                    error={!!errors.project}
-                  />
-                </div>
+                Obra/Projeto
+                <input
+                  list="projects-suggest"
+                  value={form.project}
+                  onChange={e=>update('project',e.target.value)}
+                  placeholder="Ex.: Obra #204"
+                  className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.project?'border-rose-400':''}`}
+                />
+                <datalist id="projects-suggest">
+                  {projectNames.map(n => <option key={n} value={n} />)}
+                </datalist>
                 {errors.project && <div className="text-xs text-rose-600 mt-1">{errors.project}</div>}
               </label>
             )}
 
-            {/* ENCARREGADO (só para Trabalho Normal) */}
-            {template === 'Trabalho Normal' && (
+            {template==='Trabalho Normal' && (
               <label className="text-sm">
                 Encarregado de Obra
-                <div className="mt-1">
-                  <CustomSelect
-                    value={form.supervisor}
-                    onChange={(v) => update('supervisor', v)}
-                    options={supervisorNames}
-                    placeholder="Ex.: Paulo Silva"
-                    error={!!errors.supervisor}
-                  />
-                </div>
+                <input
+                  list="supervisors-suggest"
+                  value={form.supervisor}
+                  onChange={e=>update('supervisor',e.target.value)}
+                  className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.supervisor?'border-rose-400':''}`}
+                  placeholder="Ex.: Paulo Silva"
+                />
+                <datalist id="supervisors-suggest">
+                  {supervisorNames.map(n => <option key={n} value={n} />)}
+                </datalist>
                 {errors.supervisor && <div className="text-xs text-rose-600 mt-1">{errors.supervisor}</div>}
               </label>
             )}
 
-            {/* PERÍODO (para Férias e Baixa) */}
-            {(template === 'Férias' || template === 'Baixa') && (
-              <>
-                <label className="text-sm">
-                  Início
-                  <input
-                    type="date"
-                    value={form.periodStart}
-                    onChange={e=>update('periodStart',e.target.value)}
-                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.periodStart?'border-rose-400':''}`}
-                  />
-                  {errors.periodStart && <div className="text-xs text-rose-600 mt-1">{errors.periodStart}</div>}
-                </label>
-
-                <label className="text-sm">
-                  Fim
-                  <input
-                    type="date"
-                    value={form.periodEnd}
-                    onChange={e=>update('periodEnd',e.target.value)}
-                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.periodEnd?'border-rose-400':''}`}
-                  />
-                  {errors.periodEnd && <div className="text-xs text-rose-600 mt-1">{errors.periodEnd}</div>}
-                </label>
-              </>
-            )}
-
-            {/* HORAS (TRABALHO NORMAL) */}
-            {template === 'Trabalho Normal' && !isWeekendDay && (
+            {template==='Trabalho Normal' && (
               <label className="text-sm">
-                Horas
+                Colaborador
                 <input
-                  type="number" min={0} step={0.5}
-                  value={form.hours}
-                  onChange={e=>update('hours',parseFloat(e.target.value))}
-                  className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.hours?'border-rose-400':''}`}
+                  list="people-suggest"
+                  value={form.worker}
+                  onChange={e=>update('worker',e.target.value)}
+                  className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.worker?'border-rose-400':''}`}
+                  placeholder="Quem executou o trabalho"
                 />
+                <datalist id="people-suggest">
+                  {peopleNames.map(n => <option key={n} value={n} />)}
+                </datalist>
+                {errors.worker && <div className="text-xs text-rose-600 mt-1">{errors.worker}</div>}
               </label>
             )}
 
-            {/* HORÁRIO FIM-DE-SEMANA */}
-            {template === 'Trabalho Normal' && isWeekendDay && (
+            {(template==='Férias' || template==='Baixa') && (
+              <label className="text-sm">
+                Início
+                <input
+                  type="date"
+                  value={form.periodStart}
+                  onChange={e=>update('periodStart',e.target.value)}
+                  className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.periodStart?'border-rose-400':''}`}
+                />
+                {errors.periodStart && <div className="text-xs text-rose-600 mt-1">{errors.periodStart}</div>}
+              </label>
+            )}
+
+            {(template==='Férias' || template==='Baixa') && (
+              <label className="text-sm">
+                Fim
+                <input
+                  type="date"
+                  value={form.periodEnd}
+                  onChange={e=>update('periodEnd',e.target.value)}
+                  className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.periodEnd?'border-rose-400':''}`}
+                />
+                {errors.periodEnd && <div className="text-xs text-rose-600 mt-1">{errors.periodEnd}</div>}
+              </label>
+            )}
+
+            {template==='Trabalho Normal' && (
               <>
                 <label className="text-sm">
-                  Hora início (FDS)
+                  Horas
                   <input
-                    type="time"
-                    value={form.weekendStartTime}
-                    onChange={e=>update('weekendStartTime', e.target.value)}
-                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.weekendStartTime?'border-rose-400':''}`}
+                    type="number" min={0} step={0.5}
+                    value={form.hours}
+                    onChange={e=>update('hours',parseFloat(e.target.value))}
+                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.hours?'border-rose-400':''}`}
                   />
-                  {errors.weekendStartTime && <div className="text-xs text-rose-600 mt-1">{errors.weekendStartTime}</div>}
                 </label>
-
                 <label className="text-sm">
-                  Hora fim (FDS)
+                  Horas Extra
                   <input
-                    type="time"
-                    value={form.weekendEndTime}
-                    onChange={e=>update('weekendEndTime', e.target.value)}
-                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.weekendEndTime?'border-rose-400':''}`}
+                    type="number" min={0} step={0.5}
+                    value={form.overtime}
+                    onChange={e=>update('overtime',parseFloat(e.target.value))}
+                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.overtime?'border-rose-400':''}`}
                   />
-                  {errors.weekendEndTime && <div className="text-xs text-rose-600 mt-1">{errors.weekendEndTime}</div>}
-                  <div className="text-xs text-slate-500 mt-1">Horas calculadas: {weekendComputedHours || '—'}h</div>
                 </label>
               </>
             )}
 
-            {/* HORÁRIO EXTRA EM DIAS ÚTEIS */}
-            {template === 'Trabalho Normal' && !isWeekendDay && (
-              <>
-                <label className="text-sm">
-                  Hora extra (início)
-                  <input
-                    type="time"
-                    value={form.extraStartTime}
-                    onChange={e=>update('extraStartTime', e.target.value)}
-                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.extraStartTime?'border-rose-400':''}`}
-                  />
-                  {errors.extraStartTime && <div className="text-xs text-rose-600 mt-1">{errors.extraStartTime}</div>}
-                </label>
-
-                <label className="text-sm">
-                  Hora extra (fim)
-                  <input
-                    type="time"
-                    value={form.extraEndTime}
-                    onChange={e=>update('extraEndTime', e.target.value)}
-                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.extraEndTime?'border-rose-400':''}`}
-                  />
-                  {errors.extraEndTime && <div className="text-xs text-rose-600 mt-1">{errors.extraEndTime}</div>}
-                  <div className="text-xs text-slate-500 mt-1">Horas extra calculadas: {overtimeComputedHours || '—'}h</div>
-                </label>
-              </>
+            {(template==='Baixa' || template==='Falta') && (
+              <label className="text-sm md:col-span-2">
+                Observação
+                <textarea
+                  value={form.notes}
+                  onChange={e=>update('notes',e.target.value)}
+                  placeholder={template==='Falta'?'Motivo da falta':'Observações'}
+                  className="mt-1 w-full rounded-xl border p-2 min-h-[80px] dark:bg-slate-900 dark:border-slate-700"
+                />
+              </label>
             )}
-
-            {/* NOTAS (para Baixa e Falta) */}
-            {/* HORAS DE FALTA (OPCIONAL) */}
-{template === 'Falta' && (
-  <>
-    <label className="text-sm">
-      Horas de Falta (opcional)
-      <input
-        type="number"
-        min={0}
-        max={8}
-        step={0.5}
-        value={form.hours || ''}
-        onChange={e=>update('hours',parseFloat(e.target.value) || 0)}
-        placeholder="Ex: 4 (se faltou meio-dia)"
-        className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-      />
-      <div className="text-xs text-slate-500 mt-1">
-        Deixa vazio se faltou o dia todo (8h)
-      </div>
-    </label>
-
-    <label className="text-sm md:col-span-2">
-      Motivo da Falta
-      <textarea
-        value={form.notes}
-        onChange={e=>update('notes',e.target.value)}
-        placeholder="Descreve o motivo..."
-        className="mt-1 w-full rounded-xl border p-2 min-h-[80px] dark:bg-slate-900 dark:border-slate-700"
-      />
-    </label>
-  </>
-)}
-
-{/* NOTAS (para Baixa) */}
-{template === 'Baixa' && (
-  <label className="text-sm md:col-span-2">
-    Observações
-    <textarea
-      value={form.notes}
-      onChange={e=>update('notes',e.target.value)}
-      placeholder="Observações médicas..."
-      className="mt-1 w-full rounded-xl border p-2 min-h-[80px] dark:bg-slate-900 dark:border-slate-700"
-    />
-  </label>
-)}
           </div>
 
           <div className="pt-2 flex justify-between gap-2">
@@ -4357,6 +2482,104 @@ const TimesheetTemplateForm = ({
     </div>
   );
 };
+
+/* ---------- AUTH / LOGIN ---------- */
+const ROLE_LABELS = {
+  tecnico: 'Técnico',
+  encarregado: 'Encarregado',
+  diretor: 'Diretor de Obra',
+  logistica: 'Gestor de Logística',
+  admin: 'Administrador',
+} as const
+
+const CAN = {
+  dashboard:   new Set(['admin']),
+  timesheets:  new Set(['tecnico','encarregado','admin']),
+  materials:   new Set(['encarregado','diretor','admin']),
+  obras:       new Set(['diretor','admin']),
+  obraReport:  new Set(['diretor','admin']),
+  logistics:   new Set(['logistica','admin']),
+  people:      new Set(['diretor','admin']),
+  vehicles:    new Set(['diretor','admin']),
+  agenda:      new Set(['encarregado','diretor','admin']),
+}
+
+const defaultViewForRole = (role: string) =>
+  role === 'tecnico'     ? 'timesheets' :
+  role === 'encarregado' ? 'timesheets' :
+  role === 'diretor'     ? 'obras'      :
+  role === 'logistica'   ? 'logistics'  :
+  'dashboard'
+// LoginView real: pede email e password e usa Supabase
+// Login real: estética antiga + funcionalidade Supabase
+// Vista de login: cartão antigo com autenticação Supabase
+function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    const res = await window.Auth?.login(email, password);
+    setLoading(false);
+    if (res?.ok) {
+      onLogin(res.user);
+    } else {
+      setError(res?.error || 'Credenciais inválidas');
+    }
+  };
+
+  return (
+    <div className="min-h-screen grid place-items-center p-4 bg-slate-50 dark:bg-slate-950">
+      <Card className="max-w-md w-full p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="p-2 rounded-xl bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900">
+            <Icon name="activity" />
+          </div>
+          <div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">Plataforma</div>
+            <div className="font-semibold dark:text-slate-100">Gestão de Trabalho</div>
+          </div>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <label className="text-sm">
+            Email
+            <input
+              type="email"
+              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              placeholder="Digite o seu email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+            />
+          </label>
+          <label className="text-sm">
+            Password
+            <input
+              type="password"
+              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              placeholder="Digite a sua password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+            />
+          </label>
+          {error && (
+            <div className="text-red-500 text-xs">{error}</div>
+          )}
+          <Button type="submit" className="w-full justify-center" disabled={loading}>
+            {loading ? 'A entrar…' : 'Entrar'}
+          </Button>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
+
 
 
 const JOB_TYPES = ['Instalação','Manutenção','Visita Técnica','Reunião'];
@@ -4438,598 +2661,79 @@ function AgendaQuickForm({ initial, setAgenda, onClose, peopleNames=[], projectN
 }
 
 
-// 🔐 ROLES E PERMISSÕES
-// ---------------------------------------------------------------
-const ROLE_LABELS = {
-  tecnico: "Técnico",
-  encarregado: "Encarregado",
-  diretor: "Diretor de Obra",
-  logistica: "Gestor de Logística",
-  admin: "Administrador",
-} as const;
 
-const CAN = {
-  dashboard: new Set(["admin"]),
-  timesheets: new Set(["tecnico", "encarregado", "admin"]),
-  materials: new Set(["encarregado", "diretor", "admin"]),
-  obras: new Set(["diretor", "admin"]),
-  obraReport: new Set(["diretor", "admin"]),
-  logistics: new Set(["logistica", "admin"]),
-  people: new Set(["diretor", "admin"]),
-  vehicles: new Set(["diretor", "admin"]),
-  agenda: new Set(["encarregado", "diretor", "admin"]),
-};
-
-
-// ---------------------------------------------------------------
-// 🔐 FUNÇÃO AUXILIAR: VIEW PADRÃO POR ROLE
-// ---------------------------------------------------------------
-function defaultViewForRole(role: string): string {
-  switch (role) {
-    case "admin":
-      return "monthly-report";
-    case "tecnico":
-    case "encarregado":
-    case "diretor":
-      return "profile"; // ⬅️ TÉCNICOS/ENCARREGADOS VÊM PERFIL POR DEFEITO
-    case "logistica":
-      return "logistics";
-    default:
-      return "profile";
-  }
-}
-// ---------------------------------------------------------------
-// 🔐 LOGIN VIEW (Supabase) — UI igual ao login antigo
-// ---------------------------------------------------------------
-// ---------------------------------------------------------------
-// 🔐 LOGIN VIEW (Supabase) — COM DEBUG
-// ---------------------------------------------------------------
-// ---------------------------------------------------------------
-// 🔐 LOGIN VIEW (Supabase) — VERSÃO CORRIGIDA
-// ---------------------------------------------------------------
-function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    // ✅ Usa o Auth.login() que já busca da tabela profiles!
-    const res = await window.Auth?.login?.(email, password);
-
-    setLoading(false);
-
-    if (res?.ok) {
-      const u = res.user;
-
-      console.log("✅ LOGIN SUCESSO:", u);
-      console.log("✅ ROLE:", u.role);
-
-      // ✅ O user já vem com role da BD!
-      onLogin({
-        id: u.id,
-        email: u.email,
-        role: u.role, // ⬅️ já validado no auth.tsx
-        name: u.name,
-      });
-    } else {
-      setError(res?.error || "Credenciais inválidas.");
-    }
-  };
-
-  return (
-    <div className="min-h-screen grid place-items-center bg-slate-50 dark:bg-slate-950 p-4">
-      <div className="w-full max-w-md p-6 space-y-4 rounded-2xl bg-white shadow-sm dark:bg-slate-900 dark:border dark:border-slate-800">
-        <h2 className="text-xl font-semibold text-center">Entrar</h2>
-
-        <form className="space-y-3" onSubmit={submit}>
-          <div>
-            <label className="text-sm">Email</label>
-            <input
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@empresa.pt"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="text-sm">Password</label>
-            <input
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-
-          {error && (
-            <div className="text-red-500 text-sm">{error}</div>
-          )}
-
-          <Button className="w-full" disabled={loading}>
-            {loading ? "A entrar..." : "Entrar"}
-          </Button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------
-// 🔧 DEFAULTS RH
-// ---------------------------------------------------------------
-const DEFAULT_HOURLY_RATE = 12.5;
-const DEFAULT_OT_MULTIPLIER = 1.5;
-
-// ---------------------------------------------------------------
-// 🔥 APLICAÇÃO PRINCIPAL
-// ---------------------------------------------------------------
+/* ---------- App ---------- */
 function App() {
-  const persisted = loadState?.();
-  const [cloudStamp, setCloudStamp] = useState<string | null>(persisted?.updatedAt || null)
-  const [cloudReady, setCloudReady] = useState(false)
+  // Carrega qualquer estado persistente (excepto auth)
+  const persisted = loadState();
 
-  // -------------------------------------------------------------
-  // 🔐 AUTH E NAVEGAÇÃO
-  // -------------------------------------------------------------
-  const [auth, setAuth] = useState<any | null>(
-    (window as any).Auth?.user?.() ?? null
+  // Estado de autenticação
+  const [auth, setAuth] = useState<any | null>(window.Auth?.user() ?? null);
+
+  // Vista inicial
+  const [view, setView] = useState(
+    auth ? defaultViewForRole(auth.role) : 'timesheets'
   );
 
-  const [view, setView] = useState<
-    keyof typeof CAN | "timesheets" | "obra-report"
-  >(auth ? defaultViewForRole(auth.role) : "timesheets");
+  // ... outros useState (jobs, timeEntries, etc.)
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [modal, setModal] = useState<any | null>(null);
-  const cloudSaveTimer = useRef<any>(null)
-  const [supabaseActive] = useState(() => supabaseReady)
-  const cloudKey = useMemo(() => CLOUD_ROW_ID, [])
-  const latestStampRef = useRef<string | null>(cloudStamp)
 
-  // 👉 Função can() — PERMISSÕES
-  const can = (section: keyof typeof CAN) => {
-    if (!auth?.role) return false;
-    const allowed = CAN[section];
-    return allowed?.has(auth.role) ?? false;
-  };
 
-  // -------------------------------------------------------------
-  // 🎨 TEMA E DENSIDADE
-  // -------------------------------------------------------------
-  const [theme, setTheme] = useState(persisted?.theme || "light");
-  const [density, setDensity] = useState(persisted?.density || "comfy");
+  const [theme,setTheme]=useState(persisted?.theme||'light');
+  const [density,setDensity]=useState(persisted?.density||'comfy');
 
-  // -------------------------------------------------------------
-  // 📊 DADOS PRINCIPAIS
-  // -------------------------------------------------------------
-  const [people, setPeople] = useState(
-    migratePeople(persisted?.people) || {}
-  );
-  const [vehicles, setVehicles] = useState(persisted?.vehicles || []);
-  const [agenda, setAgenda] = useState(persisted?.agenda || []);
-  const [suppliers, setSuppliers] = useState(persisted?.suppliers || {});
-  const [prefs, setPrefs] = useState(
-    persisted?.prefs || {
-      defaultRate: DEFAULT_HOURLY_RATE,
-      otMultiplier: DEFAULT_OT_MULTIPLIER,
-    }
+  // antes: const [people,setPeople]=useState(persisted?.people ||{});
+const [people,setPeople]=useState(migratePeople(persisted?.people) || {});
+const [vehicles, setVehicles] = useState(persisted?.vehicles || []);      // {id, plate, model, inspAt, serviceAt, notes}
+const [agenda, setAgenda]     = useState(persisted?.agenda || []);        // {id, date, worker, project, notes}
+const [suppliers, setSuppliers] = useState(persisted?.suppliers || {});   // { [supplierName]: [{name,code,price,family}] }
+  const [prefs,setPrefs]=useState(
+    persisted?.prefs || { defaultRate: DEFAULT_HOURLY_RATE, otMultiplier: DEFAULT_OT_MULTIPLIER }
   );
   const [projectFocus, setProjectFocus] = useState(null);
 
-  // Defaults
-  const defaultTime = [
-    {
-      id: uid(),
-      date: todayISO(),
-      template: "Trabalho Normal",
-      project: "Obra #204",
-      supervisor: "João Silva",
-      hours: 8,
-      overtime: 1,
-    },
-    {
-      id: uid(),
-      date: todayISO(),
-      template: "Férias",
-      periodStart: todayISO(),
-      periodEnd: todayISO(),
-      hours: 0,
-      overtime: 0,
-    },
+  useEffect(() => { document.documentElement.classList.toggle('dark', theme === 'dark'); }, [theme]);
+
+  const defaultTime=[{id:uid(),date:todayISO(),template:'Trabalho Normal',project:'Obra #204',supervisor:'João Silva',hours:8,overtime:1},{id:uid(),date:todayISO(),template:'Férias',periodStart:todayISO(),periodEnd:todayISO(),hours:0,overtime:0}];
+  const defaultOrders=[{ id:uid(),project:'Primark Porto',requestedBy:'Hélder Pinto',status:'Pendente',requestedAt:todayISO(), items:[{name:'INTERRUPTOR UNIPOLAR',qty:1}] }];
+  const defaultProjects=[
+    {id:uid(),name:'Primark Porto',manager:'',type:'Eletricidade',family:'Logus 90'},
+    {id:uid(),name:'Primark Covilhã',manager:'',type:'Eletricidade',family:'Logus 90'},
+    {id:uid(),name:'Joom',manager:'',type:'Eletricidade',family:'Modus 55'},
+    {id:uid(),name:'AH50',manager:'',type:'Eletricidade',family:'Mec 21'},
+    {id:uid(),name:'MB4',manager:'',type:'Eletricidade',family:'Mec 21'},
+    {id:uid(),name:'Torres Lisboa',manager:'',type:'Eletricidade',family:'Logus 90'},
+    {id:uid(),name:'Cenes',manager:'',type:'Eletricidade',family:'Mec 21'},
+    {id:uid(),name:'JTI',manager:'',type:'Eletricidade',family:'Modus 55'},
   ];
 
-  const defaultOrders = [
-    {
-      id: uid(),
-      project: "Primark Porto",
-      requestedBy: "Hélder Pinto",
-      status: "Pendente",
-      requestedAt: todayISO(),
-      items: [{ name: "INTERRUPTOR UNIPOLAR", qty: 1 }],
-    },
-  ];
-
-  const defaultProjects = [
-    { id: uid(), name: "Primark Porto", manager: "", type: "Eletricidade", family: "Logus 90" },
-    { id: uid(), name: "Primark Covilhã", manager: "", type: "Eletricidade", family: "Logus 90" },
-    { id: uid(), name: "Joom", manager: "", type: "Eletricidade", family: "Modus 55" },
-    { id: uid(), name: "AH50", manager: "", type: "Eletricidade", family: "Mec 21" },
-    { id: uid(), name: "MB4", manager: "", type: "Eletricidade", family: "Mec 21" },
-    { id: uid(), name: "Torres Lisboa", manager: "", type: "Eletricidade", family: "Logus 90" },
-    { id: uid(), name: "Cenes", manager: "", type: "Eletricidade", family: "Mec 21" },
-    { id: uid(), name: "JTI", manager: "", type: "Eletricidade", family: "Modus 55" },
-  ];
-
-  const [timeEntries, setTimeEntries] = useState(
-    dedupTimeEntries(persisted?.timeEntries || defaultTime)
-  );
-  const [orders, setOrders] = useState(
-    persisted?.orders || defaultOrders
-  );
-  const [projects, setProjects] = useState(
-    persisted?.projects || defaultProjects
-  );
-  const [activity, setActivity] = useState(
-    persisted?.activity || [
-      { id: uid(), ts: new Date(), text: "App iniciada." },
-    ]
-  );
-  const [catalog, setCatalog] = useState(persisted?.catalog || []);
-
-  const applySnapshot = (snap: any) => {
-    if (!snap) return
-
-    setTimeEntries(dedupTimeEntries(snap.timeEntries || []))
-    setOrders(snap.orders || [])
-    setProjects(snap.projects || [])
-    setActivity((snap.activity || []).map((a: any) => ({ ...a, ts: a?.ts ? new Date(a.ts) : new Date() })))
-    setTheme(snap.theme || 'light')
-    setDensity(snap.density || 'comfy')
-    setCatalog(snap.catalog || [])
-    setPeople(migratePeople(snap.people) || {})
-    setPrefs(
-      snap.prefs || {
-        defaultRate: DEFAULT_HOURLY_RATE,
-        otMultiplier: DEFAULT_OT_MULTIPLIER,
-      }
-    )
-    setVehicles(snap.vehicles || [])
-    setAgenda(snap.agenda || [])
-    setSuppliers(snap.suppliers || {})
-    setCloudStamp(snap.updatedAt || new Date().toISOString())
+  const [timeEntries,setTimeEntries]=useState(persisted?.timeEntries||defaultTime);
+  const [orders,setOrders]=useState(persisted?.orders||defaultOrders);
+  // ---- VISIBILIDADE POR PERFIL ----
+const visibleTimeEntries = React.useMemo(() => {
+  if (auth?.role === 'tecnico' || auth?.role === 'encarregado') {
+    return (timeEntries || []).filter(t =>
+      t.worker === auth?.name || t.supervisor === auth?.name
+    );
   }
-
-  // -------------------------------------------------------------
-  // 🌙 Alterar tema
-  // -------------------------------------------------------------
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-  }, [theme]);
-
-  // -------------------------------------------------------------
-  // ☁️ CARREGAR ESTADO NA CLOUD (SE EXISTIR)
-  // -------------------------------------------------------------
-  useEffect(() => {
-    latestStampRef.current = cloudStamp
-  }, [cloudStamp])
-
-  useEffect(() => {
-    let cancelled=false
-
-    ;(async()=>{
-      if(!supabaseActive){
-        setCloudReady(true)
-        return
-      }
-
-      const cloud = await fetchCloudState(cloudKey)
-      if(cancelled)return
-
-      const remoteTs = cloud?.updatedAt ? new Date(cloud.updatedAt).getTime() : 0
-      const localTs = cloudStamp ? new Date(cloudStamp).getTime() : 0
-
-      if(cloud?.payload && remoteTs>localTs){
-        applySnapshot({ ...cloud.payload, updatedAt: cloud.updatedAt })
-      }
-
-      setCloudReady(true)
-    })()
-
-    return ()=>{cancelled=true}
-  }, [cloudKey, supabaseActive])
-
-  useEffect(()=>{
-    if(!supabaseActive||!supabase)return
-
-    const channel = supabase
-      .channel('app_state_sync')
-      .on('postgres_changes',{event:'UPDATE',schema:'public',table:CLOUD_STATE_TABLE,filter:`id=eq.${cloudKey}`},payload=>{
-        const updatedAt = (payload.new as any)?.updated_at || (payload.new as any)?.updatedAt
-        const remoteTs = updatedAt ? new Date(updatedAt).getTime() : 0
-        const localTs = latestStampRef.current ? new Date(latestStampRef.current).getTime() : 0
-
-        if(remoteTs>localTs){
-          const snap = (payload.new as any)?.payload || (payload.new as any)
-          applySnapshot({ ...snap, updatedAt })
-        }
-      })
-      .subscribe()
-
-    return ()=>{
-      supabase.removeChannel(channel)
-    }
-  },[cloudKey, supabaseActive])
-
-  // -------------------------------------------------------------
-  // 🔄 REFRESH SUPABASE AO INICIAR
-  // -------------------------------------------------------------
-// -------------------------------------------------------------
-// 🔄 REFRESH SUPABASE AO INICIAR
-// -------------------------------------------------------------
-// -------------------------------------------------------------
-// 🔄 REFRESH SUPABASE AO INICIAR
-// -------------------------------------------------------------
-useEffect(() => {
-  let cancelled = false;
-
-  (async () => {
-    // ✅ Agora usa o Auth.refresh() que já existe!
-    const u = await window.Auth?.refresh?.();
-
-    if (!cancelled) {
-      if (u) {
-        console.log("🔄 REFRESH USER:", u);
-        console.log("✅ ROLE:", u.role); // já vem da tabela profiles!
-
-        setAuth({
-          id: u.id,
-          email: u.email,
-          role: u.role, // ⬅️ já vem normalizado e validado
-          name: u.name,
-        });
-      } else {
-        setAuth(null);
-      }
-    }
-  })();
-
-  return () => {
-    cancelled = true;
-  };
-}, []);
-
-  // -------------------------------------------------------------
-  // 🔁 FALLBACK AUTOMÁTICO DE VIEW
-  // -------------------------------------------------------------
-  useEffect(() => {
-    if (auth) {
-      if (!CAN[view] || !CAN[view].has(auth.role)) {
-        setView(defaultViewForRole(auth.role));
-      }
-    }
-  }, [auth, view]);
-
-  // -------------------------------------------------------------
-  // 💾 PERSISTÊNCIA LOCAL
-  // -------------------------------------------------------------
-  useEffect(() => {
-    if (!cloudReady) return
-
-    const updatedAt = new Date().toISOString()
-    const snapshot = {
-      timeEntries,
-      orders,
-      projects,
-      activity,
-      theme,
-      density,
-      catalog,
-      people,
-      prefs,
-      vehicles,
-      agenda,
-      suppliers,
-      updatedAt,
-    }
-
-    saveState(snapshot)
-    setCloudStamp(updatedAt)
-
-    if (cloudReady && supabaseActive) {
-      if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current)
-      cloudSaveTimer.current = setTimeout(() => saveCloudState(snapshot, cloudKey), 400)
-    }
-  }, [
-    timeEntries,
-    orders,
-    projects,
-    activity,
-    theme,
-    density,
-    catalog,
-    people,
-    prefs,
-    vehicles,
-    agenda,
-    suppliers,
-    cloudReady,
-    supabaseActive,
-    cloudKey,
-  ]);
-
-  // -------------------------------------------------------------
-  // 🔍 MEMOS E DERIVADOS
-  // -------------------------------------------------------------
-  // ✅ DEPOIS
-// ---------------------------------------------------------------
-// 🔍 FILTRO DE VISIBILIDADE DE TIMESHEETS
-// ---------------------------------------------------------------
-
-// ============================================================
-// 🔍 DEBUG: Auditoria de Timesheets
-// ============================================================
-useEffect(() => {
-  console.log('🔍 Auditoria de Timesheets:', {
-    total: timeEntries.length,
-    comWorker: timeEntries.filter(t => t.worker).length,
-    comSupervisor: timeEntries.filter(t => t.supervisor).length,
-    semAmbos: timeEntries.filter(t => !t.worker && !t.supervisor).length,
-    workers: [...new Set(timeEntries.map(t => t.worker).filter(Boolean))],
-    supervisors: [...new Set(timeEntries.map(t => t.supervisor).filter(Boolean))],
-  });
-}, [timeEntries]);
-
-// ⬇️ O useMemo do visibleTimeEntries continua aqui
-const visibleTimeEntries = useMemo(() => {
-  console.log('🔍 Filtrando timesheets:', {
-    role: auth?.role,
-    name: auth?.name,
-    totalEntries: timeEntries?.length,
-  });
-  // ... resto do código
-
-
-  // Admin, Diretor e Logística veem TUDO
-  if (auth?.role === "admin" || auth?.role === "diretor" || auth?.role === "logistica") {
-    console.log('✅ Admin/Diretor/Logística - mostrar TODOS os registos');
-    return timeEntries || [];
-  }
-  
-  // Técnico e Encarregado veem APENAS os seus próprios registos
-  if (auth?.role === "tecnico" || auth?.role === "encarregado") {
-    const filtered = (timeEntries || []).filter((t) => {
-      // ⬇️ CORRIGIDO: verifica worker OU supervisor
-      const match = t.worker === auth?.name || t.supervisor === auth?.name;
-      
-      if (match) {
-        console.log('✅ Match encontrado:', {
-          date: t.date,
-          worker: t.worker,
-          supervisor: t.supervisor,
-          authName: auth?.name,
-        });
-      }
-      
-      return match;
-    });
-
-    console.log(`📊 Técnico/Encarregado - ${filtered.length} registos filtrados`);
-    return filtered;
-  }
-  
-  // Fallback seguro
-  console.warn('⚠️ Role desconhecido:', auth?.role);
-  return [];
+  return timeEntries;
 }, [auth?.role, auth?.name, timeEntries]);
 
-  const visibleOrders = useMemo(() => {
-    if (auth?.role === "logistica" || auth?.role === "admin") {
-      return orders;
-    }
-    return (orders || []).filter((o) => o.requestedBy === auth?.name);
-  }, [auth?.role, auth?.name, orders]);
+ useEffect(() => {
+    let cancelled = false;
 
-  const catalogMaps = useMemo(() => buildCatalogMaps(catalog), [catalog]);
+    (async () => {
+      const u = await window.Auth?.refresh();
+      if (!cancelled) {
+        setAuth(u || null);
+      }
+    })();
 
-  const uniqueFamilies = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          catalog
-            .map((c) => String(c.family || "").trim())
-            .filter(Boolean)
-        )
-      ).sort(),
-    [catalog]
-  );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const peopleNames = useMemo(
-    () =>
-      Array.from(
-        new Set([
-          ...Object.keys(people || {}),
-          ...timeEntries
-            .map((t) => t.worker || t.supervisor)
-            .filter(Boolean),
-        ])
-      ).sort(),
-    [people, timeEntries]
-  );
-
-  const supervisorNames = [
-    "Paulo Silva",
-    "Paulo Carujo",
-    "António Sousa",
-    "Hélder Pinto",
-  ];
-
-  const projectNames = useMemo(
-    () =>
-      Array.from(new Set(projects.map((p) => p.name))).sort(),
-    [projects]
-  );
-
-  const { start: cycStart, end: cycEnd } = getCycle(0);
-
-  const registeredDays = useMemo(() => {
-    const s = new Set<string>();
-    (visibleTimeEntries || []).forEach((t) => {
-      if (t.date) s.add(t.date);
-    });
-    return s.size;
-  }, [visibleTimeEntries, cycStart, cycEnd]);
-
-  const startWeek = startOfWeek(new Date());
-
-  const hoursByDay = useMemo(() => {
-    const map = new Map(
-      ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((d) => [d, 0])
-    );
-    (visibleTimeEntries || [])
-      .filter((t) => t.date && new Date(t.date) >= startWeek)
-      .forEach((t) => {
-        const d = new Date(t.date);
-        const idx = (d.getDay() + 6) % 7;
-        const label = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"][idx];
-        const cur = map.get(label) || 0;
-        map.set(
-          label,
-          cur + (Number(t.hours) || 0) + (Number(t.overtime) || 0)
-        );
-      });
-    return Array.from(map, ([label, value]) => ({ label, value }));
-  }, [visibleTimeEntries, startWeek]);
-
-  const MaterialsFlat = visibleOrders.flatMap((o) =>
-    o.items.map((it) => ({
-      requestedAt: o.requestedAt,
-      project: o.project,
-      item: it.name,
-      qty: it.qty,
-      requestedBy: o.requestedBy,
-      status: o.status,
-    }))
-  );
-
-  const openReport = (p: any) => {
-    if (can("obraReport")) {
-      setProjectFocus(p);
-      setView("obra-report");
-    }
-  };
-
-  // -------------------------------------------------------------
-  // 🔐 GUARD — LOGIN OBRIGATÓRIO
-  // -------------------------------------------------------------
   if (!auth) {
     return (
       <LoginView
@@ -5042,945 +2746,498 @@ const visibleTimeEntries = useMemo(() => {
   }
 
 
-  // ---------------------------------------------------------------
-// 📝 FUNÇÕES DE MANIPULAÇÃO DE DADOS
-// ---------------------------------------------------------------
-const addTimeEntry = (entry: any) => {
-  // ⬇️ GARANTIR QUE WORKER É SEMPRE PREENCHIDO
-  const completeEntry = {
-    ...entry,
-    id: entry.id || uid(),
-    worker: entry.worker || auth?.name || 'Desconhecido',
-  };
-
-  console.log('✅ Timesheet criado:', {
-    id: completeEntry.id,
-    worker: completeEntry.worker,
-    date: completeEntry.date,
-    template: completeEntry.template,
-  });
-
-  setTimeEntries((prev) => [completeEntry, ...prev]);
-  addToast("Timesheet registado com sucesso");
-};
-
-const updateTimeEntry = (entry: any) => {
-  setTimeEntries((prev) => prev.map((t) => (t.id === entry.id ? entry : t)));
-  addToast("Timesheet atualizado");
-};
-
-
-// ---------------------------------------------------------------
-// 📊 CONSTRUIR LINHAS DO RELATÓRIO
-// ---------------------------------------------------------------
-const buildTimesheetCycleRows = ({ worker, timeEntries, cycle }) => {
-  const { start, end } = cycle;
-  const rows = [];
-  const dayName = d => d.toLocaleDateString('pt-PT', { weekday: 'long' });
-
-  // index por dia
-  const byDay = new Map();
-  for (const t of timeEntries) {
-    if (worker && t.worker && t.worker !== worker) continue;
-    
-    const dates = (t.template === 'Férias' || t.template === 'Baixa')
-      ? (() => {
-          const a = new Date(t.periodStart || t.date);
-          const b = new Date(t.periodEnd || t.date);
-          a.setHours(0, 0, 0, 0);
-          b.setHours(0, 0, 0, 0);
-          const out = [];
-          for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
-            out.push(d.toISOString().slice(0, 10));
-          }
-          return out;
-        })()
-      : [new Date(t.date).toISOString().slice(0, 10)];
-
-    for (const iso of dates) {
-      if (!byDay.has(iso)) byDay.set(iso, []);
-      byDay.get(iso).push(t);
-    }
+const visibleOrders = React.useMemo(() => {
+  if (auth?.role === 'logistica' || auth?.role === 'admin') {
+    return orders;
   }
+  return (orders || []).filter(o => o.requestedBy === auth?.name);
+}, [auth?.role, auth?.name, orders]);
 
-  // varrer dia-a-dia
-  const cur = new Date(start);
-  cur.setHours(0, 0, 0, 0);
-  const last = new Date(end);
-  last.setHours(0, 0, 0, 0);
-  
-  while (cur <= last) {
-    const iso = cur.toISOString().slice(0, 10);
-    const dow = cur.getDay();
-    const weekend = (dow === 0 || dow === 6);
 
-    let situ = weekend ? 'Fim de Semana' : 'Sem Registo';
-    let horas = 0, extras = 0, local = '—';
+  const [projects,setProjects]=useState(persisted?.projects||defaultProjects);
+  const [activity,setActivity]=useState(persisted?.activity||[{id:uid(),ts:new Date(),text:'App iniciada.'}]);
+  const [catalog,setCatalog]=useState(persisted?.catalog||[]);
 
-    const reg = byDay.get(iso) || [];
-    if (reg.length) {
-      const t = reg[0];
-      if (t.template === 'Trabalho Normal') {
-        situ = 'Trabalho - Horário Normal';
-        horas = Number(t.hours || 0);
-        extras = Number(t.overtime || 0);
-        local = t.project || '—';
-      } else if (t.template === 'Férias') {
-        situ = 'Férias';
-      } else if (t.template === 'Baixa') {
-        situ = 'Baixa';
-      } else if (t.template === 'Falta') {
-        situ = 'Falta';
+  const catalogMaps=useMemo(()=>buildCatalogMaps(catalog),[catalog]);
+  const uniqueFamilies=useMemo(()=>Array.from(new Set(catalog.map(c=>String(c.family||'').trim()).filter(Boolean))).sort(),[catalog]);
+
+  const [sidebarOpen,setSidebarOpen]=useState(false);
+  const [modal,setModal]=useState(null);
+
+  // dentro de function App() { ... } mas ANTES do return do App
+const TimesheetsView = () => (
+  <section className="space-y-4">
+    <PageHeader icon="clock"
+      title="Timesheets"
+      subtitle="Calendário 21→20 + registos recentes"
+      actions={
+        <Button onClick={() => setModal({ name: 'add-time' })}>
+          <Icon name="plus" /> Adicionar
+        </Button>
+      }
+    />
+    <Card className="p-4">
+      <CycleCalendar timeEntries={visibleTimeEntries}
+        onDayClick={(iso) => setModal({ name: 'day-actions', dateISO: iso })}
+      />
+    </Card>
+
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold dark:text-slate-100">Registos recentes</h3>
+        <Button variant="secondary"
+          size="sm"
+          onClick={() => setModal({ name: 'ts-all' })}
+        >
+          Ver mais
+        </Button>
+      </div>
+      <TableSimple columns={['Data','Tipo','Projeto','Encarregado','Horas','Extra']}
+        rows={visibleTimeEntries
+          .map(t => [
+            t.date,
+            t.template,
+            t.project || '-',
+            t.supervisor || '-',
+            t.hours || 0,
+            t.overtime || 0
+          ])
+          .slice(0, 5)}
+      />
+    </div>
+  </section>
+);
+
+
+
+
+  const peopleNames = useMemo(
+    () => Array.from(new Set([
+      ...Object.keys(people || {}),
+      ...timeEntries.map(t => t.worker || t.supervisor).filter(Boolean),
+    ])).sort(),
+    [people, timeEntries]
+  );
+
+  const supervisorNames = ['Paulo Silva','Paulo Carujo','António Sousa','Hélder Pinto'];
+  const projectNames = useMemo(
+    () => Array.from(new Set(projects.map(p => p.name))).sort(),
+    [projects]
+  );
+
+  useEffect(()=>{ 
+  saveState({timeEntries,orders,projects,activity,theme,density,catalog,people,prefs,vehicles,agenda,suppliers}) 
+},[timeEntries,orders,projects,activity,theme,density,catalog,people,prefs,vehicles,agenda,suppliers]);
+
+  useEffect(()=>{ if (auth) setView(v => CAN[v]?.has(auth.role) ? v : defaultViewForRole(auth.role)); }, [auth]);
+
+  const addToast=(msg)=>{const id=uid();setActivity(a=>[{id,ts:new Date(),text:msg},...a])};
+
+  const addTimeEntry = entry => {
+    const withId = {id:uid(), ...entry};
+    setTimeEntries(prev => [withId, ...prev]);
+    if (withId.worker && !(withId.worker in (people||{}))) {
+  const base = prefs.defaultRate ?? DEFAULT_HOURLY_RATE;
+  const otm  = prefs.otMultiplier ?? DEFAULT_OT_MULTIPLIER;
+  setPeople(prev => ({
+    ...prev,
+    [withId.worker]: {
+      rates: {
+        normal: base,
+        extra: base * otm,
+        deslocada: base * 1.25,
+        fimSemana: base * 2
       }
     }
-
-    const diaFormatado = dayName(cur);
-    rows.push({
-      data: iso,
-      dia: diaFormatado.charAt(0).toUpperCase() + diaFormatado.slice(1),
-      situ,
-      horas,
-      extras,
-      local
-    });
-
-    cur.setDate(cur.getDate() + 1);
-  }
-
-  return rows;
-};
-
-// ---------------------------------------------------------------
-// 📊 GERAR RELATÓRIO PESSOAL
-// ---------------------------------------------------------------
-const generatePersonalTimesheetReport = ({ worker, timeEntries, cycle }) => {
-  const { start, end } = cycle;
-  const rows = buildTimesheetCycleRows({ worker, timeEntries, cycle });
-
-  const fmt = fmtDate;
-  
-  // Estatísticas
-  const totalExtras = rows.reduce((s, r) => s + (r.extras || 0), 0);
-  const uteis = rows.filter(r => !['Sábado', 'Domingo'].includes(r.dia)).length;
-  const fds = rows.filter(r => ['Sábado', 'Domingo'].includes(r.dia)).length;
-  const feriados = rows.filter(r => r.situ === 'Feriado').length;
-  const ferias = rows.filter(r => r.situ === 'Férias').length;
-  const baixas = rows.filter(r => r.situ === 'Baixa').length;
-  const semReg = rows.filter(r => r.situ === 'Sem Registo' && !['Sábado', 'Domingo'].includes(r.dia)).length;
-
-  // Dias por preencher
-  const diasPorPreencher = rows.filter(r => 
-    r.situ === 'Sem Registo' && 
-    !['Sábado', 'Domingo'].includes(r.dia)
-  );
-
-  // HTML do detalhe diário
-  const detalheDiario = rows.map(r => {
-    const isUtilSemReg = r.situ === 'Sem Registo' && !['Sábado', 'Domingo'].includes(r.dia);
-    const bgColor = isUtilSemReg ? 'background: #fef3c7;' : '';
-    
-    return `
-      <tr style="${bgColor}">
-        <td style="padding:8px; border-bottom:1px solid #e5e7eb">${fmt(r.data)}</td>
-        <td style="padding:8px; border-bottom:1px solid #e5e7eb">${r.dia}</td>
-        <td style="padding:8px; border-bottom:1px solid #e5e7eb">${r.situ}</td>
-        <td style="padding:8px; border-bottom:1px solid #e5e7eb; text-align:right">${r.horas || '—'}</td>
-        <td style="padding:8px; border-bottom:1px solid #e5e7eb; text-align:right">${r.extras || '—'}</td>
-        <td style="padding:8px; border-bottom:1px solid #e5e7eb">${r.local}</td>
-      </tr>
-    `;
-  }).join('');
-
-  // HTML dos dias por preencher
-  const tabelaPorPreencher = diasPorPreencher.length > 0 ? `
-    <div style="margin-bottom: 24px; padding: 16px; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
-      <h2 style="margin: 0 0 12px 0; font-size: 16px; color: #92400e;">
-        POR PREENCHER — ${diasPorPreencher.length} dias
-      </h2>
-      <p style="margin: 0 0 12px 0; font-size: 14px; color: #78350f; font-weight: 600;">
-        Dias por preencher
-      </p>
-      <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-          <tr style="background: #fbbf24; color: #78350f;">
-            <th style="padding: 8px; text-align: left; font-weight: 600; font-size: 12px;">Data</th>
-            <th style="padding: 8px; text-align: left; font-weight: 600; font-size: 12px;">Dia da Semana</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${diasPorPreencher.map(r => `
-            <tr>
-              <td style="padding: 6px 8px; font-size: 12px; color: #78350f;">${fmt(r.data)}</td>
-              <td style="padding: 6px 8px; font-size: 12px; color: #78350f;">${r.dia}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  ` : '';
-
-  const html = `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <title>Resumo do Registo — ${worker || 'Colaborador'}</title>
-  <style>
-    body { 
-      font-family: system-ui, -apple-system, Arial, sans-serif; 
-      padding: 40px; 
-      color: #0f172a;
-      max-width: 900px;
-      margin: 0 auto;
-      background: #f8fafc;
-    }
-    .container {
-      background: white;
-      padding: 32px;
-      border-radius: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    h1 { 
-      margin: 0 0 8px 0; 
-      font-size: 24px;
-      color: #0f172a;
-    }
-    .subtitle {
-      color: #64748b;
-      font-size: 16px;
-      margin-bottom: 24px;
-    }
-    .greeting {
-      font-size: 14px;
-      color: #64748b;
-      margin-bottom: 32px;
-    }
-    h2 {
-      font-size: 18px;
-      margin: 32px 0 16px 0;
-      color: #1e293b;
-      border-bottom: 2px solid #e2e8f0;
-      padding-bottom: 8px;
-    }
-    table { 
-      width: 100%; 
-      border-collapse: collapse; 
-      margin-top: 16px;
-      font-size: 13px;
-    }
-    th { 
-      text-align: left; 
-      background: #f1f5f9;
-      padding: 10px 8px;
-      font-weight: 600;
-      color: #475569;
-      border-bottom: 2px solid #cbd5e1;
-    }
-    td {
-      padding: 8px;
-      border-bottom: 1px solid #e5e7eb;
-    }
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-      margin-top: 24px;
-    }
-    .stat-box {
-      padding: 16px;
-      background: #f8fafc;
-      border-radius: 8px;
-      border: 1px solid #e2e8f0;
-    }
-    .stat-label {
-      font-size: 12px;
-      color: #64748b;
-      margin-bottom: 4px;
-    }
-    .stat-value {
-      font-size: 24px;
-      font-weight: 700;
-      color: #0f172a;
-    }
-    .legend {
-      margin-top: 24px;
-      padding: 12px 16px;
-      background: #fef3c7;
-      border-radius: 8px;
-      font-size: 12px;
-      color: #78350f;
-      border-left: 4px solid #f59e0b;
-    }
-    @media print {
-      body { padding: 20px; background: white; }
-      .container { box-shadow: none; }
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>Resumo do Registo</h1>
-    <div class="subtitle">${fmt(start)} - ${fmt(end)}</div>
-    <div class="greeting">Olá <strong>${worker || '—'}</strong>,</div>
-
-    ${tabelaPorPreencher}
-
-    <h2>Detalhe diário</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Data</th>
-          <th>Dia da Semana</th>
-          <th>Situação Atual</th>
-          <th style="text-align:right">Horas</th>
-          <th style="text-align:right">Extras</th>
-          <th>Local de Trabalho</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${detalheDiario}
-      </tbody>
-    </table>
-
-    <h2>Resumo Estatístico</h2>
-    <div class="stats-grid">
-      <div class="stat-box">
-        <div class="stat-label">Total de dias úteis</div>
-        <div class="stat-value">${uteis}</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">Dias de fim de semana</div>
-        <div class="stat-value">${fds}</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">Feriados</div>
-        <div class="stat-value">${feriados}</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">Baixas</div>
-        <div class="stat-value">${baixas}</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">Férias</div>
-        <div class="stat-value">${ferias}</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">Dias por preencher (úteis)</div>
-        <div class="stat-value">${semReg}</div>
-      </div>
-      <div class="stat-box" style="grid-column: span 3;">
-        <div class="stat-label">Total de horas extra (somadas)</div>
-        <div class="stat-value">${totalExtras}h</div>
-      </div>
-    </div>
-
-    <div class="legend">
-      <strong>Legenda:</strong> linhas a amarelo = dias úteis sem registo.
-    </div>
-  </div>
-</body>
-</html>`;
-
-  return html;
-};
-const duplicateTimeEntry = (entry: any) => {
-  const newEntry = { ...entry, id: uid() };
-  setTimeEntries((prev) => [newEntry, ...prev]);
-  addToast("Timesheet duplicado");
-};
-
-const addOrder = (payload: any) => {
-  const newOrder = {
-    id: uid(),
-    requestedAt: todayISO(),
-    status: "Pendente",
-    notes: "",
-    ...payload,
+  }));
+}
+    addToast('Registo criado.');
   };
-  setOrders((prev) => [newOrder, ...prev]);
-  addToast("Pedido criado com sucesso");
-};
+  const updateTimeEntry=updated=>{setTimeEntries(prev=>prev.map(t=>t.id===updated.id?{...t,...updated}:t));addToast('Registo atualizado.')};
+  const duplicateTimeEntry=t=>{const copy={...t,id:uid()};setTimeEntries(prev=>[copy,...prev]);addToast('Registo duplicado.')};
 
-const moveOrderStatus = (orderId: string, newStatus: string) => {
-  setOrders((prev) =>
-    prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
-  );
-};
+  const addOrder=(payload)=>{const order={id:uid(),requestedAt:todayISO(),status:'Pendente',notes:'',...payload};setOrders(prev=>[order,...prev]);addToast(`Pedido criado (${payload.project})`)};
+  const setOrderPatch=(id,patch)=>setOrders(prev=>prev.map(m=>m.id===id?{...m,...patch}:m));
+  const moveOrderStatus=(id,status)=>{setOrderPatch(id,{status});const it=orders.find(m=>m.id===id);if(it){addToast(`Pedido "${it.project}" → ${status}.`)}};  
 
-const setOrderPatch = (orderId: string, patch: any) => {
-  setOrders((prev) =>
-    prev.map((o) => (o.id === orderId ? { ...o, ...patch } : o))
-  );
-};
+  const resetDemo=()=>{clearState();setTimeEntries(defaultTime);setOrders(defaultOrders);setProjects(defaultProjects);setActivity([{id:uid(),ts:new Date(),text:'Dados de demonstração repostos.'}]);setCatalog([])};
 
-const addToast = (msg: string, type = "ok") => {
-  console.log(`[${type.toUpperCase()}] ${msg}`);
-  // Se quiseres toast visual, adiciona biblioteca tipo react-hot-toast
-};
-
-const setters = {
+  const setters = {
+  // setters diretos
   setTimeEntries,
-  setOrders,
+  setOrders,            // não precisas do alias setOrders:setOrders
   setProjects,
   setActivity,
-  setCatalog,
   setPeople,
   setPrefs,
+  setCatalog: (rows) => setCatalog(rows),
+
+  // NOVOS (expõe-os para o ImportCenter usar)
   setVehicles,
   setAgenda,
   setSuppliers,
-  setAll: (data: any) => {
-    setTimeEntries(data.timeEntries || []);
-    setOrders(data.orders || []);
-    setProjects(data.projects || []);
-    setActivity(data.activity || []);
-    setCatalog(data.catalog || []);
-    setPeople(data.people || {});
-    setPrefs(data.prefs || { defaultRate: DEFAULT_HOURLY_RATE, otMultiplier: DEFAULT_OT_MULTIPLIER });
-    setVehicles(data.vehicles || []);
-    setAgenda(data.agenda || []);
-    setSuppliers(data.suppliers || {});
-  },
+
+  // snapshot para exportBackup()
   get: () => ({
-    timeEntries,
-    orders,
-    projects,
-    activity,
-    catalog,
-    people,
-    prefs,
-    vehicles,
-    agenda,
-    suppliers,
-    theme,
-    density,
+    timeEntries, orders, projects, activity, theme, density,
+    catalog, people, prefs, vehicles, agenda, suppliers
   }),
+
+  // repõe tudo (import JSON "replace")
+  setAll: ({
+    timeEntries,
+    orders: ord,
+    projects: projs,
+    activity,
+    theme: th,
+    density: de,
+    catalog: cat,
+    people: pp,
+    prefs: pf,
+    vehicles: vv,
+    agenda: ag,
+    suppliers: ss
+  }) => {
+    setTimeEntries(Array.isArray(timeEntries) ? timeEntries : []);
+    setOrders(Array.isArray(ord) ? ord : []);
+    setProjects(Array.isArray(projs) ? projs : []);
+    setActivity(Array.isArray(activity) ? activity : []);
+    if (th) setTheme(th);
+    if (de) setDensity(de);
+    if (Array.isArray(cat)) setCatalog(cat);
+    setPeople((typeof migratePeople === 'function') ? migratePeople(pp || {}) : (pp || {}));
+    setPrefs(pf || { defaultRate: DEFAULT_HOURLY_RATE, otMultiplier: DEFAULT_OT_MULTIPLIER });
+    setVehicles(Array.isArray(vv) ? vv : []);
+    setAgenda(Array.isArray(ag) ? ag : []);
+    setSuppliers(ss || {});
+  },
 };
 
-// ---------------------------------------------------------------
-// 📊 DASHBOARD VIEW
-// ---------------------------------------------------------------
-function DashboardView() {
-  return (
-    <section className="space-y-4">
-      <PageHeader icon="activity" title="Dashboard" subtitle="Visão geral da operação" />
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <KpiCard
-          icon="clock"
-          title="Dias Registados"
-          value={registeredDays}
-          subtitle={`Este ciclo (${fmtDate(cycStart)} - ${fmtDate(cycEnd)})`}
-          onClick={() => setModal({ name: "kpi-overview" })}
-        />
-        
-        <KpiCard
-          icon="package"
-          title="Pedidos Ativos"
-          value={visibleOrders.filter((o) => o.status !== "Entregue").length}
-          subtitle="Pendentes + Aprovados"
-          onClick={() => setView("logistics")}
-        />
-        
-        <KpiCard
-          icon="wrench"
-          title="Obras Ativas"
-          value={projects.length}
-          subtitle="Obras em curso"
-          onClick={() => setView("obras")}
-        />
+
+
+  const {start:cycStart,end:cycEnd}=getCycle(0);
+
+ const registeredDays=useMemo(()=>{ /* igual ao teu código, mas varre visibleTimeEntries */
+   const s=new Set();
+   (visibleTimeEntries||[]).forEach(t=>{ /* ...mesma lógica... */ });
+   return s.size;
+ },[visibleTimeEntries,cycStart,cycEnd]);
+
+  const startWeek=startOfWeek(new Date());
+
+ const hoursByDay=useMemo(()=>{ /* mesma lógica, mas usa visibleTimeEntries */
+   const map=new Map(['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map(d=>[d,0]));
+   (visibleTimeEntries||[]).filter(t=>new Date(t.date)>=startWeek).forEach(t=>{ /* ... */ });
+   return Array.from(map,([label,value])=>({label,value}));
+},[visibleTimeEntries]);
+
+  const NavItem=({id,icon,label})=>(
+    <button onClick={()=>{setView(id);setSidebarOpen(false)}} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm hover:bg-slate-100 dark:hover:bg-slate-800 ${view===id?'bg-slate-900 text-white hover:bg-slate-900 dark:bg-slate-200 dark:text-slate-900':'text-slate-700 dark:text-slate-200'}`}><Icon name={icon}/><span>{label}</span></button>
+  );
+
+  const MaterialsFlat=visibleOrders.flatMap(o=>o.items.map(it=>({requestedAt:o.requestedAt,project:o.project,item:it.name,qty:it.qty,requestedBy:o.requestedBy,status:o.status})));
+
+const DashboardView = () => (
+  <section className="space-y-4">
+    {/* --- Ações Rápidas --- */}
+    <Card className="p-5 bg-gradient-to-br from-slate-900 to-slate-800 text-white dark:from-slate-800 dark:to-slate-900">
+      <div className="text-base font-semibold mb-3">⚡ Ações Rápidas</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        <button
+          onClick={() =>
+            setModal({
+              name: 'add-time',
+              initial: { date: todayISO(), template: 'Trabalho Normal' },
+            })
+          }
+          className="rounded-2xl px-5 py-4 text-left text-white shadow-md hover:shadow-lg transition border border-white/10 bg-gradient-to-r from-blue-600 to-indigo-600"
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-sm opacity-90">Registo Hoje</div>
+            <div className="p-2 rounded-lg bg-white/10">
+              <Icon name="clock" className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-2 text-lg font-semibold">Criar registo de horas</div>
+        </button>
+
+        <button
+          onClick={() => setModal({ name: 'add-order' })}
+          className="rounded-2xl px-5 py-4 text-left text-white shadow-md hover:shadow-lg transition border border-white/10 bg-gradient-to-r from-amber-600 to-orange-600"
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-sm opacity-90">Pedir Material</div>
+            <div className="p-2 rounded-lg bg-white/10">
+              <Icon name="package" className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-2 text-lg font-semibold">Nova requisição</div>
+        </button>
+
+        <button
+          onClick={() => setModal({ name: 'import' })}
+          className="rounded-2xl px-5 py-4 text-left text-white shadow-md hover:shadow-lg transition border border-white/10 bg-gradient-to-r from-slate-600 to-slate-800"
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-sm opacity-90">Importar Dados</div>
+            <div className="p-2 rounded-lg bg-white/10">
+              <Icon name="file" className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-2 text-lg font-semibold">CSV/JSON</div>
+        </button>
+      </div>
+    </Card>
+
+    {/* --- KPI Cards (substitui o cartão antigo) --- */}
+    {(() => {
+      const { start, end } = getCycle(0);
+      const uteis = countWeekdaysInclusive(start, end);
+      const reg = registeredDays;
+
+      const totalOrders = orders.length;
+      const delivered = orders.filter((o) => o.status === 'Entregue').length;
+      const eff = totalOrders ? Math.round((delivered / totalOrders) * 100) : 0;
+
+      const fleetTotal = vehicles.length || 0;
+      const fleetOk = fleetTotal; // se adicionares estados de avaria, ajusta aqui
+
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <KpiCard
+  icon="calendar"
+  title="Visão Geral do Mês"
+  value={`${reg}/${uteis}`}
+  subtitle="dias registados/úteis"
+  onClick={() => setModal({ name: 'kpi-overview' })}
+/>
+          <KpiCard
+            icon="file"
+            title="Eficiência Material"
+            value={`${eff}%`}
+            subtitle={`${delivered}/${totalOrders} entregues`}
+            onClick={() => setModal({ name: 'kpi-logistics' })}
+          />
+          <KpiCard
+            icon="wrench"
+            title="Performance da Frota"
+            value={`${fleetTotal ? 100 : 0}%`}
+            subtitle={`${fleetOk}/${fleetTotal} operacionais`}
+            onClick={() => setModal({ name: 'kpi-fleet' })}
+          />
+        </div>
+      );
+    })()}
+
+    {/* --- Horas por dia (semana atual) --- */}
+    <Card className="p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="font-semibold dark:text-slate-100">Horas por dia (semana atual)</div>
+        <div className="text-xs text-slate-500 dark:text-slate-400">
+          {hoursByDay.reduce((s, d) => s + d.value, 0)} h
+        </div>
       </div>
 
-      <Card className="p-4">
-        <div className="font-semibold mb-3">Horas por Dia (Esta Semana)</div>
-        <div className="h-48 flex items-end gap-2">
-          {hoursByDay.map((d) => (
-            <div key={d.label} className="flex-1 flex flex-col items-center gap-1">
-              <div
-                className="w-full bg-indigo-600 rounded-t"
-                style={{ height: `${(d.value / 12) * 100}%` }}
-              />
-              <div className="text-xs text-slate-500">{d.label}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </section>
-  );
-}
+      {(() => {
+        const data = hoursByDay;
+        const height = 220,
+          padding = 24;
+        const max = Math.max(1, ...data.map((d) => d.value || 0));
+        const barW = 28,
+          gap = 14;
+        const width = padding * 2 + data.length * barW + (data.length - 1) * gap;
+        const scaleY = (v) => (height - padding * 2) * (v / max);
 
-// ---------------------------------------------------------------
-// ⏰ TIMESHEETS VIEW
-// ---------------------------------------------------------------
-// ---------------------------------------------------------------
-// ⏰ TIMESHEETS VIEW (COM BOTÃO DE REMOVER)
-// ---------------------------------------------------------------
-function TimesheetsView() {
-  const hasEntriesForDay = useCallback(
-    (iso) => {
-      const target = new Date(iso);
-      target.setHours(0, 0, 0, 0);
-      return visibleTimeEntries.some((t) => {
-        if (t.template === "Férias" || t.template === "Baixa") {
-          const a = new Date(t.periodStart || t.date);
-          const b = new Date(t.periodEnd || t.date);
-          a.setHours(0, 0, 0, 0);
-          b.setHours(0, 0, 0, 0);
-          return target >= a && target <= b;
-        }
-        const d = new Date(t.date);
-        d.setHours(0, 0, 0, 0);
-        return d.getTime() === target.getTime();
-      });
-    },
-    [visibleTimeEntries]
-  );
-
-  const handleDayClick = useCallback(
-    (iso) => {
-      if (hasEntriesForDay(iso)) {
-        setModal({ name: "day-details", dateISO: iso });
-      } else {
-        setModal({ name: "day-actions", dateISO: iso });
-      }
-    },
-    [hasEntriesForDay]
-  );
-
-  return (
-    <section className="space-y-4">
-      <PageHeader
-  icon="clock"
-  title="Timesheets"
-  subtitle={`${visibleTimeEntries.length} registos`}
-  actions={
-    <>
-      {/* ⬇️ BOTÃO DE DEBUG TEMPORÁRIO */}
-      <Button
-        variant="secondary"
-        onClick={() => {
-          console.log('🔍 DEBUG:', {
-            auth,
-            totalEntries: timeEntries.length,
-            visibleEntries: visibleTimeEntries.length,
-            allWorkers: [...new Set(timeEntries.map(t => t.worker))],
-            allSupervisors: [...new Set(timeEntries.map(t => t.supervisor))],
-          });
-        }}
-      >
-        Debug
-      </Button>
-
-      <Button onClick={() => setModal({ name: "add-time" })}>
-        <Icon name="plus" /> Novo Registo
-      </Button>
-    </>
-  }
-/>
-
-      <CycleCalendar
-        timeEntries={visibleTimeEntries}
-        onDayClick={handleDayClick}
-        auth={auth}
-      />
-
-      {/* ✅ TABELA COM COLUNA DE AÇÕES */}
-      <Card className="p-4">
-        <div className="overflow-auto rounded-2xl border dark:border-slate-800">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900/50">
-              <tr>
-                <th className="px-3 py-2 text-left">Data</th>
-                <th className="px-3 py-2 text-left">Tipo</th>
-                <th className="px-3 py-2 text-left">Obra</th>
-                <th className="px-3 py-2 text-left">Colaborador</th>
-                <th className="px-3 py-2 text-right">Horas</th>
-                <th className="px-3 py-2 text-right">Extra</th>
-                <th className="px-3 py-2 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleTimeEntries.length === 0 && (
-                <tr>
-                  <td colSpan="7" className="px-3 py-8 text-center text-slate-500">
-                    Sem registos
-                  </td>
-                </tr>
-              )}
-
-              {visibleTimeEntries.slice(0, 20).map((t) => (
-                <tr key={t.id} className="border-t dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                  <td className="px-3 py-2">
-                    {t.template === 'Trabalho Normal' || t.template === 'Falta'
-                      ? t.date
-                      : `${t.periodStart} → ${t.periodEnd}`}
-                  </td>
-                  <td className="px-3 py-2">
-                    <Badge
-                      tone={
-                        t.template === 'Trabalho Normal' ? 'emerald' :
-                        t.template === 'Férias' ? 'blue' :
-                        t.template === 'Baixa' ? 'rose' : 'amber'
-                      }
+        return (
+          <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-56">
+            <g transform={`translate(${padding}, ${padding})`}>
+              {data.map((d, i) => {
+                const h = Math.max(2, scaleY(d.value));
+                const x = i * (barW + gap);
+                const y = height - padding * 2 - h;
+                return (
+                  <g key={i} transform={`translate(${x},0)`}>
+                    <rect
+                      x={0}
+                      y={y}
+                      width={barW}
+                      height={h}
+                      rx={6}
+                      className="fill-slate-800 dark:fill-slate-200"
+                    />
+                    <text
+                      x={barW / 2}
+                      y={height - padding * 2 + 16}
+                      textAnchor="middle"
+                      className="fill-slate-500 dark:fill-slate-400 text-[10px]"
                     >
-                      {t.template}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-2">{t.project || "—"}</td>
-                  <td className="px-3 py-2">{t.worker || t.supervisor || "—"}</td>
-                  <td className="px-3 py-2 text-right">{t.hours || 0}</td>
-                  <td className="px-3 py-2 text-right">{t.overtime || 0}</td>
-                  
-                  {/* ✅ COLUNA DE AÇÕES */}
-                  <td className="px-3 py-2 text-right">
-                    <div className="flex gap-2 justify-end">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setModal({ name: "add-time", initial: t })}
-                      >
-                        Editar
-                      </Button>
-                      
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm(`Remover registo de ${t.template} em ${t.date || t.periodStart}?`)) {
-                            setTimeEntries(prev => prev.filter(entry => entry.id !== t.id));
-                            addToast("Registo removido com sucesso");
-                          }
-                        }}
-                      >
-                        Remover
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                      {d.label}
+                    </text>
+                    <text
+                      x={barW / 2}
+                      y={y - 6}
+                      textAnchor="middle"
+                      className="fill-slate-700 dark:fill-slate-300 text-[10px]"
+                    >
+                      {d.value}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+          </svg>
+        );
+      })()}
+    </Card>
 
-        {/* Botão para ver todos */}
-        {visibleTimeEntries.length > 20 && (
-          <div className="mt-3 text-center">
-            <Button
-              variant="secondary"
-              onClick={() => setModal({ name: "ts-all" })}
-            >
-              Ver todos os {visibleTimeEntries.length} registos
-            </Button>
-          </div>
-        )}
-      </Card>
-    </section>
-  );
-}
+    {/* --- Atividade --- */}
+    <Card className="p-4">
+      <div className="flex items-center gap-2 mb-3 dark:text-slate-100">
+        <Icon name="activity" />
+        <div className="font-semibold">Atividade</div>
+      </div>
+      <ul className="space-y-2 max-h-[340px] overflow-auto pr-1">
+        {activity.map((a) => (
+          <li key={a.id} className="flex items-start gap-3">
+            <div className="mt-1 w-2 h-2 rounded-full bg-slate-400" />
+            <div>
+              <div className="text-sm dark:text-slate-200">{a.text}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                {a.ts.toLocaleString()}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  </section>
+);
 
-// ---------------------------------------------------------------
-// 📦 MATERIAIS VIEW
-// ---------------------------------------------------------------
-function TableMaterials() {
-  return (
-    <section className="space-y-4">
-      <PageHeader
-        icon="package"
-        title="Pedidos de Material"
-        subtitle={`${visibleOrders.length} pedidos`}
-        actions={
-          <Button onClick={() => setModal({ name: "add-order" })}>
-            <Icon name="plus" /> Novo Pedido
-          </Button>
-        }
-      />
 
-      <Card className="p-4">
-        <TableSimple
-          columns={["Data", "Obra", "Requisitante", "Estado", "Itens"]}
-          rows={visibleOrders.map((o) => [
-            fmtDate(o.requestedAt),
-            o.project,
-            o.requestedBy || "—",
-            o.status,
-            o.items.map((i) => `${i.name} (${i.qty})`).join(", "),
-          ])}
-        />
-      </Card>
-    </section>
-  );
-}
 
-  // -------------------------------------------------------------
-  // 🌍 RETURN PRINCIPAL — LAYOUT DA APP
-  // -------------------------------------------------------------
-  return (
-    <div
-      className={`min-h-screen ${
-        density === "compact" ? "text-[15px]" : ""
-      }`}
-      data-density={density}
-    >
-      {/* HEADER MOBILE */}
+
+
+
+  const TableMaterials=()=>(<section className="space-y-4"><PageHeader icon="package" title="Materiais" actions={<Button onClick={()=>setModal({name:'add-order'})}><Icon name="plus"/> Novo Pedido</Button>}/><TableSimple columns={["Data","Projeto","Item","Qtd","Requisitante","Estado"]} rows={MaterialsFlat.map(m=>[m.requestedAt,m.project,m.item,m.qty,m.requestedBy,m.status])}/></section>);
+
+
+
+
+  const openReport = (p) => {
+    if (can('obraReport')) { setProjectFocus(p); setView('obra-report'); }
+  };
+
+
+  return(
+    <div className={`min-h-screen ${density==='compact'?'text-[15px]':''}`} data-density={density}>
+      {/* Header Mobile */}
       <div className="lg:hidden sticky top-0 z-40 glass border-b dark:border-slate-800">
         <div className="flex items-center justify-between px-4 py-3">
-          <Button
-            variant="ghost"
-            onClick={() => setSidebarOpen((s) => !s)}
-          >
-            <Icon name="menu" />
-          </Button>
-
-          <div className="font-semibold dark:text-slate-100">
-            Gestão de Trabalho
-          </div>
-
+          <Button variant="ghost" onClick={()=>setSidebarOpen(s=>!s)} aria-label="Menu"><Icon name="menu"/></Button>
+          <div className="font-semibold dark:text-slate-100">Gestão de Trabalho</div>
           <div className="flex gap-2">
-            {auth?.role === "admin" && (
-              <Button
-                variant="ghost"
-                onClick={() => setModal({ name: "import" })}
-              >
-                Importar
-              </Button>
-            )}
-
-            <Button
-              variant="ghost"
-              onClick={() =>
-                setTheme((t) => (t === "dark" ? "light" : "dark"))
-              }
-            >
-              <Icon name="calendar" />
-            </Button>
+            {auth?.role==='admin' && <Button variant="ghost" onClick={()=>setModal({name:'import'})}>Importar</Button>}
+            <Button variant="ghost" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')} aria-label="Tema"><Icon name="calendar"/></Button>
           </div>
         </div>
       </div>
 
-      {/* LAYOUT GRID */}
       <div className="mx-auto max-w-7xl lg:grid lg:grid-cols-[260px_1fr] gap-6 p-4">
-        {/* -------------------- SIDEBAR -------------------- */}
-        <aside
-          className={`lg:sticky lg:top-4 h-fit lg:block ${
-            sidebarOpen ? "block" : "hidden"
-          } glass rounded-2xl border shadow-sm p-3 dark:border-slate-800`}
-        >
+        {/* Sidebar */}
+        <aside className={`lg:sticky lg:top-4 h-fit lg:block ${sidebarOpen?'block':'hidden'} glass rounded-2xl border shadow-sm p-3 dark:border-slate-800`}>
           <div className="flex items-center justify-between px-2 py-2">
             <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900">
-                <Icon name="activity" />
-              </div>
-
+              <div className="p-2 rounded-xl bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900"><Icon name="activity"/></div>
               <div>
-                <div className="text-sm text-slate-500 dark:text-slate-400">
-                  Plataforma
-                </div>
-                <div className="font-semibold dark:text-slate-100">
-                  Gestão de Trabalho
-                </div>
+                <div className="text-sm text-slate-500 dark:text-slate-400">Plataforma</div>
+                <div className="font-semibold dark:text-slate-100">Gestão de Trabalho</div>
               </div>
             </div>
-
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                (window as any).Auth?.logout?.();
-                setAuth(null);
-                setView("timesheets");
-              }}
-            >
-              Sair
-            </Button>
+            <Button variant="secondary" size="sm" onClick={()=>{ window.Auth?.logout(); setAuth(null); setView('dashboard'); }}>
+    Sair
+  </Button>
           </div>
 
-          {/* USER INFO */}
           <div className="px-2 pb-2 text-xs text-slate-500 dark:text-slate-400">
-            Utilizador:{" "}
-            <b className="dark:text-slate-200">{auth?.name || "—"}</b>{" "}
-            ·{" "}
-            {ROLE_LABELS[auth?.role as keyof typeof ROLE_LABELS] ||
-              "—"}
+            Utilizador: <b className="dark:text-slate-200">{auth.name}</b> · {ROLE_LABELS[auth.role]}
           </div>
 
-          {/* NAV ITEMS */}
-<div className="mt-2 space-y-1">
-  {/* ⬇️ PERFIL - TODOS VEEM (NO TOPO) */}
-  <NavItem id="profile" icon="user" label="Meu Perfil" setView={setView} />
-
-  {/* Admin vê o relatório mensal */}
-  {auth?.role === "admin" && (
-    <NavItem id="monthly-report" icon="calendar" label="Relatório Mensal" setView={setView} />
-  )}
-
-  {/* Timesheets - TODOS veem */}
-  <NavItem id="timesheets" icon="clock" label="Timesheets" setView={setView} />
-
-  {/* Materiais - Encarregado, Diretor, Admin */}
-  {can("materials") && (
-    <NavItem id="materials" icon="package" label="Materiais" setView={setView} />
-  )}
-  
-  {/* Logística - Logística e Admin */}
-  {can("logistics") && (
-    <NavItem id="logistics" icon="package" label="Logística (Direção)" setView={setView} />
-  )}
-  
-  {/* Obras - Diretor e Admin */}
-  {can("obras") && (
-    <NavItem id="obras" icon="wrench" label="Obras" setView={setView} />
-  )}
-  
-  {/* Colaboradores - Diretor e Admin */}
-  {can("people") && (
-    <NavItem id="people" icon="user" label="Colaboradores" setView={setView} />
-  )}
-  
-  {/* Veículos - Diretor e Admin */}
-  {can("vehicles") && (
-    <NavItem id="vehicles" icon="building" label="Veículos" setView={setView} />
-  )}
-  
-  {/* Agenda - Encarregado, Diretor, Admin */}
-  {can("agenda") && (
-    <NavItem id="agenda" icon="calendar" label="Agenda" setView={setView} />
-  )}
+          <div className="mt-2 space-y-1">
+  {can('dashboard') && <NavItem id="dashboard" icon="activity" label="Dashboard"/>}
+  {can('timesheets') && <NavItem id="timesheets" icon="clock" label="Timesheets"/>}
+  {can('materials') && <NavItem id="materials" icon="package" label="Materiais"/>}
+  {can('logistics') && <NavItem id="logistics" icon="package" label="Logística (Direção)"/>}
+  {can('obras') && <NavItem id="obras" icon="wrench" label="Obras"/>}
+  {can('people')   && <NavItem id="people"   icon="user"     label="Colaboradores"/>}
+{can('vehicles') && <NavItem id="vehicles" icon="building" label="Veículos"/>}
+{can('agenda')   && <NavItem id="agenda"   icon="calendar" label="Agenda"/>}
 </div>
 
-          {/* PREFERÊNCIAS */}
+
           <div className="mt-4 p-2 rounded-xl bg-slate-50 dark:bg-slate-900 border dark:border-slate-800">
-            <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">
-              Preferências
-            </div>
-
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm dark:text-slate-200">
-                Tema
-              </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() =>
-                  setTheme((t) => (t === "dark" ? "light" : "dark"))
-                }
-              >
-                {theme === "dark" ? "Claro" : "Escuro"}
-              </Button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-sm dark:text-slate-200">
-                Densidade
-              </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() =>
-                  setDensity((d) =>
-                    d === "comfy" ? "compact" : "comfy"
-                  )
-                }
-              >
-                {density === "compact" ? "Compacto" : "Conforto"}
-              </Button>
-            </div>
-
-            <div className="mt-3">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setModal({ name: "import" })}
-              >
-                <Icon name="download" /> Importar/Exportar
-              </Button>
-            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">Preferências</div>
+            <div className="flex items-center justify-between mb-2"><span className="text-sm dark:text-slate-200">Tema</span><Button variant="secondary" size="sm" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>{theme==='dark'?'Claro':'Escuro'}</Button></div>
+            <div className="flex items-center justify-between"><span className="text-sm dark:text-slate-200">Densidade</span><Button variant="secondary" size="sm" onClick={()=>setDensity(d=>d==='comfy'?'compact':'comfy')}>{density==='compact'?'Compacto':'Conforto'}</Button></div>
+            <div className="mt-3"><Button variant="secondary" size="sm" onClick={()=>setModal({name:'import'})}><Icon name="download"/> Importar/Exportar</Button></div>
+            <div className="mt-2"><Button variant="secondary" size="sm" onClick={resetDemo}>Repor dados demo</Button></div>
           </div>
         </aside>
 
-        {/* -------------------- MAIN CONTENT -------------------- */}
+        {/* Main */}
         <main className="space-y-4 text-slate-800 dark:text-slate-100">
-          {/* SEARCH / ACTION BAR */}
           <div className="hidden lg:flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl px-3 py-2 w-96">
-              <Icon name="search" />
-              <input
-                className="bg-transparent outline-none text-sm w-full"
-                placeholder="Pesquisar (clientes, obras, materiais)"
-              />
+              <Icon name="search"/>
+              <input className="bg-transparent outline-none text-sm w-full" placeholder="Pesquisar (clientes, obras, materiais)"/>
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {can("timesheets") && (
-                <Button
-                  onClick={() => setModal({ name: "add-time" })}
-                >
-                  <Icon name="clock" /> Registar Tempo
+              {can('timesheets') && (
+                <Button onClick={()=>setModal({name:'add-time'})}>
+                  <Icon name="clock"/> Registar Tempo
                 </Button>
               )}
 
-              {can("materials") && (
-                <Button
-                  onClick={() => setModal({ name: "add-order" })}
-                >
-                  <Icon name="package" /> Pedir Material
+              {can('materials') && (
+                <Button onClick={()=>setModal({name:'add-order'})}>
+                  <Icon name="package"/> Pedir Material
                 </Button>
               )}
 
-              {auth?.role === "admin" && (
-                <Button
-                  variant="secondary"
-                  onClick={() => setModal({ name: "import" })}
-                >
-                  <Icon name="download" /> Importar
+              {auth?.role==='admin' && (
+                <Button variant="secondary" onClick={()=>setModal({name:'import'})}>
+                  <Icon name="download"/> Importar
                 </Button>
               )}
+
+              <Button variant="secondary" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>
+                {theme==='dark'?'Claro':'Escuro'}
+              </Button>
+
+              <Button variant="secondary" onClick={()=>setDensity(d=>d==='comfy'?'compact':'comfy')}>
+                {density==='compact'?'Compacto':'Conforto'}
+              </Button>
             </div>
           </div>
 
-          {/* ROUTER INTERNO */}
-          {view === "dashboard" && <DashboardView />}
-          {/* ROUTER INTERNO */}
-{view === "profile" && (
-  <ProfileView timeEntries={timeEntries} auth={auth} people={people} />
+          {view==='dashboard'&&<DashboardView/>}
+          {view==='timesheets'&&<TimesheetsView/>}
+          {view==='materials'&&<TableMaterials/>}
+          {view==='logistics'&&<LogisticsView orders={orders} moveOrderStatus={moveOrderStatus} setOrderPatch={setOrderPatch} setModal={setModal} download={download} catalogMaps={catalogMaps} projects={projects}/>}
+   {view==='people'   && <PeopleView   people={people}   setPeople={setPeople} />}
+
+{view==='vehicles' && <VehiclesView vehicles={vehicles} setVehicles={setVehicles} />}
+
+{view==='agenda'   && (
+  <AgendaView
+    agenda={agenda}
+    setAgenda={setAgenda}
+    projectNames={projectNames}
+    peopleNames={peopleNames}
+  />
 )}
 
-{view === "monthly-report" && auth?.role === "admin" && (
-  <MonthlyReportView timeEntries={timeEntries} people={people} />
-)}
-
-{view === "timesheets" && <TimesheetsView />}
-          {view === "materials" && <TableMaterials />}
-          {view === "logistics" && (
-            <LogisticsView
-              orders={orders}
-              moveOrderStatus={moveOrderStatus}
-              setOrderPatch={setOrderPatch}
-              setModal={setModal}
-              download={download}
-              catalogMaps={catalogMaps}
-              projects={projects}
-            />
-          )}
-          {view === "people" && (
-            <PeopleView
-              people={people}
-              setPeople={setPeople}
-            />
-          )}
-          {view === "vehicles" && (
-            <VehiclesView
-              vehicles={vehicles}
-              setVehicles={setVehicles}
-            />
-          )}
-          {view === "agenda" && (
-            <AgendaView
-              agenda={agenda}
-              setAgenda={setAgenda}
-              projectNames={projectNames}
-              peopleNames={peopleNames}
-            />
-          )}
-          {view === "obras" && (
+          {view==='obras' && (
             <ObrasView
               projects={projects}
               setProjects={setProjects}
@@ -5988,8 +3245,7 @@ function TableMaterials() {
               openReport={openReport}
             />
           )}
-
-          {view === "obra-report" && projectFocus && (
+          {view==='obra-report'&&projectFocus&&(
             <ProjectReportView
               project={projectFocus}
               orders={orders}
@@ -6000,54 +3256,22 @@ function TableMaterials() {
               setPeople={setPeople}
               prefs={prefs}
               setPrefs={setPrefs}
-              onBack={() => setView("obras")}
+              onBack={()=>setView('obras')}
             />
           )}
         </main>
       </div>
 
-      {/* ---------------------------------------------------------
-         🔳 MODAIS — (Mantive todos como estavam)
-         --------------------------------------------------------- */}
-
-      <Modal
-        open={modal?.name === "add-time"}
-        title="Registar Tempo"
-        onClose={() => setModal(null)}
-        wide
-      >
+      {/* Modais */}
+      <Modal open={modal?.name==='add-time'} title="Registar Tempo" onClose={()=>setModal(null)} wide>
         <TimesheetTemplateForm
           initial={modal?.initial}
           peopleNames={peopleNames}
           projectNames={projectNames}
           supervisorNames={supervisorNames}
-          onSubmit={(data) => {
-            data.id ? updateTimeEntry(data) : addTimeEntry(data);
-            setModal(null);
-          }}
+          onSubmit={data => { data.id ? updateTimeEntry(data) : addTimeEntry(data); setModal(null); }}
         />
       </Modal>
-
-      {/* Modais */}
-      // ✅ DEPOIS
-<Modal 
-  open={modal?.name === "add-time"} 
-  title="Registar Tempo" 
-  onClose={() => setModal(null)} 
-  wide
->
-  <TimesheetTemplateForm
-    initial={modal?.initial}
-    peopleNames={peopleNames}
-    projectNames={projectNames}
-    supervisorNames={supervisorNames}
-    auth={auth} // ⬅️ ADICIONA ISTO!
-    onSubmit={(data) => {
-      data.id ? updateTimeEntry(data) : addTimeEntry(data);
-      setModal(null);
-    }}
-  />
-</Modal>
 
       {/* Escolha rápida: registar horas / agendar (apenas hoje+futuro) */}
 <Modal open={modal?.name==='day-actions'} title={`Ações — ${fmtDate(modal?.dateISO||todayISO())}`} onClose={()=>setModal(null)}>
@@ -6098,8 +3322,7 @@ function TableMaterials() {
       return d >= a && d <= b;
     };
 
-    const holidaySet = getHolidayDatesInRange(timeEntries, start, end);
-    const uteis = countWeekdaysInclusive(start, end, holidaySet);
+    const uteis = countWeekdaysInclusive(start, end);
 
     // dias registados (qualquer tipo) dentro do ciclo
     const diasReg = (() => {
@@ -6158,7 +3381,7 @@ function TableMaterials() {
     const baixas = countDaysOf('Baixa');
     const faltas = countDaysOf('Falta');
 
-    const fmt = fmtDate;
+    const fmt = (d) => new Date(d).toLocaleDateString('pt-PT');
 
     return (
       <div className="space-y-4">
@@ -6212,20 +3435,6 @@ function TableMaterials() {
           <Button onClick={() => printTimesheetCycleReport(visibleTimeEntries)}>
   Exportar Relatório de Horas
 </Button>
-        {/* ✅ NOVO BOTÃO */}
-          <Button 
-            variant="secondary"
-            onClick={() => {
-              const html = generatePersonalTimesheetReport({
-                worker: auth?.name,
-                timeEntries: visibleTimeEntries,
-                cycle: getCycle(0)
-              });
-              openPrintWindow(html);
-            }}
-          >
-            <Icon name="download" /> Meu Relatório Pessoal
-          </Button>
         </div>
       </div>
     );
@@ -6260,13 +3469,8 @@ function TableMaterials() {
 
 
       <Modal open={modal?.name==='add-order'} title="Pedido de Material" onClose={()=>setModal(null)} wide>
-  <MaterialForm 
-    onSubmit={(payload)=>{addOrder(payload);setModal(null)}} 
-    catalogMaps={catalogMaps} 
-    projects={projects}
-    auth={auth} // ⬅️ ADICIONA ISTO!
-  />
-</Modal>
+        <MaterialForm onSubmit={(payload)=>{addOrder(payload);setModal(null)}} catalogMaps={catalogMaps} projects={projects}/>
+      </Modal>
 
       <Modal open={modal?.name==='day-details'} title="Dia no calendário" onClose={()=>setModal(null)}>
         <DayDetails dateISO={modal?.dateISO} timeEntries={timeEntries} onNew={iso=>setModal({name:'add-time',initial:{date:iso,template:'Trabalho Normal'}})} onEdit={t=>setModal({name:'add-time',initial:t})} onDuplicate={t=>{duplicateTimeEntry({...t,date:modal?.dateISO});setModal(null)}}/>
@@ -6369,6 +3573,8 @@ function TableMaterials() {
   <Button onClick={() => setStatus('Entregue')}>Marcar Entregue</Button>
 </div>
 
+
+
         <div>
           <div className="text-sm text-slate-600 dark:text-slate-300 mb-1">Notas / Observações</div>
           <textarea
@@ -6383,17 +3589,16 @@ function TableMaterials() {
   })()}
 </Modal>
 
+
       <Modal open={modal?.name==='ts-all'} title="Todos os Timesheets" onClose={()=>setModal(null)} wide>
-        <TableSimple columns={["Data/Período","Tipo","Obra","Encarregado","Horas","Extra"]} rows={visibleTimeEntries.map(t=>[t.template==='Trabalho Normal'?t.date:`${t.periodStart}→${t.periodEnd}`,t.template,t.project||'-',t.supervisor||'-',t.hours||0,t.overtime||0])}/>
+        <TableSimple columns={["Data/Período","Tipo","Projeto","Encarregado","Horas","Extra"]} rows={visibleTimeEntries.map(t=>[t.template==='Trabalho Normal'?t.date:`${t.periodStart}→${t.periodEnd}`,t.template,t.project||'-',t.supervisor||'-',t.hours||0,t.overtime||0])}/>
       </Modal>
 
       <Modal open={modal?.name==='import'} title="Importar / Exportar Dados" onClose={()=>setModal(null)} wide>
         <ImportCenter onClose={()=>setModal(null)} setters={setters} addToast={()=>{}} log={(m)=>addToast(m)}/>
       </Modal>
     </div>
-  );     
+  );
 }
-    
 
-// ---------------------------------------------------------------
 export default App;

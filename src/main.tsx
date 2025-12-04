@@ -1,15 +1,16 @@
-﻿// main.tsx ou index.tsx
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App'
-import './index.css'
-import { setupAuth } from './auth' // ⬅️ IMPORTAR
+// src/main.tsx
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+import './index.css';
+import { setupAuth } from './auth';
 
-// ⬅️ INICIALIZAR O window.Auth ANTES DE RENDERIZAR
-setupAuth()
+// Inicializa o cliente Supabase e regista window.Auth
+setupAuth();
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root') as HTMLElement;
+createRoot(rootElement).render(
   <React.StrictMode>
     <App />
-  </React.StrictMode>,
-)
+  </React.StrictMode>
+);
