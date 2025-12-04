@@ -120,7 +120,11 @@ const REQUESTER_SUGGESTIONS = ['Paulo Silva','Paulo Carujo','Hélder Pinto','Ant
 
 const uid=()=>Math.random().toString(36).slice(2,9);
 const todayISO=()=>new Date().toISOString().slice(0,10);
-const fmtDate=d=>new Date(d).toLocaleDateString('pt-PT');
+const fmtDate = (d) => {
+  const parsed = new Date(d);
+  if (!d || Number.isNaN(parsed.getTime())) return 'Data inválida';
+  return parsed.toLocaleDateString('pt-PT');
+};
 const mondayIndex=date=>(date.getDay()+6)%7;
 const startOfWeek=d=>{const x=new Date(d);const i=mondayIndex(x);x.setDate(x.getDate()-i);x.setHours(0,0,0,0);return x;};
 function getCycle(offset=0){const now=new Date();const endMonthRaw=now.getMonth()+offset;const endYear=now.getFullYear()+Math.floor(endMonthRaw/12);const endMonth=((endMonthRaw%12)+12)%12;const end=new Date(endYear,endMonth,20);end.setHours(23,59,59,999);let startMonth=endMonth-1,startYear=endYear;if(startMonth<0){startMonth=11;startYear--}const start=new Date(startYear,startMonth,21);start.setHours(0,0,0,0);return{start,end}}
@@ -214,7 +218,7 @@ return `<!doctype html><html><head><meta charset="utf-8"/><title>Pedido ${o.id}<
 }
 
 function printTimesheetReportHTML({ worker, cycle, rows }) {
-  const fmt = iso => new Date(iso).toLocaleDateString('pt-PT');
+  const fmt = fmtDate;
   const totalExtras = rows.reduce((s,r)=>s+(r.extras||0),0);
   const uteis  = rows.filter(r=>!['Sábado','Domingo'].includes(r.dia)).length;
   const fds    = rows.length - uteis;
@@ -311,7 +315,7 @@ function generatePersonalTimesheetReport({ worker, timeEntries, cycle }) {
   const { start, end } = cycle;
   const rows = buildTimesheetCycleRows({ worker, timeEntries, cycle });
 
-  const fmt = iso => new Date(iso).toLocaleDateString('pt-PT');
+  const fmt = fmtDate;
   
   const totalExtras = rows.reduce((s, r) => s + (r.extras || 0), 0);
   const uteis = rows.filter(r => !['Sábado', 'Domingo'].includes(r.dia)).length;
@@ -5153,7 +5157,7 @@ const generatePersonalTimesheetReport = ({ worker, timeEntries, cycle }) => {
   const { start, end } = cycle;
   const rows = buildTimesheetCycleRows({ worker, timeEntries, cycle });
 
-  const fmt = (iso) => new Date(iso).toLocaleDateString('pt-PT');
+  const fmt = fmtDate;
   
   // Estatísticas
   const totalExtras = rows.reduce((s, r) => s + (r.extras || 0), 0);
@@ -6154,7 +6158,7 @@ function TableMaterials() {
     const baixas = countDaysOf('Baixa');
     const faltas = countDaysOf('Falta');
 
-    const fmt = (d) => new Date(d).toLocaleDateString('pt-PT');
+    const fmt = fmtDate;
 
     return (
       <div className="space-y-4">
