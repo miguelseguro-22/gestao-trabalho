@@ -67,3 +67,15 @@ export default tseslint.config([
   },
 ])
 ```
+
+## Restaurar para o commit `59e166e`
+
+Use the helper script if you need to branch off the historical commit `59e166e`:
+
+```bash
+./scripts/checkout-59e166e.sh            # creates branch restore-59e166e at that commit
+# or supply a remote explicitly
+REMOTE_URL=https://github.com/<user>/<repo>.git ./scripts/checkout-59e166e.sh outra-branch
+```
+
+The script first checks for the commit locally; if missing, it fetches from the configured remote (or `REMOTE_URL`) before creating the branch.
