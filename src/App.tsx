@@ -600,7 +600,7 @@ const Badge=({tone='neutral',children})=>{
   const tones={neutral:'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',amber:'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200',blue:'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200',emerald:'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200',rose:'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200'};
   return <span className={`text-[11px] px-2 py-0.5 rounded ${tones[tone]}`}>{children}</span>;
 };
-const Card=({children,className=''})=><div className={`rounded-2xl border shadow-sm bg-white dark:bg-slate-900 dark:border-slate-800 ${className}`}>{children}</div>;
+const Card=({children,className='',style})=><div style={style} className={`rounded-2xl border shadow-sm ${!style ? 'bg-white dark:bg-slate-900' : ''} dark:border-slate-800 ${className}`}>{children}</div>;
 const PageHeader=({icon,title,subtitle,actions})=>(
   <Card className="p-4 glass">
     <div className="flex flex-wrap items-center gap-3">
