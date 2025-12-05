@@ -5558,7 +5558,32 @@ function TimesheetsView() {
 
       <CycleCalendar
         timeEntries={visibleTimeEntries}
-        onDayClick={(iso) => setModal({ name: "day-actions", dateISO: iso })}
+        onDayClick={(iso) => {
+          // Verifica se existem registos para este dia
+          const target = new Date(iso);
+          target.setHours(0, 0, 0, 0);
+
+          const hasEntries = visibleTimeEntries.some(t => {
+            // Para Férias e Baixa, verificar se o dia está dentro do período
+            if (t.template === 'Férias' || t.template === 'Baixa') {
+              const start = new Date(t.periodStart || t.date);
+              start.setHours(0, 0, 0, 0);
+              const end = new Date(t.periodEnd || t.date);
+              end.setHours(0, 0, 0, 0);
+              return target >= start && target <= end;
+            }
+            // Para outros tipos, verificar se a data é igual
+            const entryDate = new Date(t.date);
+            entryDate.setHours(0, 0, 0, 0);
+            return entryDate.getTime() === target.getTime();
+          });
+
+          // Se existem registos, mostra detalhes; caso contrário, mostra ações
+          setModal({
+            name: hasEntries ? "day-details" : "day-actions",
+            dateISO: iso
+          });
+        }}
         auth={auth}
       />
 
