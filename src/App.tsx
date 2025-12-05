@@ -3331,6 +3331,41 @@ const ProfileView = ({ timeEntries, auth, people }) => {
     };
   }, [myEntries]);
 
+  // Calcular estatísticas mensais
+  const monthlyStats = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-11
+
+    // Calcular dias úteis do mês atual
+    const firstDay = new Date(currentYear, currentMonth, 1);
+    const lastDay = new Date(currentYear, currentMonth + 1, 0);
+    let workingDays = 0;
+
+    for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+      const dow = d.getDay();
+      if (dow !== 0 && dow !== 6) { // Não é sábado nem domingo
+        workingDays++;
+      }
+    }
+
+    // Contar dias registados no mês atual
+    const registeredDays = new Set();
+    myEntries.forEach((entry) => {
+      const entryDate = new Date(entry.date);
+      if (entryDate.getFullYear() === currentYear &&
+          entryDate.getMonth() === currentMonth &&
+          isNormalWork(entry.template)) {
+        registeredDays.add(entry.date);
+      }
+    });
+
+    return {
+      registeredDays: registeredDays.size,
+      workingDays,
+    };
+  }, [myEntries]);
+
   // Cores para o gráfico (paleta moderna)
   const colors = [
     '#3b82f6', // blue-500
@@ -3368,9 +3403,11 @@ const ProfileView = ({ timeEntries, auth, people }) => {
       {/* KPIs Principais */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-5 bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-          <div className="text-sm opacity-90">Dias Trabalhados</div>
-          <div className="text-4xl font-bold mt-2">{stats.daysWorked}</div>
-          <div className="text-sm opacity-80 mt-1">dias em {selectedYear}</div>
+          <div className="text-sm opacity-90">Visão Geral do Mês</div>
+          <div className="text-4xl font-bold mt-2">
+            {monthlyStats.registeredDays}/{monthlyStats.workingDays}
+          </div>
+          <div className="text-sm opacity-80 mt-1">dias registados/úteis</div>
         </Card>
 
         <Card className="p-5 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
