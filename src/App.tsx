@@ -726,12 +726,16 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
   },[timeEntries,start,end]);
   const dayInfo = useMemo(() => {
     const m = new Map();
-    const add = (iso, project, overtime) => {
-      if (!m.has(iso)) m.set(iso, { projects: new Set(), overtime: 0 });
+    const add = (iso, project, overtime, status) => {
+      if (!m.has(iso)) m.set(iso, { projects: new Set(), overtime: 0, statuses: { pending: 0, approved: 0, rejected: 0 } });
       const cur = m.get(iso);
       if (project) cur.projects.add(project);
       const ot = Number(overtime) || 0;
       if (ot) cur.overtime = Number((cur.overtime || 0) + ot);
+      // 🆕 Contar status
+      if (status === 'pending') cur.statuses.pending++;
+      else if (status === 'approved') cur.statuses.approved++;
+      else if (status === 'rejected') cur.statuses.rejected++;
     };
 
     timeEntries.forEach((t) => {
@@ -739,7 +743,7 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
       const d = new Date(t.date);
       if (!(d >= start && d <= end)) return;
       const iso = d.toISOString().slice(0, 10);
-      add(iso, t.project || t.projectNormal || '', t.overtime);
+      add(iso, t.project || t.projectNormal || '', t.overtime, t.status || 'approved'); // Default approved para registos antigos
     });
 
     return m;
@@ -822,7 +826,38 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
               ].join(' ')}
               style={has && inCycle ? { backgroundColor: fillColor, ...ringStyle } : ringStyle}
             >
-              <div className={`text-xs ${has ? 'text-white' : ''}`}>{d.getDate()}</div>
+              <div className="flex items-start justify-between">
+                <div className={`text-xs ${has ? 'text-white' : ''}`}>{d.getDate()}</div>
+                {/* 🆕 Badge de Status */}
+                {inCycle && has && dayInfo.has(iso) && (() => {
+                  const info = dayInfo.get(iso);
+                  const { pending = 0, approved = 0, rejected = 0 } = info?.statuses || {};
+                  const total = pending + approved + rejected;
+                  if (total === 0) return null;
+
+                  let badgeColor, badgeEmoji;
+                  if (rejected > 0) {
+                    badgeColor = '#ef4444'; // Vermelho
+                    badgeEmoji = '❌';
+                  } else if (pending > 0) {
+                    badgeColor = '#f59e0b'; // Amarelo/Laranja
+                    badgeEmoji = '🟡';
+                  } else {
+                    badgeColor = '#10b981'; // Verde
+                    badgeEmoji = '✅';
+                  }
+
+                  return (
+                    <div
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.3)', color: '#fff' }}
+                      title={`${pending} pendente${pending !== 1 ? 's' : ''}, ${approved} aprovado${approved !== 1 ? 's' : ''}, ${rejected} rejeitado${rejected !== 1 ? 's' : ''}`}
+                    >
+                      {badgeEmoji}
+                    </div>
+                  );
+                })()}
+              </div>
               {inCycle && has && dayInfo.has(iso) && (
                 <div className="mt-1 text-[11px] leading-tight text-white/90">
                   <div className="truncate">
@@ -854,7 +889,7 @@ function familyForProjectInput(projects, input){
   return '';
 }
 
-const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate})=>{
+const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,onApprove,onReject,auth})=>{
   if(!dateISO) return null;
   const target=new Date(dateISO);target.setHours(0,0,0,0);
   const matches=t=>{
@@ -990,23 +1025,62 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate})=>{
                         : 'linear-gradient(to right, #2C3134, #3A3F42)'
                     }}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                          <span className="text-lg">
-                            {isWork ? '💼' : isHoliday ? '🏖️' : isSick ? '🏥' : '❌'}
-                          </span>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                            <span className="text-lg">
+                              {isWork ? '💼' : isHoliday ? '🏖️' : isSick ? '🏥' : '❌'}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="font-semibold text-white text-sm">
+                              {t.template}
+                            </div>
+                            <div className="text-xs text-white/80">
+                              Registo #{index + 1}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="font-semibold text-white text-sm">
-                            {t.template}
-                          </div>
-                          <div className="text-xs text-white/80">
-                            Registo #{index + 1}
-                          </div>
+                        {/* 🆕 Badge de Status */}
+                        <div className="flex items-center gap-2">
+                          {t.status === 'pending' && (
+                            <div className="px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24' }}>
+                              <span>🟡</span> Pendente
+                            </div>
+                          )}
+                          {t.status === 'approved' && (
+                            <div className="px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1" style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' }}>
+                              <span>✅</span> Aprovado
+                            </div>
+                          )}
+                          {t.status === 'rejected' && (
+                            <div className="px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}>
+                              <span>❌</span> Rejeitado
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="flex gap-2">
+                        {/* Botões de Aprovação (apenas para encarregados e se pendente) */}
+                        {isWork && t.status === 'pending' && (auth?.role === 'encarregado' || auth?.role === 'diretor' || auth?.role === 'admin') && onApprove && onReject && (
+                          <>
+                            <Button
+                              size="sm"
+                              onClick={() => onApprove(t)}
+                              className="!bg-green-500 !text-white hover:!bg-green-600 !border-0"
+                            >
+                              ✅ Aprovar
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => onReject(t)}
+                              className="!bg-red-500 !text-white hover:!bg-red-600 !border-0"
+                            >
+                              ❌ Rejeitar
+                            </Button>
+                          </>
+                        )}
                         <Button
                           variant="secondary"
                           size="sm"
@@ -1070,6 +1144,36 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate})=>{
                             <div className="text-sm text-slate-700 dark:text-slate-300 italic">
                               {t.notes}
                             </div>
+                          </div>
+                        )}
+                        {/* 🆕 Motivo de Rejeição */}
+                        {t.status === 'rejected' && t.rejectionReason && (
+                          <div className="col-span-2">
+                            <div className="rounded-lg p-3" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444' }}>
+                              <div className="flex items-start gap-2">
+                                <span className="text-lg">⚠️</span>
+                                <div className="flex-1">
+                                  <div className="text-xs font-semibold text-red-600 dark:text-red-400 mb-1">
+                                    Motivo da Rejeição
+                                  </div>
+                                  <div className="text-sm text-red-700 dark:text-red-300">
+                                    {t.rejectionReason}
+                                  </div>
+                                  {t.approvedBy && (
+                                    <div className="text-xs text-red-600/70 dark:text-red-400/70 mt-1">
+                                      Rejeitado por: {t.approvedBy}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {/* Informação de Aprovação */}
+                        {t.status === 'approved' && t.approvedBy && (
+                          <div className="col-span-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                            <span>✅</span> Aprovado por {t.approvedBy}
+                            {t.approvedAt && <span className="text-slate-400">• {new Date(t.approvedAt).toLocaleDateString('pt-PT')}</span>}
                           </div>
                         )}
                       </div>
@@ -4525,7 +4629,11 @@ const MultiWorkTimesheetForm = ({
         weekendEndTime: '',
         extraStartTime: '',
         extraEndTime: '',
-        notes: ''
+        notes: '',
+        status: 'pending', // 🆕 Status inicial: pendente
+        rejectionReason: undefined,
+        approvedBy: undefined,
+        approvedAt: undefined
       });
     });
 
@@ -5101,7 +5209,15 @@ const TimesheetTemplateForm = ({
   adjusted.periodEnd = '';
 }
     
-    const payload = { ...adjusted, template };
+    const payload = {
+      ...adjusted,
+      template,
+      // 🆕 Campos de aprovação
+      status: initial?.status || 'pending',
+      rejectionReason: initial?.rejectionReason || undefined,
+      approvedBy: initial?.approvedBy || undefined,
+      approvedAt: initial?.approvedAt || undefined
+    };
     const e = validate(payload);
     setErrors(e);
     if (Object.keys(e).length === 0) onSubmit(payload);
