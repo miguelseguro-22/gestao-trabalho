@@ -1062,8 +1062,8 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,onApp
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        {/* Botões de Aprovação (apenas para encarregados e se pendente) */}
-                        {isWork && t.status === 'pending' && (auth?.role === 'encarregado' || auth?.role === 'diretor' || auth?.role === 'admin') && onApprove && onReject && (
+                        {/* 🔧 Botões de Aprovação (para o supervisor do registo OU admin) */}
+                        {isWork && t.status === 'pending' && (auth?.name === t.supervisor || auth?.role === 'admin') && onApprove && onReject && (
                           <>
                             <Button
                               size="sm"
@@ -5553,8 +5553,9 @@ const CAN = {
   people: new Set(["diretor", "admin"]),
   vehicles: new Set(["diretor", "admin"]),
   agenda: new Set(["encarregado", "diretor", "admin"]),
-  pendingApprovals: new Set(["encarregado", "diretor", "admin"]), // 🆕
-  teamDashboard: new Set(["encarregado", "diretor", "admin"]), // 🆕
+  // 🔧 CORRIGIDO: Qualquer pessoa pode ver pendentes/equipa se for supervisor de alguém
+  pendingApprovals: new Set(["tecnico", "encarregado", "diretor", "admin"]),
+  teamDashboard: new Set(["tecnico", "encarregado", "diretor", "admin"]),
 };
 
 
