@@ -2950,19 +2950,49 @@ const TimesheetsView = () => (
 
   const {start:cycStart,end:cycEnd}=getCycle(0);
 
- const registeredDays=useMemo(()=>{ /* igual ao teu código, mas varre visibleTimeEntries */
+ const registeredDays=useMemo(()=>{
+   const start=new Date(cycStart);start.setHours(0,0,0,0);
+   const end=new Date(cycEnd);end.setHours(23,59,59,999);
+
+   const inRange=(iso)=>{if(!iso)return false;const d=new Date(iso);d.setHours(0,0,0,0);return d>=start&&d<=end;};
+
    const s=new Set();
-   (visibleTimeEntries||[]).forEach(t=>{ /* ...mesma lógica... */ });
+   for(const t of (visibleTimeEntries||[])){
+     if(t?.template==='Férias'||t?.template==='Baixa'){
+       const a=new Date(t.periodStart||t.date);const b=new Date(t.periodEnd||t.date);
+       a.setHours(0,0,0,0);b.setHours(0,0,0,0);
+       for(let d=new Date(a);d<=b;d.setDate(d.getDate()+1)){
+         if(d>=start&&d<=end)s.add(d.toISOString().slice(0,10));
+       }
+     }else if(inRange(t?.date)){
+       s.add(new Date(t.date).toISOString().slice(0,10));
+     }
+   }
+
    return s.size;
  },[visibleTimeEntries,cycStart,cycEnd]);
 
   const startWeek=startOfWeek(new Date());
 
- const hoursByDay=useMemo(()=>{ /* mesma lógica, mas usa visibleTimeEntries */
-   const map=new Map(['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map(d=>[d,0]));
-   (visibleTimeEntries||[]).filter(t=>new Date(t.date)>=startWeek).forEach(t=>{ /* ... */ });
+ const hoursByDay=useMemo(()=>{
+   const labels=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+   const map=new Map(labels.map(d=>[d,0]));
+
+   const start=new Date(startWeek);start.setHours(0,0,0,0);
+   const end=new Date(start);end.setDate(end.getDate()+6);end.setHours(23,59,59,999);
+
+   for(const t of (visibleTimeEntries||[])){
+     if(!t?.date)continue;
+     const d=new Date(t.date);d.setHours(0,0,0,0);
+     if(d<start||d>end)continue;
+     if(t.template!=='Trabalho Normal')continue;
+     const label=labels[(d.getDay()+6)%7];
+     const total=(Number(t.hours)||0)+(Number(t.overtime)||0);
+     map.set(label,(map.get(label)||0)+total);
+   }
+
    return Array.from(map,([label,value])=>({label,value}));
-},[visibleTimeEntries]);
+},[visibleTimeEntries,startWeek]);
 
   const NavItem=({id,icon,label})=>(
     <button onClick={()=>{setView(id);setSidebarOpen(false)}} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm hover:bg-slate-100 dark:hover:bg-slate-800 ${view===id?'bg-slate-900 text-white hover:bg-slate-900 dark:bg-slate-200 dark:text-slate-900':'text-slate-700 dark:text-slate-200'}`}><Icon name={icon}/><span>{label}</span></button>
