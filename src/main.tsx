@@ -3,14 +3,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
-import { setupAuth } from './auth';
+import { setupAuth } from './auth';   // < IMPORTA
+setupAuth();                          // < INVOCA (semeia users, obras, etc.)
 
-// Inicializa o cliente Supabase e regista window.Auth
-setupAuth();
-
-const rootElement = document.getElementById('root') as HTMLElement;
-createRoot(rootElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+createRoot(document.getElementById('root')!).render(<App />);

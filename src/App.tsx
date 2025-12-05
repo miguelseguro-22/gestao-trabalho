@@ -1,6 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
-// ... (resto dos imports que o teu projeto usa)
-
+﻿import React, { useState, useMemo, useEffect } from 'react';
 
 
 /* ---------- Helpers ---------- */
@@ -670,10 +668,7 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     timesheets:[
       {k:'template',label:'template (Trabalho Normal/Férias/Baixa/Falta)',opt:true},
       {k:'date',label:'data (yyyy-mm-dd)'},
-      {k:'project',label:'obra (fallback genérico)',opt:true},
-      {k:'projectNormal',label:'obra Trabalho Normal (coluna AC)',opt:true},
-      {k:'projectWeekend',label:'obra Trabalho Fim de Semana (coluna AH)',opt:true},
-      {k:'projectDisplaced',label:'obra Deslocada (coluna AG)',opt:true},
+      {k:'project',label:'projeto/obra',opt:true},
       {k:'supervisor',label:'encarregado',opt:true},
       {k:'hours',label:'horas',opt:true},
       {k:'overtime',label:'extra',opt:true},
@@ -693,31 +688,12 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     ]
   };
   const AUTO_KEYS={ date:['data','date','dia'], requestedAt:['data','pedido','data pedido','request date'],
-    project:['projeto','project','obra','site'],
-    projectNormal:['obra trabalho normal','local de trabalho','obra ac','coluna ac','local obra (ac)','local de trabalho obra'],
-    projectWeekend:['obra fim de semana','obra fds','fim de semana','obra ah','coluna ah','local obra (ah)','local fim de semana'],
-    projectDisplaced:['deslocacao','deslocação','obra deslocada','local de deslocacao','local deslocação','coluna ag','local obra (ag)','local de deslocacao (ag)'],
-    supervisor:['encarregado','supervisor','chefe','lider'],
+    project:['projeto','project','obra','site'], supervisor:['encarregado','supervisor','chefe','lider'],
     hours:['horas','hours'], overtime:['extra','overtime','horas extra'], item:['item','material','produto'],
     qty:['quantidade','qty','qtd','quantity'], requestedBy:['requisitante','solicitante','quem pediu','requested by'],
     status:['estado','status','situação'], notes:['observações','notas','notes','obs'] };
-  const norm=(s)=>String(s||'')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g,' ')
-    .trim();
-  const buildAutoMap=(headers)=>{
-    const m={};
-    const headersNorm=headers.map(h=>({ raw:h, norm:norm(h) }));
-    const matches=(h,c)=>c.some(p=>h===p||h.includes(p)||p.includes(h));
-    const pick=k=>{
-      const c=AUTO_KEYS[k]||[];
-      const found=headersNorm.find(h=>matches(h.norm,c));
-      if(found) m[k]=found.raw;
-    };
-    Object.keys(AUTO_KEYS).forEach(pick);
-    return m;
-  };
+  const norm=(s)=>String(s||'').trim().toLowerCase();
+  const buildAutoMap=(headers)=>{const m={};const pick=k=>{const c=AUTO_KEYS[k]||[];const f=headers.find(h=>c.includes(norm(h)));if(f)m[k]=f;};Object.keys(AUTO_KEYS).forEach(pick);return m;};
 
   function parseCSV(text){
     const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
@@ -741,7 +717,7 @@ const handleCSV = (file) => {
     const parsed = parseCSV(text);
     setCsvPreview(parsed);
 
-    const auto = buildAutoMap(parsed.headers);
+    const auto = buildAutoMap(parsed.headers.map(h => norm(h)));
 
     // regra: em Materiais, "código" vem SEMPRE da coluna B (se existir)
     if (section === 'materials' && parsed.headers?.[1]) {
@@ -974,18 +950,7 @@ const handleCatalog = (file) => {
       const date=normalizeDate(val('date'));
       const periodStart=normalizeDate(val('periodStart'));
       const periodEnd=normalizeDate(val('periodEnd'));
-      const projectNormal=val('projectNormal');
-      const projectWeekend=val('projectWeekend');
-      const projectDisplaced=val('projectDisplaced');
-      const projectFallback=val('project');
-      const isWeekend=(()=>{
-        if(date){const dow=new Date(date).getDay(); if(dow===0||dow===6) return true;}
-        return /fim\s*de\s*semana|fds/i.test(template);
-      })();
-      const project=isWeekend
-        ? (projectWeekend||projectNormal||projectFallback||projectDisplaced||'')
-        : (projectNormal||projectFallback||projectWeekend||projectDisplaced||'');
-      return {id:uid(),template,date,project,supervisor:val('supervisor'),hours:toNumber(val('hours')),overtime:toNumber(val('overtime')),periodStart,periodEnd,notes:val('notes')};
+      return {id:uid(),template,date,project:val('project'),supervisor:val('supervisor'),hours:toNumber(val('hours')),overtime:toNumber(val('overtime')),periodStart,periodEnd,notes:val('notes')};
     }
     if(section==='materials'){
       return { requestedAt:normalizeDate(val('requestedAt'))||todayISO(), project:val('project'),
@@ -2523,8 +2488,9 @@ const ROLE_LABELS = {
   diretor: 'Diretor de Obra',
   logistica: 'Gestor de Logística',
   admin: 'Administrador',
-} as const
+};
 
+// ROLE_LABELS já ok; acrescenta nas permissões:
 const CAN = {
   dashboard:   new Set(['admin']),
   timesheets:  new Set(['tecnico','encarregado','admin']),
@@ -2535,35 +2501,37 @@ const CAN = {
   people:      new Set(['diretor','admin']),
   vehicles:    new Set(['diretor','admin']),
   agenda:      new Set(['encarregado','diretor','admin']),
-}
+};
 
-const defaultViewForRole = (role: string) =>
-  role === 'tecnico'     ? 'timesheets' :
-  role === 'encarregado' ? 'timesheets' :
-  role === 'diretor'     ? 'obras'      :
-  role === 'logistica'   ? 'logistics'  :
-  'dashboard'
-// LoginView real: pede email e password e usa Supabase
-// Login real: estética antiga + funcionalidade Supabase
-// Vista de login: cartão antigo com autenticação Supabase
-function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    const res = await window.Auth?.login(email, password);
-    setLoading(false);
-    if (res?.ok) {
-      onLogin(res.user);
-    } else {
-      setError(res?.error || 'Credenciais inválidas');
-    }
-  };
+const defaultViewForRole = (role) =>
+  role==='tecnico'   ? 'timesheets' :
+  role==='encarregado'? 'timesheets' :
+  role==='diretor'   ? 'obras'      :
+  role==='logistica' ? 'logistics'  :
+  'dashboard';
+
+  const TEST_CREDS = [
+  { label:'Técnico',     role:'tecnico',     user:'tecnico@demo',     pass:'demo123' },
+  { label:'Encarregado', role:'encarregado', user:'encarregado@demo', pass:'demo123' },
+  { label:'Diretor',     role:'diretor',     user:'diretor@demo',     pass:'demo123' },
+  { label:'Logística',   role:'logistica',   user:'logistica@demo',   pass:'demo123' },
+  { label:'Admin',       role:'admin',       user:'admin@demo',       pass:'demo123' },
+];
+
+const LoginView = ({ onLogin }) => {
+  const [username, setUsername] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [role, setRole] = React.useState('tecnico');
+  const [showCreds, setShowCreds] = React.useState(false);
+
+ const handleSubmit = () => {
+   const chosen = TEST_CREDS.find(c => c.user === username && c.pass === password);
+   const effectiveRole = chosen?.role || role;
+   // regista no Auth (guarda em storage)
+   window.Auth?.login(username || 'Utilizador', '***', effectiveRole);
+   onLogin(window.Auth?.user());
+ };
 
   return (
     <div className="min-h-screen grid place-items-center p-4 bg-slate-50 dark:bg-slate-950">
@@ -2577,43 +2545,84 @@ function LoginView({ onLogin }: { onLogin: (user: any) => void }) {
             <div className="font-semibold dark:text-slate-100">Gestão de Trabalho</div>
           </div>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-3">
+
+        <div className="space-y-3">
           <label className="text-sm">
-            Email
+            Nome de Utilizador
             <input
-              type="email"
               className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              placeholder="Digite o seu email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
+              placeholder="Digite seu usuário"
+              value={username}
+              onChange={e=>setUsername(e.target.value)}
             />
           </label>
+
           <label className="text-sm">
-            Password
+            Senha
             <input
               type="password"
               className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              placeholder="Digite a sua password"
+              placeholder="Digite sua senha"
               value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
+              onChange={e=>setPassword(e.target.value)}
             />
           </label>
-          {error && (
-            <div className="text-red-500 text-xs">{error}</div>
-          )}
-          <Button type="submit" className="w-full justify-center" disabled={loading}>
-            {loading ? 'A entrar…' : 'Entrar'}
+
+          <label className="text-sm">
+            Tipo de Utilizador (apenas para demo sem password)
+            <select
+              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={role}
+              onChange={e=>setRole(e.target.value)}
+            >
+              <option value="tecnico">Técnico</option>
+              <option value="encarregado">Encarregado</option>
+              <option value="diretor">Diretor de Obra</option>
+              <option value="logistica">Gestor de Logística</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </label>
+
+          <Button className="w-full justify-center" onClick={handleSubmit}>
+            Entrar
           </Button>
-        </form>
+
+          {/* === AQUI entra exatamente o bloco que partilhaste === */}
+          <div className="mt-4 space-y-2">
+            <Button variant="secondary" className="w-full justify-center" onClick={()=>setShowCreds(s=>!s)}>
+              <Icon name="eye"/> {showCreds ? 'Esconder' : 'Mostrar'} Credenciais de Teste
+            </Button>
+
+            {showCreds && (
+              <div className="grid grid-cols-2 gap-2">
+                {TEST_CREDS.map(c => (
+                  <button
+                    key={c.role}
+                    type="button"
+                    className="rounded-xl border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
+                    onClick={()=>{
+                      setUsername(c.user);
+                      setPassword(c.pass);
+                      onLogin({ name: c.user, role: c.role }); // entra direto
+                    }}
+                    title={`${c.user} / ${c.pass}`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="text-[11px] text-slate-400 mt-2 text-center">
+              Podes entrar como qualquer perfil para veres os acessos específicos.
+            </div>
+          </div>
+          {/* === fim do bloco === */}
+        </div>
       </Card>
     </div>
   );
-}
-
-
-
+};
 
 const JOB_TYPES = ['Instalação','Manutenção','Visita Técnica','Reunião'];
 
@@ -2696,21 +2705,10 @@ function AgendaQuickForm({ initial, setAgenda, onClose, peopleNames=[], projectN
 
 
 /* ---------- App ---------- */
-function App() {
-  // Carrega qualquer estado persistente (excepto auth)
-  const persisted = loadState();
-
-  // Estado de autenticação
-  const [auth, setAuth] = useState<any | null>(window.Auth?.user() ?? null);
-
-  // Vista inicial
-  const [view, setView] = useState(
-    auth ? defaultViewForRole(auth.role) : 'timesheets'
-  );
-
-  // ... outros useState (jobs, timeEntries, etc.)
-
-
+function App(){
+  const persisted=loadState();
+  const [auth, setAuth] = useState(window.Auth?.user() || persisted?.auth || null);
+  const can = (feature) => !!CAN[feature]?.has(auth?.role);
 
   const [theme,setTheme]=useState(persisted?.theme||'light');
   const [density,setDensity]=useState(persisted?.density||'comfy');
@@ -2752,21 +2750,6 @@ const visibleTimeEntries = React.useMemo(() => {
   return timeEntries;
 }, [auth?.role, auth?.name, timeEntries]);
 
- useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      const u = await window.Auth?.refresh();
-      if (!cancelled) {
-        setAuth(u || null);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
 const visibleOrders = React.useMemo(() => {
   if (auth?.role === 'logistica' || auth?.role === 'admin') {
     return orders;
@@ -2783,6 +2766,7 @@ const visibleOrders = React.useMemo(() => {
   const uniqueFamilies=useMemo(()=>Array.from(new Set(catalog.map(c=>String(c.family||'').trim()).filter(Boolean))).sort(),[catalog]);
 
   const [sidebarOpen,setSidebarOpen]=useState(false);
+  const [view,setView]=useState('dashboard');
   const [modal,setModal]=useState(null);
 
   // dentro de function App() { ... } mas ANTES do return do App
@@ -2831,7 +2815,6 @@ const TimesheetsView = () => (
 
 
 
-
   const peopleNames = useMemo(
     () => Array.from(new Set([
       ...Object.keys(people || {}),
@@ -2847,8 +2830,8 @@ const TimesheetsView = () => (
   );
 
   useEffect(()=>{ 
-  saveState({timeEntries,orders,projects,activity,theme,density,catalog,people,prefs,vehicles,agenda,suppliers}) 
-},[timeEntries,orders,projects,activity,theme,density,catalog,people,prefs,vehicles,agenda,suppliers]);
+  saveState({timeEntries,orders,projects,activity,theme,density,catalog,people,prefs,auth,vehicles,agenda,suppliers}) 
+},[timeEntries,orders,projects,activity,theme,density,catalog,people,prefs,auth,vehicles,agenda,suppliers]);
 
   useEffect(()=>{ if (auth) setView(v => CAN[v]?.has(auth.role) ? v : defaultViewForRole(auth.role)); }, [auth]);
 
@@ -3141,24 +3124,14 @@ const DashboardView = () => (
 
   const TableMaterials=()=>(<section className="space-y-4"><PageHeader icon="package" title="Materiais" actions={<Button onClick={()=>setModal({name:'add-order'})}><Icon name="plus"/> Novo Pedido</Button>}/><TableSimple columns={["Data","Projeto","Item","Qtd","Requisitante","Estado"]} rows={MaterialsFlat.map(m=>[m.requestedAt,m.project,m.item,m.qty,m.requestedBy,m.status])}/></section>);
 
-
-
+  // Se não estiver autenticado, mostra o login
+  if(!auth){
+    return <LoginView onLogin={(u)=>setAuth(u)} />;
+  }
 
   const openReport = (p) => {
     if (can('obraReport')) { setProjectFocus(p); setView('obra-report'); }
   };
-
-
-  if (!auth) {
-    return (
-      <LoginView
-        onLogin={(u) => {
-          setAuth(u);
-          setView(defaultViewForRole(u.role));
-        }}
-      />
-    );
-  }
 
 
   return(
@@ -3327,6 +3300,30 @@ const DashboardView = () => (
   </div>
 </Modal>
 
+{/* Escolha rápida: registar horas / agendar (apenas hoje+futuro) */}
+<Modal
+  open={modal?.name==='day-actions'}
+  title={`Ações — ${fmtDate(modal?.dateISO||todayISO())}`}
+  onClose={()=>setModal(null)}
+>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <button className="rounded-2xl border p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
+      onClick={()=>setModal({name:'add-time', initial:{ date: modal?.dateISO, template:'Trabalho Normal' }})}
+    >
+      <div className="text-sm text-slate-500">Registar</div>
+      <div className="mt-1 font-semibold">Registar horas</div>
+      <div className="text-xs text-slate-400 mt-1">Criar timesheet para este dia</div>
+    </button>
+
+    <button className="rounded-2xl border p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
+      onClick={()=>setModal({name:'agenda-add', initial:{ date: modal?.dateISO, time:'08:00', jobType:'Instalação' }})}
+    >
+      <div className="text-sm text-slate-500">Agendar</div>
+      <div className="mt-1 font-semibold">Agendar trabalho</div>
+      <div className="text-xs text-slate-400 mt-1">Obra, hora e tipo</div>
+    </button>
+  </div>
+</Modal>
 
 {/* Agendamento rápido (formulário compacto) */}
 <Modal open={modal?.name==='agenda-add'} title="Agendar Trabalho" onClose={()=>setModal(null)}>
