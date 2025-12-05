@@ -642,10 +642,10 @@ const KpiCard = ({ icon, title, value, subtitle, onClick }) => (
 
 const CalendarLegend = () => {
   const items = [
-    { color: 'bg-emerald-600', label: 'Trabalho Normal' },
-    { color: 'bg-violet-600', label: 'Férias' },
-    { color: 'bg-rose-600', label: 'Baixa' },
-    { color: 'bg-amber-600', label: 'Falta' },
+    { color: '#00A9B8', label: 'Trabalho Normal' },
+    { color: '#BE8A3A', label: 'Férias' },
+    { color: '#00677F', label: 'Baixa' },
+    { color: '#2C3134', label: 'Falta' },
   ];
 
   return (
@@ -655,7 +655,7 @@ const CalendarLegend = () => {
       </div>
       {items.map((item) => (
         <div key={item.label} className="flex items-center gap-2">
-          <div className={`w-4 h-4 rounded ${item.color}`} />
+          <div className="w-4 h-4 rounded" style={{ backgroundColor: item.color }} />
           <span className="text-xs text-slate-700 dark:text-slate-300">
             {item.label}
           </span>
@@ -665,6 +665,12 @@ const CalendarLegend = () => {
   );
 };
 
+const TYPE_FILL_COLORS = {
+  'Trabalho Normal': '#00A9B8',  // Electric Teal
+  'Férias': '#BE8A3A',           // Copper Gold
+  'Baixa': '#00677F',            // Lux Blue
+  'Falta': '#2C3134'             // Metal Graphite
+};
 const TYPE_FILL_BG = { 'Trabalho Normal':'bg-emerald-600','Férias':'bg-violet-600','Baixa':'bg-rose-600','Falta':'bg-amber-600' };
 const TYPE_COLORS = TYPE_FILL_BG;
 const getHolidayDatesInRange = (entries = [], start, end) => {
@@ -796,17 +802,26 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
           const types = Array.from(dayTypes.get(iso) || []);
           const has = types.length > 0;
           const primary = has ? types[0] : null;
-          const fill = has ? (TYPE_FILL_BG[primary] || 'bg-slate-700') : '';
-          const ringToday = isToday(d) ? 'ring-2 ring-indigo-400 dark:ring-indigo-500' : '';
+          const fillColor = has ? TYPE_FILL_COLORS[primary] : null;
+          const ringToday = isToday(d) ? 'ring-2' : '';
+          const ringStyle = isToday(d) ? { borderColor: '#00A9B8', borderWidth: '2px' } : {};
+
           return (
-            <button key={i} type="button" onClick={() => click(d)} title={has ? primary : ''} className={[
-              'text-left rounded-2xl p-2 min-h-[72px] w-full transition ring-focus',
-              inCycle
-                ? (has ? `${fill} text-white hover:brightness-110 border-0`
-                       : 'bg-white border hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800')
-                : 'bg-slate-100 dark:bg-slate-800/60 text-slate-400 cursor-not-allowed',
-              ringToday
-            ].join(' ')}>
+            <button
+              key={i}
+              type="button"
+              onClick={() => click(d)}
+              title={has ? primary : ''}
+              className={[
+                'text-left rounded-2xl p-2 min-h-[72px] w-full transition ring-focus',
+                inCycle
+                  ? (has ? 'text-white hover:brightness-110 border-0'
+                         : 'bg-white border hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800')
+                  : 'bg-slate-100 dark:bg-slate-800/60 text-slate-400 cursor-not-allowed',
+                ringToday
+              ].join(' ')}
+              style={has && inCycle ? { backgroundColor: fillColor, ...ringStyle } : ringStyle}
+            >
               <div className={`text-xs ${has ? 'text-white' : ''}`}>{d.getDate()}</div>
               {inCycle && has && dayInfo.has(iso) && (
                 <div className="mt-1 text-[11px] leading-tight text-white/90">
@@ -963,12 +978,18 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate})=>{
                   className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden shadow-sm hover:shadow-md transition-shadow"
                 >
                   {/* Header colorido baseado no tipo */}
-                  <div className={`px-4 py-3 ${
-                    isWork ? 'bg-gradient-to-r from-emerald-500 to-emerald-600' :
-                    isHoliday ? 'bg-gradient-to-r from-violet-500 to-violet-600' :
-                    isSick ? 'bg-gradient-to-r from-orange-500 to-orange-600' :
-                    'bg-gradient-to-r from-slate-500 to-slate-600'
-                  }`}>
+                  <div
+                    className="px-4 py-3"
+                    style={{
+                      background: isWork
+                        ? 'linear-gradient(to right, #00A9B8, #00C4D6)'
+                        : isHoliday
+                        ? 'linear-gradient(to right, #BE8A3A, #D4A04D)'
+                        : isSick
+                        ? 'linear-gradient(to right, #00677F, #008AA4)'
+                        : 'linear-gradient(to right, #2C3134, #3A3F42)'
+                    }}
+                  >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
@@ -3653,13 +3674,13 @@ const ProfileView = ({ timeEntries, auth, people }) => {
     };
   }, [myEntries]);
 
-  // Cores para o gráfico (paleta moderna)
+  // Cores para o gráfico (paleta Engitagus)
   const colors = [
-    '#3b82f6', // blue-500
-    '#8b5cf6', // violet-500
-    '#ec4899', // pink-500
-    '#f59e0b', // amber-500
-    '#10b981', // emerald-500
+    '#00A9B8', // Electric Teal
+    '#00677F', // Lux Blue
+    '#BE8A3A', // Copper Gold
+    '#2C3134', // Metal Graphite
+    '#007D99', // Lux Blue variant
   ];
 
   // Calcular percentagens para o gráfico
