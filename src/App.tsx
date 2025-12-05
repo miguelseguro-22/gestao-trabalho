@@ -3582,31 +3582,42 @@ const ProfileView = ({ timeEntries, auth, people }) => {
     };
   }, [myEntries]);
 
-  // Calcular estatísticas mensais
+  // Calcular estatísticas mensais (dia 21 do mês anterior até dia 20 do mês atual)
   const monthlyStats = useMemo(() => {
     const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth(); // 0-11
+    const currentDay = now.getDate();
 
-    // Calcular dias úteis do mês atual
-    const firstDay = new Date(currentYear, currentMonth, 1);
-    const lastDay = new Date(currentYear, currentMonth + 1, 0);
+    // Determinar o período: se hoje é >= 21, período atual; senão, período anterior
+    let periodStart, periodEnd;
+    if (currentDay >= 21) {
+      // Período atual: dia 21 deste mês até dia 20 do próximo mês
+      periodStart = new Date(now.getFullYear(), now.getMonth(), 21);
+      periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 20);
+    } else {
+      // Período anterior: dia 21 do mês passado até dia 20 deste mês
+      periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 21);
+      periodEnd = new Date(now.getFullYear(), now.getMonth(), 20);
+    }
+
+    periodStart.setHours(0, 0, 0, 0);
+    periodEnd.setHours(23, 59, 59, 999);
+
+    // Calcular dias úteis no período
     let workingDays = 0;
-
-    for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+    for (let d = new Date(periodStart); d <= periodEnd; d.setDate(d.getDate() + 1)) {
       const dow = d.getDay();
       if (dow !== 0 && dow !== 6) { // Não é sábado nem domingo
         workingDays++;
       }
     }
 
-    // Contar dias registados no mês atual
+    // Contar dias registados no período
     const registeredDays = new Set();
     myEntries.forEach((entry) => {
       const entryDate = new Date(entry.date);
-      if (entryDate.getFullYear() === currentYear &&
-          entryDate.getMonth() === currentMonth &&
-          isNormalWork(entry.template)) {
+      entryDate.setHours(0, 0, 0, 0);
+
+      if (entryDate >= periodStart && entryDate <= periodEnd && isNormalWork(entry.template)) {
         registeredDays.add(entry.date);
       }
     });
@@ -4517,6 +4528,9 @@ const MultiWorkTimesheetForm = ({
         notes: ''
       });
     });
+
+    // Fechar modal após submissão bem-sucedida
+    onCancel();
   };
 
   return (
@@ -4687,35 +4701,114 @@ const MultiWorkTimesheetForm = ({
 
               {/* Horas */}
               <div className="grid grid-cols-2 gap-3">
+                {/* Horas Normais */}
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
                     ⏰ Horas Normais
                   </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="24"
-                    step="0.5"
-                    value={work.hours}
-                    onChange={(e) => updateWork(work.id, 'hours', e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 dark:border-slate-700 p-2 text-sm dark:bg-slate-800 focus:ring-2"
-                    style={{ '--focus-ring-color': '#00A9B8' } as any}
-                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateWork(work.id, 'hours', Math.max(0, Number(work.hours) - 0.5))}
+                      className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg transition-all hover:scale-110"
+                      style={{ background: 'linear-gradient(135deg, #E5ECEF 0%, #CDD5D9 100%)', color: '#00677F' }}
+                    >
+                      −
+                    </button>
+                    <div className="flex-1 relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max="24"
+                        step="0.5"
+                        value={work.hours}
+                        onChange={(e) => updateWork(work.id, 'hours', e.target.value)}
+                        className="w-full rounded-lg border-2 p-2 text-center text-lg font-bold dark:bg-slate-800 focus:ring-2"
+                        style={{ borderColor: '#00A9B8', color: '#00677F' }}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: '#64748b' }}>h</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateWork(work.id, 'hours', Math.min(24, Number(work.hours) + 0.5))}
+                      className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg transition-all hover:scale-110"
+                      style={{ background: 'linear-gradient(135deg, #00A9B8 0%, #00C4D6 100%)', color: '#fff' }}
+                    >
+                      +
+                    </button>
+                  </div>
+                  {/* Botões rápidos */}
+                  <div className="flex gap-1 mt-2">
+                    {[2, 4, 8].map(h => (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => updateWork(work.id, 'hours', h)}
+                        className="flex-1 px-2 py-1 rounded text-xs font-medium transition-colors"
+                        style={{
+                          background: Number(work.hours) === h ? '#00A9B8' : '#E5ECEF',
+                          color: Number(work.hours) === h ? '#fff' : '#64748b'
+                        }}
+                      >
+                        {h}h
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Horas Extra */}
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
                     ⚡ Horas Extra
                   </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="24"
-                    step="0.5"
-                    value={work.overtime}
-                    onChange={(e) => updateWork(work.id, 'overtime', e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 dark:border-slate-700 p-2 text-sm dark:bg-slate-800 focus:ring-2"
-                    style={{ '--focus-ring-color': '#00A9B8' } as any}
-                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateWork(work.id, 'overtime', Math.max(0, Number(work.overtime) - 0.5))}
+                      className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg transition-all hover:scale-110"
+                      style={{ background: 'linear-gradient(135deg, #E5ECEF 0%, #CDD5D9 100%)', color: '#BE8A3A' }}
+                    >
+                      −
+                    </button>
+                    <div className="flex-1 relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max="24"
+                        step="0.5"
+                        value={work.overtime}
+                        onChange={(e) => updateWork(work.id, 'overtime', e.target.value)}
+                        className="w-full rounded-lg border-2 p-2 text-center text-lg font-bold dark:bg-slate-800 focus:ring-2"
+                        style={{ borderColor: '#BE8A3A', color: '#BE8A3A' }}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: '#64748b' }}>h</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateWork(work.id, 'overtime', Math.min(24, Number(work.overtime) + 0.5))}
+                      className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg transition-all hover:scale-110"
+                      style={{ background: 'linear-gradient(135deg, #BE8A3A 0%, #D4A04D 100%)', color: '#fff' }}
+                    >
+                      +
+                    </button>
+                  </div>
+                  {/* Botões rápidos */}
+                  <div className="flex gap-1 mt-2">
+                    {[1, 2, 4].map(h => (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => updateWork(work.id, 'overtime', h)}
+                        className="flex-1 px-2 py-1 rounded text-xs font-medium transition-colors"
+                        style={{
+                          background: Number(work.overtime) === h ? '#BE8A3A' : '#E5ECEF',
+                          color: Number(work.overtime) === h ? '#fff' : '#64748b'
+                        }}
+                      >
+                        +{h}h
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -4761,6 +4854,103 @@ const MultiWorkTimesheetForm = ({
             <div className="text-white font-semibold text-sm">Atenção: Limite Excedido</div>
             <div className="text-white/90 text-xs mt-1">
               O total de horas ({totalAll.toFixed(1)}h) ultrapassa as 24h disponíveis no dia.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resumo Final */}
+      {works.some(w => w.project && w.supervisor && (Number(w.hours) > 0 || Number(w.overtime) > 0)) && (
+        <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #2C3134 0%, #3D4246 100%)' }}>
+          <div className="px-4 py-3 flex items-center gap-2" style={{ background: 'rgba(0,0,0,0.2)' }}>
+            <div className="text-xl">📊</div>
+            <div className="text-white font-semibold">Resumo do Registo</div>
+          </div>
+
+          <div className="p-4 space-y-3">
+            {/* Estatísticas principais */}
+            <div className="grid grid-cols-3 gap-3">
+              {/* Total de Registos */}
+              <div
+                className="rounded-xl p-3 text-center"
+                style={{ background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)' }}
+              >
+                <div className="text-white/80 text-[10px] font-medium mb-1">Registos</div>
+                <div className="text-white text-2xl font-bold">
+                  {works.filter(w => w.project && w.supervisor && (Number(w.hours) > 0 || Number(w.overtime) > 0)).length}
+                </div>
+              </div>
+
+              {/* Total Horas Normais */}
+              <div
+                className="rounded-xl p-3 text-center"
+                style={{ background: 'linear-gradient(135deg, #00A9B8 0%, #00C4D6 100%)' }}
+              >
+                <div className="text-white/80 text-[10px] font-medium mb-1">Horas</div>
+                <div className="text-white text-2xl font-bold">{totalHours}h</div>
+              </div>
+
+              {/* Total Horas Extra */}
+              <div
+                className="rounded-xl p-3 text-center"
+                style={{ background: 'linear-gradient(135deg, #BE8A3A 0%, #D4A04D 100%)' }}
+              >
+                <div className="text-white/80 text-[10px] font-medium mb-1">Extra</div>
+                <div className="text-white text-2xl font-bold">+{totalOvertime}h</div>
+              </div>
+            </div>
+
+            {/* Lista de obras a registar */}
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-white/60 px-1">Obras a registar:</div>
+              {works
+                .filter(w => w.project && w.supervisor && (Number(w.hours) > 0 || Number(w.overtime) > 0))
+                .map((work, index) => (
+                  <div
+                    key={work.id}
+                    className="rounded-lg p-2 flex items-center justify-between"
+                    style={{ background: 'rgba(255,255,255,0.05)' }}
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div
+                        className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold flex-shrink-0"
+                        style={{ background: 'rgba(0,169,184,0.3)', color: '#00C4D6' }}
+                      >
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white text-sm font-medium truncate">{work.project}</div>
+                        <div className="text-white/60 text-xs truncate">{work.supervisor}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      {Number(work.hours) > 0 && (
+                        <div className="text-right">
+                          <div className="text-white text-sm font-bold">{Number(work.hours)}h</div>
+                          <div className="text-white/50 text-[10px]">Normal</div>
+                        </div>
+                      )}
+                      {Number(work.overtime) > 0 && (
+                        <div className="text-right">
+                          <div className="text-sm font-bold" style={{ color: '#BE8A3A' }}>+{Number(work.overtime)}h</div>
+                          <div className="text-white/50 text-[10px]">Extra</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+            </div>
+
+            {/* Total geral */}
+            <div
+              className="rounded-xl p-3 text-center"
+              style={{ background: 'linear-gradient(90deg, rgba(0,103,127,0.2) 0%, rgba(0,169,184,0.2) 100%)', border: '2px solid rgba(0,169,184,0.3)' }}
+            >
+              <div className="text-white/70 text-xs mb-1">Total Geral</div>
+              <div className="flex items-center justify-center gap-2">
+                <div className="text-white text-3xl font-bold">{totalAll.toFixed(1)}h</div>
+                <div className="text-white/60 text-sm">/ 24h</div>
+              </div>
             </div>
           </div>
         </div>
