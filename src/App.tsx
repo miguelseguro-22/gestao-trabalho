@@ -2954,18 +2954,32 @@ const TimesheetsView = () => (
    const start=new Date(cycStart);start.setHours(0,0,0,0);
    const end=new Date(cycEnd);end.setHours(23,59,59,999);
 
-   const inRange=(iso)=>{if(!iso)return false;const d=new Date(iso);d.setHours(0,0,0,0);return d>=start&&d<=end;};
+   const isValidDate=(d)=>d instanceof Date&&!Number.isNaN(d.getTime());
+   const inRange=(iso)=>{
+     if(!iso) return false;
+     const d=new Date(iso);
+     if(!isValidDate(d)) return false;
+     d.setHours(0,0,0,0);
+     return d>=start&&d<=end;
+   };
 
    const s=new Set();
    for(const t of (visibleTimeEntries||[])){
      if(t?.template==='Férias'||t?.template==='Baixa'){
-       const a=new Date(t.periodStart||t.date);const b=new Date(t.periodEnd||t.date);
+       const a=new Date(t.periodStart||t.date);
+       const b=new Date(t.periodEnd||t.date);
+       if(!isValidDate(a)||!isValidDate(b)) continue;
        a.setHours(0,0,0,0);b.setHours(0,0,0,0);
        for(let d=new Date(a);d<=b;d.setDate(d.getDate()+1)){
-         if(d>=start&&d<=end)s.add(d.toISOString().slice(0,10));
+         if(d>=start&&d<=end&&isValidDate(d)){
+           s.add(d.toISOString().slice(0,10));
+         }
        }
      }else if(inRange(t?.date)){
-       s.add(new Date(t.date).toISOString().slice(0,10));
+       const d=new Date(t.date);
+       if(isValidDate(d)){
+         s.add(d.toISOString().slice(0,10));
+       }
      }
    }
 
