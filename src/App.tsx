@@ -839,7 +839,7 @@ function familyForProjectInput(projects, input){
   return '';
 }
 
-const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate})=>{
+const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate})=>{
   if(!dateISO) return null;
   const target=new Date(dateISO);target.setHours(0,0,0,0);
   const matches=t=>{
@@ -851,24 +851,254 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate})=>{
     const d=new Date(t.date);d.setHours(0,0,0,0);return d.getTime()===target.getTime();
   };
   const list=timeEntries.filter(matches);
+
+  // Calcular totais
+  const totalHours = list.reduce((sum, t) => sum + (Number(t.hours) || 0), 0);
+  const totalOvertime = list.reduce((sum, t) => sum + (Number(t.overtime) || 0), 0);
+
+  // Navegação
+  const prevDay = () => {
+    const prev = new Date(target);
+    prev.setDate(prev.getDate() - 1);
+    onNavigate?.(prev.toISOString().slice(0, 10));
+  };
+
+  const nextDay = () => {
+    const next = new Date(target);
+    next.setDate(next.getDate() + 1);
+    onNavigate?.(next.toISOString().slice(0, 10));
+  };
+
+  // Formatação bonita da data
+  const dateStr = target.toLocaleDateString('pt-PT', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+  const dayOfWeek = target.toLocaleDateString('pt-PT', { weekday: 'short' }).toUpperCase();
+
   return(
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="font-semibold">Registos em {fmtDate(dateISO)}</div>
-        <Button onClick={()=>onNew(dateISO)}><Icon name="plus"/> Novo registo</Button>
-      </div>
-      {list.length===0&&<div className="rounded-2xl border bg-white dark:bg-slate-900 dark:border-slate-800 p-4 text-sm text-slate-600 dark:text-slate-300">Não existem registos para este dia.</div>}
-      {list.map(t=>(
-        <div key={t.id} className="rounded-2xl border bg-white dark:bg-slate-900 dark:border-slate-800 p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2"><span className={`inline-block w-2.5 h-2.5 rounded ${TYPE_COLORS[t.template]||'bg-slate-300'}`}/><div className="font-medium">{t.template}</div></div>
-            <div className="flex gap-2"><Button variant="secondary" size="sm" onClick={()=>onDuplicate(t)}>Duplicar</Button><Button size="sm" onClick={()=>onEdit(t)}>Editar</Button></div>
+    <div className="space-y-4">
+      {/* Header com navegação */}
+      <div className="flex items-center justify-between gap-4">
+        <Button variant="secondary" onClick={prevDay} className="!p-2">
+          <Icon name="chev-left" />
+        </Button>
+
+        <div className="flex-1 text-center">
+          <div className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-1">
+            {dayOfWeek}
           </div>
-          <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            {t.template==='Trabalho Normal'?<>Obra: <span className="font-medium text-slate-700 dark:text-slate-200">{t.project||'-'}</span> · Encarregado: {t.supervisor||'-'} · Horas: {t.hours||0} (+{t.overtime||0})</> : t.template==='Falta'?<>Motivo: {t.notes||'-'}</> : <>Período: {t.periodStart} → {t.periodEnd}</>}
+          <div className="text-lg font-bold text-slate-800 dark:text-slate-100 capitalize">
+            {dateStr}
           </div>
         </div>
-      ))}
+
+        <Button variant="secondary" onClick={nextDay} className="!p-2">
+          <Icon name="chev-right" />
+        </Button>
+      </div>
+
+      {/* Resumo do dia */}
+      {list.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 p-3 text-center">
+            <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+              {list.length}
+            </div>
+            <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              {list.length === 1 ? 'Registo' : 'Registos'}
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900 p-3 text-center">
+            <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
+              {totalHours}h
+            </div>
+            <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+              Horas Normais
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900 p-3 text-center">
+            <div className="text-2xl font-bold text-amber-700 dark:text-amber-300">
+              +{totalOvertime}h
+            </div>
+            <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              Horas Extra
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lista de registos */}
+      <div className="space-y-3">
+        {list.length === 0 ? (
+          <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-8 text-center">
+            <div className="text-slate-400 dark:text-slate-500 mb-3">
+              <Icon name="calendar" className="w-12 h-12 mx-auto opacity-50" />
+            </div>
+            <div className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
+              Sem registos neste dia
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-500 mb-4">
+              Adicione um novo registo para começar
+            </div>
+            <Button onClick={() => onNew(dateISO)} size="sm">
+              <Icon name="plus" /> Criar registo
+            </Button>
+          </div>
+        ) : (
+          <>
+            {list.map((t, index) => {
+              const isWork = t.template === 'Trabalho Normal';
+              const isHoliday = t.template === 'Férias';
+              const isSick = t.template === 'Baixa';
+              const isAbsence = t.template === 'Falta';
+
+              return (
+                <div
+                  key={t.id}
+                  className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+                >
+                  {/* Header colorido baseado no tipo */}
+                  <div className={`px-4 py-3 ${
+                    isWork ? 'bg-gradient-to-r from-emerald-500 to-emerald-600' :
+                    isHoliday ? 'bg-gradient-to-r from-violet-500 to-violet-600' :
+                    isSick ? 'bg-gradient-to-r from-orange-500 to-orange-600' :
+                    'bg-gradient-to-r from-slate-500 to-slate-600'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                          <span className="text-lg">
+                            {isWork ? '💼' : isHoliday ? '🏖️' : isSick ? '🏥' : '❌'}
+                          </span>
+                        </div>
+                        <div>
+                          <div className="font-semibold text-white text-sm">
+                            {t.template}
+                          </div>
+                          <div className="text-xs text-white/80">
+                            Registo #{index + 1}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => onDuplicate(t)}
+                          className="!bg-white/20 !text-white hover:!bg-white/30 !border-white/30"
+                        >
+                          Duplicar
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => onEdit(t)}
+                          className="!bg-white !text-slate-800 hover:!bg-white/90"
+                        >
+                          Editar
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Conteúdo */}
+                  <div className="p-4">
+                    {isWork ? (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                            🏗️ Obra
+                          </div>
+                          <div className="font-semibold text-slate-800 dark:text-slate-100">
+                            {t.project || '—'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                            👷 Encarregado
+                          </div>
+                          <div className="font-semibold text-slate-800 dark:text-slate-100">
+                            {t.supervisor || '—'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                            ⏰ Horas Normais
+                          </div>
+                          <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                            {t.hours || 0}h
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                            ⚡ Horas Extra
+                          </div>
+                          <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                            +{t.overtime || 0}h
+                          </div>
+                        </div>
+                        {t.notes && (
+                          <div className="col-span-2">
+                            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                              📝 Notas
+                            </div>
+                            <div className="text-sm text-slate-700 dark:text-slate-300 italic">
+                              {t.notes}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : isHoliday || isSick ? (
+                      <div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                          📅 Período
+                        </div>
+                        <div className="font-semibold text-slate-800 dark:text-slate-100 mb-3">
+                          {t.periodStart} → {t.periodEnd}
+                        </div>
+                        {t.notes && (
+                          <div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                              📝 Notas
+                            </div>
+                            <div className="text-sm text-slate-700 dark:text-slate-300 italic">
+                              {t.notes}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                          📝 Motivo
+                        </div>
+                        <div className="text-sm text-slate-700 dark:text-slate-300">
+                          {t.notes || '—'}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Botão para adicionar mais */}
+            <button
+              onClick={() => onNew(dateISO)}
+              className="w-full rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-4 text-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group"
+            >
+              <div className="flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                <Icon name="plus" className="w-5 h-5" />
+                <span className="font-medium">Adicionar outro registo</span>
+              </div>
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 };
@@ -6272,8 +6502,15 @@ function TableMaterials() {
   />
 </Modal>
 
-      <Modal open={modal?.name==='day-details'} title="Dia no calendário" onClose={()=>setModal(null)}>
-        <DayDetails dateISO={modal?.dateISO} timeEntries={timeEntries} onNew={iso=>setModal({name:'add-time',initial:{date:iso,template:'Trabalho Normal'}})} onEdit={t=>setModal({name:'add-time',initial:t})} onDuplicate={t=>{duplicateTimeEntry({...t,date:modal?.dateISO});setModal(null)}}/>
+      <Modal open={modal?.name==='day-details'} title="" onClose={()=>setModal(null)} wide>
+        <DayDetails
+          dateISO={modal?.dateISO}
+          timeEntries={timeEntries}
+          onNew={iso=>setModal({name:'add-time',initial:{date:iso,template:'Trabalho Normal'}})}
+          onEdit={t=>setModal({name:'add-time',initial:t})}
+          onDuplicate={t=>{duplicateTimeEntry({...t,date:modal?.dateISO});setModal(null)}}
+          onNavigate={(newDateISO) => setModal({name:'day-details', dateISO: newDateISO})}
+        />
       </Modal>
 
 <Modal open={modal?.name==='order-detail'} title="Detalhe do Pedido" onClose={()=>setModal(null)} wide>
