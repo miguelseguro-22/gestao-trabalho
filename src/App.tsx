@@ -5553,6 +5553,8 @@ const CAN = {
   people: new Set(["diretor", "admin"]),
   vehicles: new Set(["diretor", "admin"]),
   agenda: new Set(["encarregado", "diretor", "admin"]),
+  pendingApprovals: new Set(["encarregado", "diretor", "admin"]), // 🆕
+  teamDashboard: new Set(["encarregado", "diretor", "admin"]), // 🆕
 };
 
 
@@ -6482,6 +6484,202 @@ const generatePersonalTimesheetReport = ({ worker, timeEntries, cycle }) => {
 
   return html;
 };
+
+// 🆕 VIEW: REGISTOS PENDENTES DE APROVAÇÃO
+const PendingApprovalsView = ({ timeEntries, auth, onApprove, onReject }) => {
+  const pendingEntries = useMemo(() => {
+    return timeEntries.filter(t =>
+      t.status === 'pending' &&
+      t.template === 'Trabalho Normal' &&
+      (auth?.role === 'admin' || t.supervisor === auth?.name)
+    ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [timeEntries, auth]);
+
+  const groupedByWorker = useMemo(() => {
+    const groups = new Map();
+    pendingEntries.forEach(entry => {
+      const worker = entry.worker || 'Desconhecido';
+      if (!groups.has(worker)) groups.set(worker, []);
+      groups.get(worker).push(entry);
+    });
+    return groups;
+  }, [pendingEntries]);
+
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Registos Pendentes de Aprovação" subtitle={`${pendingEntries.length} registos aguardam aprovação`} />
+
+      {pendingEntries.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="text-6xl mb-4">✅</div>
+          <div className="text-lg font-semibold text-slate-700 dark:text-slate-300">
+            Sem registos pendentes
+          </div>
+          <div className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+            Todos os registos foram aprovados ou rejeitados
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {Array.from(groupedByWorker).map(([worker, entries]) => (
+            <div key={worker} className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="font-semibold text-slate-800 dark:text-slate-100">
+                  👤 {worker}
+                </h3>
+                <span className="text-sm text-slate-500 dark:text-slate-400">
+                  {entries.length} registo{entries.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {entries.map(entry => (
+                <div key={entry.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">📅 Data</div>
+                        <div className="font-semibold text-slate-800 dark:text-slate-100">
+                          {new Date(entry.date).toLocaleDateString('pt-PT')}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">🏗️ Obra</div>
+                        <div className="font-semibold text-slate-800 dark:text-slate-100 truncate">
+                          {entry.project}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">⏰ Horas</div>
+                        <div className="font-semibold text-emerald-600 dark:text-emerald-400">
+                          {entry.hours}h
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">⚡ Extra</div>
+                        <div className="font-semibold text-amber-600 dark:text-amber-400">
+                          +{entry.overtime || 0}h
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => onApprove(entry)} className="!bg-green-500 hover:!bg-green-600">
+                        ✅
+                      </Button>
+                      <Button size="sm" onClick={() => onReject(entry)} className="!bg-red-500 hover:!bg-red-600">
+                        ❌
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// 🆕 VIEW: DASHBOARD DO ENCARREGADO
+const SupervisorDashboardView = ({ timeEntries, people, auth }) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const teamWorkers = useMemo(() => Object.keys(people).filter(name => name !== auth?.name), [people, auth]);
+
+  const todayStats = useMemo(() => {
+    const registered = timeEntries.filter(t =>
+      t.date === today &&
+      t.template === 'Trabalho Normal' &&
+      teamWorkers.includes(t.worker)
+    );
+
+    const byWorker = new Map();
+    registered.forEach(entry => {
+      const worker = entry.worker;
+      if (!byWorker.has(worker)) byWorker.set(worker, { hours: 0, overtime: 0, status: entry.status });
+      const w = byWorker.get(worker);
+      w.hours += Number(entry.hours) || 0;
+      w.overtime += Number(entry.overtime) || 0;
+      if (entry.status === 'pending') w.status = 'pending';
+    });
+
+    const missing = teamWorkers.filter(w => !byWorker.has(w));
+
+    return { registered: Array.from(byWorker), missing, totalHours: registered.reduce((s, t) => s + (Number(t.hours) || 0), 0), totalOvertime: registered.reduce((s, t) => s + (Number(t.overtime) || 0), 0) };
+  }, [timeEntries, today, teamWorkers]);
+
+  const pendingCount = useMemo(() => {
+    return timeEntries.filter(t => t.status === 'pending' && t.template === 'Trabalho Normal' && (auth?.role === 'admin' || t.supervisor === auth?.name)).length;
+  }, [timeEntries, auth]);
+
+  return (
+    <div className="space-y-6">
+      <PageHeader title="👥 Minha Equipa" subtitle={`${today} - ${todayStats.registered.length}/${teamWorkers.length} registados hoje`} />
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card style={{ background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)' }}>
+          <div className="p-4 text-center text-white">
+            <div className="text-3xl font-bold">{todayStats.registered.length}</div>
+            <div className="text-sm text-white/80 mt-1">Registados Hoje</div>
+          </div>
+        </Card>
+        <Card style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)' }}>
+          <div className="p-4 text-center text-white">
+            <div className="text-3xl font-bold">{pendingCount}</div>
+            <div className="text-sm text-white/80 mt-1">Aguardam Aprovação</div>
+          </div>
+        </Card>
+        <Card style={{ background: 'linear-gradient(135deg, #00A9B8 0%, #00C4D6 100%)' }}>
+          <div className="p-4 text-center text-white">
+            <div className="text-3xl font-bold">{todayStats.totalHours}h</div>
+            <div className="text-sm text-white/80 mt-1">Total Horas Hoje</div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="font-semibold text-slate-800 dark:text-slate-100">✅ Registados ({todayStats.registered.length})</h3>
+        {todayStats.registered.map(([worker, stats]) => (
+          <Card key={worker}>
+            <div className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg" style={{ background: 'linear-gradient(135deg, #00A9B8 0%, #00C4D6 100%)', color: '#fff' }}>
+                  👤
+                </div>
+                <div>
+                  <div className="font-semibold text-slate-800 dark:text-slate-100">{worker}</div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400">
+                    {stats.hours}h + {stats.overtime}h extra
+                  </div>
+                </div>
+              </div>
+              <div>
+                {stats.status === 'pending' && <span className="px-3 py-1 rounded-full text-xs font-medium" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b' }}>🟡 Pendente</span>}
+                {stats.status === 'approved' && <span className="px-3 py-1 rounded-full text-xs font-medium" style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' }}>✅ Aprovado</span>}
+              </div>
+            </div>
+          </Card>
+        ))}
+
+        {todayStats.missing.length > 0 && (
+          <>
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100 mt-6">⏳ Faltam Registar ({todayStats.missing.length})</h3>
+            {todayStats.missing.map(worker => (
+              <Card key={worker}>
+                <div className="p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg bg-slate-200 dark:bg-slate-700">
+                    ⚠️
+                  </div>
+                  <div className="font-semibold text-slate-600 dark:text-slate-400">{worker}</div>
+                </div>
+              </Card>
+            ))}
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const duplicateTimeEntry = (entry: any) => {
   const newEntry = { ...entry, id: uid() };
   setTimeEntries((prev) => [newEntry, ...prev]);
@@ -6992,6 +7190,40 @@ function TableMaterials() {
   {/* Timesheets - TODOS veem */}
   <NavItem id="timesheets" icon="clock" label="Timesheets" setView={setView} />
 
+  {/* 🆕 Equipa - Encarregado, Diretor, Admin */}
+  {can("teamDashboard") && (
+    <NavItem id="team-dashboard" icon="user" label="👥 Minha Equipa" setView={setView} />
+  )}
+
+  {/* 🆕 Pendentes - Encarregado, Diretor, Admin */}
+  {can("pendingApprovals") && (() => {
+    const pendingCount = timeEntries.filter(t =>
+      t.status === 'pending' &&
+      t.template === 'Trabalho Normal' &&
+      (auth?.role === 'admin' || t.supervisor === auth?.name)
+    ).length;
+
+    return (
+      <button
+        onClick={() => setView('pending-approvals')}
+        className="flex items-center justify-between w-full px-3 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition"
+      >
+        <div className="flex items-center gap-3">
+          <Icon name="clock" className="w-5 h-5" />
+          <span className="text-sm">Registos Pendentes</span>
+        </div>
+        {pendingCount > 0 && (
+          <span
+            className="px-2 py-0.5 rounded-full text-xs font-bold"
+            style={{ background: '#f59e0b', color: '#fff' }}
+          >
+            {pendingCount}
+          </span>
+        )}
+      </button>
+    );
+  })()}
+
   {/* Materiais - Encarregado, Diretor, Admin */}
   {can("materials") && (
     <NavItem id="materials" icon="package" label="Materiais" setView={setView} />
@@ -7115,13 +7347,31 @@ function TableMaterials() {
 
           {/* ROUTER INTERNO */}
           {view === "dashboard" && <DashboardView />}
-          {/* ROUTER INTERNO */}
 {view === "profile" && (
   <ProfileView timeEntries={timeEntries} auth={auth} people={people} />
 )}
 
 {view === "monthly-report" && auth?.role === "admin" && (
   <MonthlyReportView timeEntries={timeEntries} people={people} />
+)}
+
+{/* 🆕 VIEW PENDENTES */}
+{view === "pending-approvals" && (
+  <PendingApprovalsView
+    timeEntries={timeEntries}
+    auth={auth}
+    onApprove={(entry) => handleApproveTimesheet(entry)}
+    onReject={(entry) => setModal({name: 'reject-timesheet', entry})}
+  />
+)}
+
+{/* 🆕 VIEW EQUIPA */}
+{view === "team-dashboard" && (
+  <SupervisorDashboardView
+    timeEntries={timeEntries}
+    people={people}
+    auth={auth}
+  />
 )}
 
 {view === "timesheets" && <TimesheetsView />}
