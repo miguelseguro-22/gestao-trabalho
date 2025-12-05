@@ -4535,51 +4535,6 @@ const MultiWorkTimesheetForm = ({
 
   return (
     <div className="space-y-4">
-      {/* Dashboard de Resumo */}
-      <div className="rounded-2xl p-4" style={{ background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)' }}>
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <div className="text-white/80 text-xs font-medium mb-1">Total do Dia</div>
-            <div className="text-white text-3xl font-bold">
-              {totalAll.toFixed(1)}h
-              <span className="text-lg font-normal text-white/80 ml-2">
-                / 24h
-              </span>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-white/80 text-xs mb-1">Disponível</div>
-            <div className={`text-2xl font-bold ${isOverLimit ? 'text-red-300' : 'text-white'}`}>
-              {isOverLimit ? '!' : hoursLeft.toFixed(1) + 'h'}
-            </div>
-          </div>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="relative h-3 bg-white/20 rounded-full overflow-hidden">
-          <div
-            className="absolute top-0 left-0 h-full transition-all duration-300 rounded-full"
-            style={{
-              width: `${progressPercent}%`,
-              background: isOverLimit
-                ? 'linear-gradient(90deg, #BE8A3A 0%, #D4A04D 100%)'
-                : 'linear-gradient(90deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.95) 100%)'
-            }}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          <div className="bg-white/10 rounded-xl p-2">
-            <div className="text-white/70 text-[10px] font-medium">Normal</div>
-            <div className="text-white text-lg font-bold">{totalHours}h</div>
-          </div>
-          <div className="bg-white/10 rounded-xl p-2">
-            <div className="text-white/70 text-[10px] font-medium">Extra</div>
-            <div className="text-white text-lg font-bold">+{totalOvertime}h</div>
-          </div>
-        </div>
-      </div>
-
       {/* Data */}
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -4861,8 +4816,8 @@ const MultiWorkTimesheetForm = ({
 
       {/* Resumo Final */}
       {works.some(w => w.project && w.supervisor && (Number(w.hours) > 0 || Number(w.overtime) > 0)) && (
-        <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #2C3134 0%, #3D4246 100%)' }}>
-          <div className="px-4 py-3 flex items-center gap-2" style={{ background: 'rgba(0,0,0,0.2)' }}>
+        <div className="rounded-2xl overflow-hidden border-2" style={{ background: 'linear-gradient(135deg, #E5ECEF 0%, #F8FAFB 100%)', borderColor: '#00A9B8' }}>
+          <div className="px-4 py-3 flex items-center gap-2" style={{ background: 'linear-gradient(90deg, #00677F 0%, #00A9B8 100%)' }}>
             <div className="text-xl">📊</div>
             <div className="text-white font-semibold">Resumo do Registo</div>
           </div>
@@ -4902,38 +4857,38 @@ const MultiWorkTimesheetForm = ({
 
             {/* Lista de obras a registar */}
             <div className="space-y-2">
-              <div className="text-xs font-medium text-white/60 px-1">Obras a registar:</div>
+              <div className="text-xs font-medium px-1" style={{ color: '#00677F' }}>Obras a registar:</div>
               {works
                 .filter(w => w.project && w.supervisor && (Number(w.hours) > 0 || Number(w.overtime) > 0))
                 .map((work, index) => (
                   <div
                     key={work.id}
-                    className="rounded-lg p-2 flex items-center justify-between"
-                    style={{ background: 'rgba(255,255,255,0.05)' }}
+                    className="rounded-lg p-2.5 flex items-center justify-between border"
+                    style={{ background: '#ffffff', borderColor: '#E5ECEF' }}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <div
-                        className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold flex-shrink-0"
-                        style={{ background: 'rgba(0,169,184,0.3)', color: '#00C4D6' }}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
+                        style={{ background: 'linear-gradient(135deg, #00A9B8 0%, #00C4D6 100%)', color: '#fff' }}
                       >
                         {index + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-white text-sm font-medium truncate">{work.project}</div>
-                        <div className="text-white/60 text-xs truncate">{work.supervisor}</div>
+                        <div className="text-sm font-semibold truncate" style={{ color: '#00677F' }}>{work.project}</div>
+                        <div className="text-xs truncate" style={{ color: '#64748b' }}>{work.supervisor}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       {Number(work.hours) > 0 && (
                         <div className="text-right">
-                          <div className="text-white text-sm font-bold">{Number(work.hours)}h</div>
-                          <div className="text-white/50 text-[10px]">Normal</div>
+                          <div className="text-sm font-bold" style={{ color: '#00677F' }}>{Number(work.hours)}h</div>
+                          <div className="text-[10px]" style={{ color: '#94a3b8' }}>Normal</div>
                         </div>
                       )}
                       {Number(work.overtime) > 0 && (
                         <div className="text-right">
                           <div className="text-sm font-bold" style={{ color: '#BE8A3A' }}>+{Number(work.overtime)}h</div>
-                          <div className="text-white/50 text-[10px]">Extra</div>
+                          <div className="text-[10px]" style={{ color: '#94a3b8' }}>Extra</div>
                         </div>
                       )}
                     </div>
@@ -4943,13 +4898,13 @@ const MultiWorkTimesheetForm = ({
 
             {/* Total geral */}
             <div
-              className="rounded-xl p-3 text-center"
-              style={{ background: 'linear-gradient(90deg, rgba(0,103,127,0.2) 0%, rgba(0,169,184,0.2) 100%)', border: '2px solid rgba(0,169,184,0.3)' }}
+              className="rounded-xl p-4 text-center border-2"
+              style={{ background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)', borderColor: '#00A9B8' }}
             >
-              <div className="text-white/70 text-xs mb-1">Total Geral</div>
+              <div className="text-white/80 text-xs mb-1.5">Total Geral do Dia</div>
               <div className="flex items-center justify-center gap-2">
                 <div className="text-white text-3xl font-bold">{totalAll.toFixed(1)}h</div>
-                <div className="text-white/60 text-sm">/ 24h</div>
+                <div className="text-white/70 text-base">/ 24h</div>
               </div>
             </div>
           </div>
