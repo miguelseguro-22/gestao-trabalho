@@ -5680,6 +5680,7 @@ function App() {
   const persisted = loadState?.();
   const [cloudStamp, setCloudStamp] = useState<string | null>(persisted?.updatedAt || null)
   const [cloudReady, setCloudReady] = useState(false)
+  const [isOnline, setIsOnline] = useState(navigator.onLine)
 
   // -------------------------------------------------------------
   // 🔐 AUTH E NAVEGAÇÃO
@@ -5829,6 +5830,29 @@ function App() {
     latestStampRef.current = cloudStamp
   }, [cloudStamp])
 
+  // -------------------------------------------------------------
+  // 🌐 MONITORAMENTO DE CONEXÃO ONLINE/OFFLINE
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('✅ Conexão restaurada - Online')
+      setIsOnline(true)
+    }
+
+    const handleOffline = () => {
+      console.log('⚠️ Sem conexão - Modo Offline')
+      setIsOnline(false)
+    }
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
+
   useEffect(() => {
     let cancelled=false
 
@@ -5838,17 +5862,23 @@ function App() {
         return
       }
 
-      const cloud = await fetchCloudState(cloudKey)
-      if(cancelled)return
+      try {
+        const cloud = await fetchCloudState(cloudKey)
+        if(cancelled)return
 
-      const remoteTs = cloud?.updatedAt ? new Date(cloud.updatedAt).getTime() : 0
-      const localTs = cloudStamp ? new Date(cloudStamp).getTime() : 0
+        const remoteTs = cloud?.updatedAt ? new Date(cloud.updatedAt).getTime() : 0
+        const localTs = cloudStamp ? new Date(cloudStamp).getTime() : 0
 
-      if(cloud?.payload && remoteTs>localTs){
-        applySnapshot({ ...cloud.payload, updatedAt: cloud.updatedAt })
+        if(cloud?.payload && remoteTs>localTs){
+          applySnapshot({ ...cloud.payload, updatedAt: cloud.updatedAt })
+        }
+
+        setCloudReady(true)
+      } catch (error) {
+        console.error('❌ Erro ao carregar dados da cloud:', error)
+        // ✅ Mesmo com erro, marca como pronto para permitir uso offline
+        setCloudReady(true)
       }
-
-      setCloudReady(true)
     })()
 
     return ()=>{cancelled=true}
@@ -5926,11 +5956,9 @@ useEffect(() => {
   }, [auth, view]);
 
   // -------------------------------------------------------------
-  // 💾 PERSISTÊNCIA LOCAL
+  // 💾 PERSISTÊNCIA LOCAL (sempre funciona, mesmo offline)
   // -------------------------------------------------------------
   useEffect(() => {
-    if (!cloudReady) return
-
     const updatedAt = new Date().toISOString()
     const snapshot = {
       timeEntries,
@@ -5949,13 +5977,9 @@ useEffect(() => {
       updatedAt,
     }
 
+    // ✅ SEMPRE salva no localStorage (modo offline)
     saveState(snapshot)
     setCloudStamp(updatedAt)
-
-    if (cloudReady && supabaseActive) {
-      if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current)
-      cloudSaveTimer.current = setTimeout(() => saveCloudState(snapshot, cloudKey), 400)
-    }
   }, [
     timeEntries,
     orders,
@@ -5970,6 +5994,50 @@ useEffect(() => {
     agenda,
     suppliers,
     notifications, // 🆕
+  ])
+
+  // -------------------------------------------------------------
+  // ☁️ SINCRONIZAÇÃO COM CLOUD (opcional, apenas quando online)
+  // -------------------------------------------------------------
+  useEffect(() => {
+    // Só sincroniza com cloud se estiver pronto E ativo
+    if (!cloudReady || !supabaseActive) return
+
+    const updatedAt = new Date().toISOString()
+    const snapshot = {
+      timeEntries,
+      orders,
+      projects,
+      activity,
+      theme,
+      density,
+      catalog,
+      people,
+      prefs,
+      vehicles,
+      agenda,
+      suppliers,
+      notifications,
+      updatedAt,
+    }
+
+    // Debounce cloud sync para evitar muitas chamadas
+    if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current)
+    cloudSaveTimer.current = setTimeout(() => saveCloudState(snapshot, cloudKey), 400)
+  }, [
+    timeEntries,
+    orders,
+    projects,
+    activity,
+    theme,
+    density,
+    catalog,
+    people,
+    prefs,
+    vehicles,
+    agenda,
+    suppliers,
+    notifications,
     cloudReady,
     supabaseActive,
     cloudKey,
@@ -7128,6 +7196,20 @@ function TableMaterials() {
       }`}
       data-density={density}
     >
+      {/* 🌐 INDICADOR DE ESTADO ONLINE/OFFLINE */}
+      {!isOnline && (
+        <div className="fixed top-4 right-4 z-50 px-3 py-2 rounded-lg shadow-lg flex items-center gap-2" style={{ background: '#f59e0b', color: '#fff' }}>
+          <div className="w-2 h-2 rounded-full bg-white animate-pulse"></div>
+          <span className="text-sm font-medium">Modo Offline</span>
+        </div>
+      )}
+      {isOnline && supabaseActive && cloudReady && (
+        <div className="fixed top-4 right-4 z-50 px-3 py-2 rounded-lg shadow-lg flex items-center gap-2" style={{ background: '#10b981', color: '#fff' }}>
+          <div className="w-2 h-2 rounded-full bg-white"></div>
+          <span className="text-sm font-medium">Sincronizado</span>
+        </div>
+      )}
+
       {/* HEADER MOBILE */}
       <div className="lg:hidden sticky top-0 z-40 glass border-b dark:border-slate-800">
         <div className="flex items-center justify-between px-4 py-3">
