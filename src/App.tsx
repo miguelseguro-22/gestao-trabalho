@@ -3596,6 +3596,63 @@ const ProfileView = ({ timeEntries, auth, people }) => {
     };
   }, [myEntries]);
 
+  // Calcular horas por dia da semana atual
+  const weeklyStats = useMemo(() => {
+    const now = new Date();
+    const currentDay = now.getDay(); // 0 = Domingo, 1 = Segunda, ...
+
+    // Calcular início da semana (Segunda-feira)
+    const startOfWeek = new Date(now);
+    const diff = currentDay === 0 ? -6 : 1 - currentDay; // Se domingo, volta 6 dias; senão, vai para segunda
+    startOfWeek.setDate(now.getDate() + diff);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    // Criar array com os 7 dias da semana
+    const days = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+    const weekData = days.map((dayName, index) => {
+      const date = new Date(startOfWeek);
+      date.setDate(startOfWeek.getDate() + index);
+      const dateStr = date.toISOString().slice(0, 10);
+
+      // Calcular horas para este dia
+      let hours = 0;
+      let overtime = 0;
+      myEntries.forEach((entry) => {
+        if (entry.date === dateStr && isNormalWork(entry.template)) {
+          hours += Number(entry.hours) || 0;
+          overtime += Number(entry.overtime) || 0;
+        }
+      });
+
+      const total = hours + overtime;
+      const isToday = date.toDateString() === now.toDateString();
+      const isPast = date < now && !isToday;
+      const isFuture = date > now;
+
+      return {
+        day: dayName,
+        date: dateStr,
+        hours,
+        overtime,
+        total,
+        isToday,
+        isPast,
+        isFuture,
+      };
+    });
+
+    const weekTotal = weekData.reduce((sum, d) => sum + d.total, 0);
+    const weekAverage = weekTotal / 7;
+    const maxHours = Math.max(...weekData.map(d => d.total), 8); // Mínimo 8 para escala
+
+    return {
+      days: weekData,
+      total: weekTotal,
+      average: weekAverage,
+      maxHours,
+    };
+  }, [myEntries]);
+
   // Cores para o gráfico (paleta moderna)
   const colors = [
     '#3b82f6', // blue-500
@@ -3660,6 +3717,151 @@ const ProfileView = ({ timeEntries, auth, people }) => {
           </div>
         </Card>
       </div>
+
+      {/* Gráfico de Horas Semanal */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-100">
+              Horas por Dia (Semana Atual)
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Distribuição de horas trabalhadas esta semana
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
+              {weeklyStats.total}h
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              Total da semana
+            </div>
+          </div>
+        </div>
+
+        {/* Gráfico de Barras */}
+        <div className="relative">
+          {/* Grid de fundo */}
+          <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+            {[...Array(5)].map((_, i) => (
+              <div
+                key={i}
+                className="border-t border-slate-200 dark:border-slate-700"
+                style={{ opacity: 0.3 }}
+              />
+            ))}
+          </div>
+
+          {/* Barras */}
+          <div className="relative grid grid-cols-7 gap-3 pt-4">
+            {weeklyStats.days.map((dayData, index) => {
+              const heightPercentage = weeklyStats.maxHours > 0
+                ? (dayData.total / weeklyStats.maxHours) * 100
+                : 0;
+
+              return (
+                <div key={index} className="flex flex-col items-center">
+                  {/* Container da barra */}
+                  <div className="w-full h-48 flex flex-col justify-end relative group">
+                    {/* Tooltip ao hover */}
+                    {dayData.total > 0 && (
+                      <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                        <div className="bg-slate-900 dark:bg-slate-700 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-nowrap">
+                          <div className="font-semibold mb-1">{dayData.day}</div>
+                          <div className="text-slate-300">Normal: {dayData.hours}h</div>
+                          {dayData.overtime > 0 && (
+                            <div className="text-amber-300">Extra: +{dayData.overtime}h</div>
+                          )}
+                          <div className="text-white font-semibold mt-1 pt-1 border-t border-slate-600">
+                            Total: {dayData.total}h
+                          </div>
+                        </div>
+                        {/* Seta */}
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1">
+                          <div className="w-2 h-2 bg-slate-900 dark:bg-slate-700 rotate-45" />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Barra principal */}
+                    <div
+                      className={`w-full rounded-t-xl transition-all duration-500 ease-out relative overflow-hidden ${
+                        dayData.isToday
+                          ? 'bg-gradient-to-t from-indigo-500 to-indigo-400 shadow-lg shadow-indigo-500/50 ring-2 ring-indigo-300'
+                          : dayData.isPast
+                          ? 'bg-gradient-to-t from-emerald-500 to-emerald-400'
+                          : dayData.total > 0
+                          ? 'bg-gradient-to-t from-blue-500 to-blue-400'
+                          : 'bg-gradient-to-t from-slate-200 to-slate-100 dark:from-slate-700 dark:to-slate-600'
+                      } ${
+                        dayData.total === 0 ? 'opacity-30' : 'group-hover:brightness-110'
+                      }`}
+                      style={{
+                        height: `${Math.max(heightPercentage, 2)}%`,
+                      }}
+                    >
+                      {/* Indicador de horas extra */}
+                      {dayData.overtime > 0 && (
+                        <div className="absolute inset-0 bg-gradient-to-t from-amber-500/40 to-amber-400/20" />
+                      )}
+
+                      {/* Shimmer effect ao hover */}
+                      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute inset-0 bg-gradient-to-t from-white/20 to-transparent" />
+                      </div>
+                    </div>
+
+                    {/* Valor no topo da barra */}
+                    {dayData.total > 0 && (
+                      <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-sm font-bold text-slate-700 dark:text-slate-300">
+                        {dayData.total}h
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Label do dia */}
+                  <div className="mt-3 text-center">
+                    <div
+                      className={`text-xs font-semibold ${
+                        dayData.isToday
+                          ? 'text-indigo-600 dark:text-indigo-400'
+                          : 'text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      {dayData.day}
+                    </div>
+                    {dayData.isToday && (
+                      <div className="text-[10px] text-indigo-500 dark:text-indigo-400 font-medium mt-0.5">
+                        Hoje
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Legenda */}
+        <div className="flex items-center justify-center gap-6 mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-gradient-to-br from-emerald-500 to-emerald-400" />
+            <span className="text-xs text-slate-600 dark:text-slate-400">Dias passados</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-gradient-to-br from-indigo-500 to-indigo-400 ring-2 ring-indigo-300" />
+            <span className="text-xs text-slate-600 dark:text-slate-400">Hoje</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-500 to-blue-400" />
+            <span className="text-xs text-slate-600 dark:text-slate-400">Próximos dias</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-gradient-to-br from-amber-500 to-amber-400" />
+            <span className="text-xs text-slate-600 dark:text-slate-400">Com horas extra</span>
+          </div>
+        </div>
+      </Card>
 
       {/* Grid: Gráfico + Detalhe */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
