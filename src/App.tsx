@@ -37,20 +37,26 @@ case 'building':return<svg viewBox="0 0 24 24" className={className}><rect {...S
 // ---------------------------------------------------------------
 // 🧭 COMPONENTE DE NAVEGAÇÃO
 // ---------------------------------------------------------------
-function NavItem({ 
-  id, 
-  icon, 
-  label, 
-  setView 
-}: { 
-  id: string; 
-  icon: string; 
-  label: string; 
-  setView: (v: any) => void; 
+function NavItem({
+  id,
+  icon,
+  label,
+  setView,
+  setSidebarOpen
+}: {
+  id: string;
+  icon: string;
+  label: string;
+  setView: (v: any) => void;
+  setSidebarOpen?: (v: boolean) => void;
 }) {
   return (
     <button
-      onClick={() => setView(id)}
+      onClick={() => {
+        setView(id);
+        // Fecha sidebar no mobile após navegação
+        if (setSidebarOpen) setSidebarOpen(false);
+      }}
       className="flex items-center gap-3 w-full px-3 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition"
     >
       <Icon name={icon} className="w-5 h-5" />
@@ -6488,6 +6494,15 @@ const generatePersonalTimesheetReport = ({ worker, timeEntries, cycle }) => {
 
 // 🆕 VIEW: REGISTOS PENDENTES DE APROVAÇÃO
 const PendingApprovalsView = ({ timeEntries, auth, onApprove, onReject }) => {
+  if (!timeEntries || !auth) {
+    return (
+      <div className="p-8 text-center">
+        <div className="text-4xl mb-4">⏳</div>
+        <div className="text-lg">A carregar...</div>
+      </div>
+    );
+  }
+
   const pendingEntries = useMemo(() => {
     return timeEntries.filter(t =>
       t.status === 'pending' &&
@@ -6508,7 +6523,10 @@ const PendingApprovalsView = ({ timeEntries, auth, onApprove, onReject }) => {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Registos Pendentes de Aprovação" subtitle={`${pendingEntries.length} registos aguardam aprovação`} />
+      <Card className="p-6">
+        <h1 className="text-2xl font-bold mb-2">📋 Registos Pendentes de Aprovação</h1>
+        <p className="text-slate-600 dark:text-slate-400">{pendingEntries.length} registos aguardam aprovação</p>
+      </Card>
 
       {pendingEntries.length === 0 ? (
         <div className="text-center py-12">
@@ -6583,8 +6601,19 @@ const PendingApprovalsView = ({ timeEntries, auth, onApprove, onReject }) => {
 
 // 🆕 VIEW: DASHBOARD DO ENCARREGADO
 const SupervisorDashboardView = ({ timeEntries, people, auth }) => {
+  if (!timeEntries || !people || !auth) {
+    return (
+      <div className="p-8 text-center">
+        <div className="text-4xl mb-4">⏳</div>
+        <div className="text-lg">A carregar...</div>
+      </div>
+    );
+  }
+
   const today = new Date().toISOString().slice(0, 10);
-  const teamWorkers = useMemo(() => Object.keys(people).filter(name => name !== auth?.name), [people, auth]);
+  const teamWorkers = useMemo(() => {
+    return Object.keys(people).filter(name => name !== auth?.name);
+  }, [people, auth]);
 
   const todayStats = useMemo(() => {
     const registered = timeEntries.filter(t =>
@@ -6614,7 +6643,10 @@ const SupervisorDashboardView = ({ timeEntries, people, auth }) => {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="👥 Minha Equipa" subtitle={`${today} - ${todayStats.registered.length}/${teamWorkers.length} registados hoje`} />
+      <Card className="p-6">
+        <h1 className="text-2xl font-bold mb-2">👥 Minha Equipa</h1>
+        <p className="text-slate-600 dark:text-slate-400">{today} - {todayStats.registered.length}/{teamWorkers.length} registados hoje</p>
+      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card style={{ background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)' }}>
@@ -7181,19 +7213,19 @@ function TableMaterials() {
           {/* NAV ITEMS */}
 <div className="mt-2 space-y-1">
   {/* ⬇️ PERFIL - TODOS VEEM (NO TOPO) */}
-  <NavItem id="profile" icon="user" label="Meu Perfil" setView={setView} />
+  <NavItem id="profile" icon="user" label="Meu Perfil" setView={setView} setSidebarOpen={setSidebarOpen} />
 
   {/* Admin vê o relatório mensal */}
   {auth?.role === "admin" && (
-    <NavItem id="monthly-report" icon="calendar" label="Relatório Mensal" setView={setView} />
+    <NavItem id="monthly-report" icon="calendar" label="Relatório Mensal" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
 
   {/* Timesheets - TODOS veem */}
-  <NavItem id="timesheets" icon="clock" label="Timesheets" setView={setView} />
+  <NavItem id="timesheets" icon="clock" label="Timesheets" setView={setView} setSidebarOpen={setSidebarOpen} />
 
   {/* 🆕 Equipa - Encarregado, Diretor, Admin */}
   {can("teamDashboard") && (
-    <NavItem id="team-dashboard" icon="user" label="👥 Minha Equipa" setView={setView} />
+    <NavItem id="team-dashboard" icon="user" label="👥 Minha Equipa" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
 
   {/* 🆕 Pendentes - Encarregado, Diretor, Admin */}
@@ -7206,7 +7238,11 @@ function TableMaterials() {
 
     return (
       <button
-        onClick={() => setView('pending-approvals')}
+        onClick={() => {
+          setView('pending-approvals');
+          // Fecha sidebar no mobile após navegação
+          setSidebarOpen(false);
+        }}
         className="flex items-center justify-between w-full px-3 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition"
       >
         <div className="flex items-center gap-3">
@@ -7227,32 +7263,32 @@ function TableMaterials() {
 
   {/* Materiais - Encarregado, Diretor, Admin */}
   {can("materials") && (
-    <NavItem id="materials" icon="package" label="Materiais" setView={setView} />
+    <NavItem id="materials" icon="package" label="Materiais" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
   
   {/* Logística - Logística e Admin */}
   {can("logistics") && (
-    <NavItem id="logistics" icon="package" label="Logística (Direção)" setView={setView} />
+    <NavItem id="logistics" icon="package" label="Logística (Direção)" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
   
   {/* Obras - Diretor e Admin */}
   {can("obras") && (
-    <NavItem id="obras" icon="wrench" label="Obras" setView={setView} />
+    <NavItem id="obras" icon="wrench" label="Obras" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
   
   {/* Colaboradores - Diretor e Admin */}
   {can("people") && (
-    <NavItem id="people" icon="user" label="Colaboradores" setView={setView} />
+    <NavItem id="people" icon="user" label="Colaboradores" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
   
   {/* Veículos - Diretor e Admin */}
   {can("vehicles") && (
-    <NavItem id="vehicles" icon="building" label="Veículos" setView={setView} />
+    <NavItem id="vehicles" icon="building" label="Veículos" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
   
   {/* Agenda - Encarregado, Diretor, Admin */}
   {can("agenda") && (
-    <NavItem id="agenda" icon="calendar" label="Agenda" setView={setView} />
+    <NavItem id="agenda" icon="calendar" label="Agenda" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
 </div>
 
@@ -7348,32 +7384,32 @@ function TableMaterials() {
 
           {/* ROUTER INTERNO */}
           {view === "dashboard" && <DashboardView />}
-{view === "profile" && (
-  <ProfileView timeEntries={timeEntries} auth={auth} people={people} />
-)}
+          {view === "profile" && (
+            <ProfileView timeEntries={timeEntries} auth={auth} people={people} />
+          )}
 
-{view === "monthly-report" && auth?.role === "admin" && (
-  <MonthlyReportView timeEntries={timeEntries} people={people} />
-)}
+          {view === "monthly-report" && auth?.role === "admin" && (
+            <MonthlyReportView timeEntries={timeEntries} people={people} />
+          )}
 
-{/* 🆕 VIEW PENDENTES */}
-{view === "pending-approvals" && (
-  <PendingApprovalsView
-    timeEntries={timeEntries}
-    auth={auth}
-    onApprove={(entry) => handleApproveTimesheet(entry)}
-    onReject={(entry) => setModal({name: 'reject-timesheet', entry})}
-  />
-)}
+          {/* 🆕 VIEW PENDENTES */}
+          {view === "pending-approvals" && (
+            <PendingApprovalsView
+              timeEntries={timeEntries}
+              auth={auth}
+              onApprove={(entry) => handleApproveTimesheet(entry)}
+              onReject={(entry) => setModal({name: 'reject-timesheet', entry})}
+            />
+          )}
 
-{/* 🆕 VIEW EQUIPA */}
-{view === "team-dashboard" && (
-  <SupervisorDashboardView
-    timeEntries={timeEntries}
-    people={people}
-    auth={auth}
-  />
-)}
+          {/* 🆕 VIEW EQUIPA */}
+          {view === "team-dashboard" && (
+            <SupervisorDashboardView
+              timeEntries={timeEntries}
+              people={people}
+              auth={auth}
+            />
+          )}
 
 {view === "timesheets" && <TimesheetsView />}
           {view === "materials" && <TableMaterials />}
