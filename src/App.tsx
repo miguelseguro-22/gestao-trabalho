@@ -5685,6 +5685,8 @@ function App() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modal, setModal] = useState<any | null>(null);
+  // 🆕 Sistema de Notificações
+  const [notifications, setNotifications] = useState<any[]>(persisted?.notifications || []);
   const cloudSaveTimer = useRef<any>(null)
   const [supabaseActive] = useState(() => supabaseReady)
   const cloudKey = useMemo(() => CLOUD_ROW_ID, [])
@@ -5800,6 +5802,7 @@ function App() {
     setVehicles(snap.vehicles || [])
     setAgenda(snap.agenda || [])
     setSuppliers(snap.suppliers || {})
+    setNotifications(snap.notifications || []) // 🆕
     setCloudStamp(snap.updatedAt || new Date().toISOString())
   }
 
@@ -5933,6 +5936,7 @@ useEffect(() => {
       vehicles,
       agenda,
       suppliers,
+      notifications, // 🆕
       updatedAt,
     }
 
@@ -5956,6 +5960,7 @@ useEffect(() => {
     vehicles,
     agenda,
     suppliers,
+    notifications, // 🆕
     cloudReady,
     supabaseActive,
     cloudKey,
@@ -6483,6 +6488,63 @@ const duplicateTimeEntry = (entry: any) => {
   addToast("Timesheet duplicado");
 };
 
+// 🆕 Função para aprovar timesheet
+const handleApproveTimesheet = (entry: any) => {
+  setTimeEntries((prev) =>
+    prev.map((t) =>
+      t.id === entry.id
+        ? {
+            ...t,
+            status: 'approved',
+            approvedBy: auth?.name || 'Desconhecido',
+            approvedAt: new Date().toISOString(),
+            rejectionReason: undefined // Limpar motivo se existir
+          }
+        : t
+    )
+  );
+  addToast(`Registo aprovado com sucesso`);
+
+  // Adicionar notificação para o técnico
+  addNotification({
+    type: 'approval',
+    message: `Seu registo de ${new Date(entry.date).toLocaleDateString('pt-PT')} foi aprovado`,
+    targetUser: entry.worker,
+    relatedEntry: entry.id
+  });
+};
+
+// 🆕 Função para rejeitar timesheet
+const handleRejectTimesheet = (entry: any, reason: string) => {
+  if (!reason || reason.trim() === '') {
+    addToast('É necessário fornecer um motivo para rejeição', 'error');
+    return;
+  }
+
+  setTimeEntries((prev) =>
+    prev.map((t) =>
+      t.id === entry.id
+        ? {
+            ...t,
+            status: 'rejected',
+            rejectionReason: reason,
+            approvedBy: auth?.name || 'Desconhecido',
+            approvedAt: new Date().toISOString()
+          }
+        : t
+    )
+  );
+  addToast(`Registo rejeitado`);
+
+  // Adicionar notificação para o técnico
+  addNotification({
+    type: 'rejection',
+    message: `Seu registo de ${new Date(entry.date).toLocaleDateString('pt-PT')} foi rejeitado: ${reason}`,
+    targetUser: entry.worker,
+    relatedEntry: entry.id
+  });
+};
+
 const addOrder = (payload: any) => {
   const newOrder = {
     id: uid(),
@@ -6512,6 +6574,29 @@ const addToast = (msg: string, type = "ok") => {
   // Se quiseres toast visual, adiciona biblioteca tipo react-hot-toast
 };
 
+// 🆕 Função para adicionar notificação
+const addNotification = (notification: any) => {
+  const newNotif = {
+    id: uid(),
+    timestamp: new Date().toISOString(),
+    read: false,
+    ...notification
+  };
+  setNotifications((prev) => [newNotif, ...prev]);
+};
+
+// 🆕 Função para marcar notificação como lida
+const markNotificationAsRead = (notifId: string) => {
+  setNotifications((prev) =>
+    prev.map((n) => (n.id === notifId ? { ...n, read: true } : n))
+  );
+};
+
+// 🆕 Função para marcar todas como lidas
+const markAllNotificationsAsRead = () => {
+  setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+};
+
 const setters = {
   setTimeEntries,
   setOrders,
@@ -6523,6 +6608,7 @@ const setters = {
   setVehicles,
   setAgenda,
   setSuppliers,
+  setNotifications, // 🆕
   setAll: (data: any) => {
     setTimeEntries(data.timeEntries || []);
     setOrders(data.orders || []);
@@ -6534,6 +6620,7 @@ const setters = {
     setVehicles(data.vehicles || []);
     setAgenda(data.agenda || []);
     setSuppliers(data.suppliers || {});
+    setNotifications(data.notifications || []); // 🆕
   },
   get: () => ({
     timeEntries,
@@ -6546,6 +6633,7 @@ const setters = {
     vehicles,
     agenda,
     suppliers,
+    notifications, // 🆕
     theme,
     density,
   }),
@@ -7383,7 +7471,85 @@ function TableMaterials() {
           onEdit={t=>setModal({name:'add-time',initial:t})}
           onDuplicate={t=>{duplicateTimeEntry({...t,date:modal?.dateISO});setModal(null)}}
           onNavigate={(newDateISO) => setModal({name:'day-details', dateISO: newDateISO})}
+          onApprove={(entry) => {
+            handleApproveTimesheet(entry);
+            // Mantém modal aberto para ver mudança
+          }}
+          onReject={(entry) => {
+            // Abrir modal de rejeição
+            setModal({name: 'reject-timesheet', entry, returnTo: 'day-details', returnData: modal});
+          }}
+          auth={auth}
         />
+      </Modal>
+
+      {/* 🆕 Modal de Rejeição */}
+      <Modal open={modal?.name==='reject-timesheet'} title="Rejeitar Registo" onClose={()=>setModal(null)}>
+        {modal?.entry && (() => {
+          const entry = modal.entry;
+          const [reason, setReason] = React.useState('');
+
+          const handleSubmit = () => {
+            handleRejectTimesheet(entry, reason);
+            // Voltar para o modal anterior
+            if (modal.returnTo && modal.returnData) {
+              setModal(modal.returnData);
+            } else {
+              setModal(null);
+            }
+          };
+
+          return (
+            <div className="space-y-4">
+              <div className="rounded-lg p-4 bg-slate-50 dark:bg-slate-800">
+                <div className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                  A rejeitar registo:
+                </div>
+                <div className="font-semibold text-slate-800 dark:text-slate-100">
+                  {entry.template} - {new Date(entry.date).toLocaleDateString('pt-PT')}
+                </div>
+                {entry.project && (
+                  <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                    Obra: {entry.project} • Encarregado: {entry.supervisor}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Motivo da Rejeição *
+                </label>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Ex: Horas incorretas, obra errada, etc."
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 p-3 dark:bg-slate-900 min-h-[100px] focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  autoFocus
+                />
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Este motivo será visível para o técnico
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => setModal(null)}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={!reason.trim()}
+                  className="flex-1 !bg-red-500 hover:!bg-red-600 disabled:!bg-slate-300 disabled:cursor-not-allowed"
+                >
+                  ❌ Rejeitar Registo
+                </Button>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
 
 <Modal open={modal?.name==='order-detail'} title="Detalhe do Pedido" onClose={()=>setModal(null)} wide>
