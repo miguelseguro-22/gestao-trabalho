@@ -3689,7 +3689,7 @@ const ProfileView = ({ timeEntries, auth, people }) => {
 
       {/* KPIs Principais */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-5 bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+        <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #00677F, #005666)' }}>
           <div className="text-sm opacity-90">Visão Geral do Mês</div>
           <div className="text-4xl font-bold mt-2">
             {monthlyStats.registeredDays}/{monthlyStats.workingDays}
@@ -3697,19 +3697,19 @@ const ProfileView = ({ timeEntries, auth, people }) => {
           <div className="text-sm opacity-80 mt-1">dias registados/úteis</div>
         </Card>
 
-        <Card className="p-5 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
-  <div className="text-sm opacity-90">Horas Totais</div>
-  <div className="text-4xl font-bold mt-2">{stats.totalHours}h</div>
-  <div className="text-sm opacity-80 mt-1">horas trabalhadas</div>
-</Card>
+        <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #00A9B8, #008A96)' }}>
+          <div className="text-sm opacity-90">Horas Totais</div>
+          <div className="text-4xl font-bold mt-2">{stats.totalHours}h</div>
+          <div className="text-sm opacity-80 mt-1">horas trabalhadas</div>
+        </Card>
 
-        <Card className="p-5 bg-gradient-to-br from-violet-500 to-violet-600 text-white">
+        <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #BE8A3A, #A07430)' }}>
           <div className="text-sm opacity-90">Férias Gozadas</div>
           <div className="text-4xl font-bold mt-2">{stats.holidayDays}</div>
           <div className="text-sm opacity-80 mt-1">dias de férias</div>
         </Card>
 
-        <Card className="p-5 bg-gradient-to-br from-amber-500 to-amber-600 text-white">
+        <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #2C3134, #1A1D1F)' }}>
           <div className="text-sm opacity-90">Baixas/Faltas</div>
           <div className="text-4xl font-bold mt-2">{stats.sickDays + stats.absenceDays}</div>
           <div className="text-sm opacity-80 mt-1">
@@ -3730,7 +3730,7 @@ const ProfileView = ({ timeEntries, auth, people }) => {
             </p>
           </div>
           <div className="text-right">
-            <div className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
+            <div className="text-3xl font-bold" style={{ color: '#00A9B8' }}>
               {weeklyStats.total}h
             </div>
             <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -3766,19 +3766,19 @@ const ProfileView = ({ timeEntries, auth, people }) => {
                     {/* Tooltip ao hover */}
                     {dayData.total > 0 && (
                       <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                        <div className="bg-slate-900 dark:bg-slate-700 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-nowrap">
+                        <div className="text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-nowrap" style={{ backgroundColor: '#2C3134' }}>
                           <div className="font-semibold mb-1">{dayData.day}</div>
-                          <div className="text-slate-300">Normal: {dayData.hours}h</div>
+                          <div style={{ color: '#E5ECEF' }}>Normal: {dayData.hours}h</div>
                           {dayData.overtime > 0 && (
-                            <div className="text-amber-300">Extra: +{dayData.overtime}h</div>
+                            <div style={{ color: '#BE8A3A' }}>Extra: +{dayData.overtime}h</div>
                           )}
-                          <div className="text-white font-semibold mt-1 pt-1 border-t border-slate-600">
+                          <div className="text-white font-semibold mt-1 pt-1" style={{ borderTop: '1px solid #00677F' }}>
                             Total: {dayData.total}h
                           </div>
                         </div>
                         {/* Seta */}
                         <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1">
-                          <div className="w-2 h-2 bg-slate-900 dark:bg-slate-700 rotate-45" />
+                          <div className="w-2 h-2 rotate-45" style={{ backgroundColor: '#2C3134' }} />
                         </div>
                       </div>
                     )}
@@ -3786,23 +3786,24 @@ const ProfileView = ({ timeEntries, auth, people }) => {
                     {/* Barra principal */}
                     <div
                       className={`w-full rounded-t-xl transition-all duration-500 ease-out relative overflow-hidden ${
-                        dayData.isToday
-                          ? 'bg-gradient-to-t from-indigo-500 to-indigo-400 shadow-lg shadow-indigo-500/50 ring-2 ring-indigo-300'
-                          : dayData.isPast
-                          ? 'bg-gradient-to-t from-emerald-500 to-emerald-400'
-                          : dayData.total > 0
-                          ? 'bg-gradient-to-t from-blue-500 to-blue-400'
-                          : 'bg-gradient-to-t from-slate-200 to-slate-100 dark:from-slate-700 dark:to-slate-600'
-                      } ${
                         dayData.total === 0 ? 'opacity-30' : 'group-hover:brightness-110'
                       }`}
                       style={{
                         height: `${Math.max(heightPercentage, 2)}%`,
+                        background: dayData.isToday
+                          ? 'linear-gradient(to top, #00677F, #007D99)'
+                          : dayData.isPast
+                          ? 'linear-gradient(to top, #00A9B8, #00C4D6)'
+                          : dayData.total > 0
+                          ? 'linear-gradient(to top, #00677F, #008AA4)'
+                          : 'linear-gradient(to top, #E5ECEF, #CDD5D9)',
+                        boxShadow: dayData.isToday ? '0 8px 16px rgba(0, 103, 127, 0.3)' : 'none',
+                        border: dayData.isToday ? '2px solid #00A9B8' : 'none',
                       }}
                     >
                       {/* Indicador de horas extra */}
                       {dayData.overtime > 0 && (
-                        <div className="absolute inset-0 bg-gradient-to-t from-amber-500/40 to-amber-400/20" />
+                        <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(190, 138, 58, 0.4), rgba(190, 138, 58, 0.2))' }} />
                       )}
 
                       {/* Shimmer effect ao hover */}
@@ -3822,16 +3823,13 @@ const ProfileView = ({ timeEntries, auth, people }) => {
                   {/* Label do dia */}
                   <div className="mt-3 text-center">
                     <div
-                      className={`text-xs font-semibold ${
-                        dayData.isToday
-                          ? 'text-indigo-600 dark:text-indigo-400'
-                          : 'text-slate-600 dark:text-slate-400'
-                      }`}
+                      className="text-xs font-semibold text-slate-600 dark:text-slate-400"
+                      style={dayData.isToday ? { color: '#00677F' } : {}}
                     >
                       {dayData.day}
                     </div>
                     {dayData.isToday && (
-                      <div className="text-[10px] text-indigo-500 dark:text-indigo-400 font-medium mt-0.5">
+                      <div className="text-[10px] font-medium mt-0.5" style={{ color: '#00A9B8' }}>
                         Hoje
                       </div>
                     )}
@@ -3845,19 +3843,19 @@ const ProfileView = ({ timeEntries, auth, people }) => {
         {/* Legenda */}
         <div className="flex items-center justify-center gap-6 mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gradient-to-br from-emerald-500 to-emerald-400" />
+            <div className="w-4 h-4 rounded" style={{ background: 'linear-gradient(to bottom right, #00A9B8, #00C4D6)' }} />
             <span className="text-xs text-slate-600 dark:text-slate-400">Dias passados</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gradient-to-br from-indigo-500 to-indigo-400 ring-2 ring-indigo-300" />
+            <div className="w-4 h-4 rounded" style={{ background: 'linear-gradient(to bottom right, #00677F, #007D99)', border: '2px solid #00A9B8' }} />
             <span className="text-xs text-slate-600 dark:text-slate-400">Hoje</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-500 to-blue-400" />
+            <div className="w-4 h-4 rounded" style={{ background: 'linear-gradient(to bottom right, #00677F, #008AA4)' }} />
             <span className="text-xs text-slate-600 dark:text-slate-400">Próximos dias</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gradient-to-br from-amber-500 to-amber-400" />
+            <div className="w-4 h-4 rounded" style={{ background: 'linear-gradient(to bottom right, #BE8A3A, #A07430)' }} />
             <span className="text-xs text-slate-600 dark:text-slate-400">Com horas extra</span>
           </div>
         </div>
