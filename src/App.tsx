@@ -4425,6 +4425,379 @@ const CustomSelect = ({
 };
 
 // ---------------------------------------------------------------
+// 🚀 MULTI-WORK TIMESHEET FORM (NEXT LEVEL)
+// ---------------------------------------------------------------
+const MultiWorkTimesheetForm = ({
+  onSubmit,
+  initial,
+  projectNames = [],
+  supervisorNames = [],
+  auth,
+  onCancel
+}) => {
+  const [date, setDate] = useState(initial?.date || todayISO());
+  const [works, setWorks] = useState([
+    {
+      id: Date.now(),
+      project: initial?.project || '',
+      supervisor: initial?.supervisor || '',
+      hours: initial?.hours || 8,
+      overtime: 0
+    }
+  ]);
+
+  // Calcular totais
+  const totalHours = works.reduce((sum, w) => sum + (Number(w.hours) || 0), 0);
+  const totalOvertime = works.reduce((sum, w) => sum + (Number(w.overtime) || 0), 0);
+  const totalAll = totalHours + totalOvertime;
+  const hoursLeft = 24 - totalAll;
+  const isOverLimit = totalAll > 24;
+  const progressPercent = Math.min((totalAll / 24) * 100, 100);
+
+  // Adicionar nova obra
+  const addWork = () => {
+    setWorks([...works, {
+      id: Date.now(),
+      project: '',
+      supervisor: '',
+      hours: 0,
+      overtime: 0
+    }]);
+  };
+
+  // Remover obra
+  const removeWork = (id) => {
+    if (works.length > 1) {
+      setWorks(works.filter(w => w.id !== id));
+    }
+  };
+
+  // Atualizar obra
+  const updateWork = (id, field, value) => {
+    setWorks(works.map(w =>
+      w.id === id ? { ...w, [field]: value } : w
+    ));
+  };
+
+  // Validar e submeter
+  const handleSubmit = () => {
+    // Validações
+    if (!date) {
+      alert('Data é obrigatória');
+      return;
+    }
+
+    if (isOverLimit) {
+      alert('Total de horas não pode ultrapassar 24h por dia');
+      return;
+    }
+
+    const validWorks = works.filter(w => w.project && w.supervisor && (Number(w.hours) > 0 || Number(w.overtime) > 0));
+
+    if (validWorks.length === 0) {
+      alert('Adicione pelo menos uma obra com horas válidas');
+      return;
+    }
+
+    // Criar um registo para cada obra
+    validWorks.forEach(work => {
+      onSubmit({
+        id: initial?.id && works.length === 1 ? initial.id : undefined,
+        template: 'Trabalho Normal',
+        date,
+        project: work.project,
+        supervisor: work.supervisor,
+        worker: auth?.name || 'Desconhecido',
+        hours: Number(work.hours) || 0,
+        overtime: Number(work.overtime) || 0,
+        weekendStartTime: '',
+        weekendEndTime: '',
+        extraStartTime: '',
+        extraEndTime: '',
+        notes: ''
+      });
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Dashboard de Resumo */}
+      <div className="rounded-2xl p-4" style={{ background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)' }}>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-white/80 text-xs font-medium mb-1">Total do Dia</div>
+            <div className="text-white text-3xl font-bold">
+              {totalAll.toFixed(1)}h
+              <span className="text-lg font-normal text-white/80 ml-2">
+                / 24h
+              </span>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-white/80 text-xs mb-1">Disponível</div>
+            <div className={`text-2xl font-bold ${isOverLimit ? 'text-red-300' : 'text-white'}`}>
+              {isOverLimit ? '!' : hoursLeft.toFixed(1) + 'h'}
+            </div>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="relative h-3 bg-white/20 rounded-full overflow-hidden">
+          <div
+            className="absolute top-0 left-0 h-full transition-all duration-300 rounded-full"
+            style={{
+              width: `${progressPercent}%`,
+              background: isOverLimit
+                ? 'linear-gradient(90deg, #BE8A3A 0%, #D4A04D 100%)'
+                : 'linear-gradient(90deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.95) 100%)'
+            }}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <div className="bg-white/10 rounded-xl p-2">
+            <div className="text-white/70 text-[10px] font-medium">Normal</div>
+            <div className="text-white text-lg font-bold">{totalHours}h</div>
+          </div>
+          <div className="bg-white/10 rounded-xl p-2">
+            <div className="text-white/70 text-[10px] font-medium">Extra</div>
+            <div className="text-white text-lg font-bold">+{totalOvertime}h</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Data */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          📅 Data
+        </label>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className="w-full rounded-xl border border-slate-300 dark:border-slate-700 p-3 dark:bg-slate-900 focus:ring-2 focus:ring-offset-2"
+          style={{ focusRingColor: '#00A9B8' }}
+        />
+      </div>
+
+      {/* Lista de Obras */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+            🏗️ Obras Trabalhadas ({works.length})
+          </h3>
+        </div>
+
+        {works.map((work, index) => (
+          <div
+            key={work.id}
+            className="rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden"
+            style={{
+              borderColor: work.project && work.supervisor ? '#00A9B8' : undefined
+            }}
+          >
+            {/* Header do Card */}
+            <div
+              className="px-4 py-3 flex items-center justify-between"
+              style={{
+                background: work.project && work.supervisor
+                  ? 'linear-gradient(90deg, #00A9B8 0%, #00C4D6 100%)'
+                  : 'linear-gradient(90deg, #E5ECEF 0%, #CDD5D9 100%)'
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center font-bold"
+                  style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    color: work.project && work.supervisor ? '#fff' : '#2C3134'
+                  }}
+                >
+                  {index + 1}
+                </div>
+                <div>
+                  <div
+                    className="font-semibold text-sm"
+                    style={{ color: work.project && work.supervisor ? '#fff' : '#2C3134' }}
+                  >
+                    {work.project || 'Obra não definida'}
+                  </div>
+                  <div
+                    className="text-xs"
+                    style={{ color: work.project && work.supervisor ? 'rgba(255,255,255,0.8)' : '#64748b' }}
+                  >
+                    {work.supervisor || 'Encarregado não definido'}
+                  </div>
+                </div>
+              </div>
+
+              {works.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeWork(work.id)}
+                  className="p-2 rounded-lg hover:bg-white/20 transition-colors"
+                  style={{ color: work.project && work.supervisor ? '#fff' : '#ef4444' }}
+                >
+                  <Icon name="x" />
+                </button>
+              )}
+            </div>
+
+            {/* Conteúdo do Card */}
+            <div className="p-4 space-y-3">
+              {/* Obra */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                  Obra
+                </label>
+                <input
+                  list={`projects-${work.id}`}
+                  value={work.project}
+                  onChange={(e) => updateWork(work.id, 'project', e.target.value)}
+                  placeholder="Ex: Obra #204"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 p-2 text-sm dark:bg-slate-800 focus:ring-2"
+                  style={{ '--focus-ring-color': '#00A9B8' } as any}
+                />
+                <datalist id={`projects-${work.id}`}>
+                  {projectNames.map(name => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+              </div>
+
+              {/* Encarregado */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                  Encarregado
+                </label>
+                <input
+                  list={`supervisors-${work.id}`}
+                  value={work.supervisor}
+                  onChange={(e) => updateWork(work.id, 'supervisor', e.target.value)}
+                  placeholder="Ex: Paulo Silva"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 p-2 text-sm dark:bg-slate-800 focus:ring-2"
+                  style={{ '--focus-ring-color': '#00A9B8' } as any}
+                />
+                <datalist id={`supervisors-${work.id}`}>
+                  {supervisorNames.map(name => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+              </div>
+
+              {/* Horas */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                    ⏰ Horas Normais
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="24"
+                    step="0.5"
+                    value={work.hours}
+                    onChange={(e) => updateWork(work.id, 'hours', e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-700 p-2 text-sm dark:bg-slate-800 focus:ring-2"
+                    style={{ '--focus-ring-color': '#00A9B8' } as any}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                    ⚡ Horas Extra
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="24"
+                    step="0.5"
+                    value={work.overtime}
+                    onChange={(e) => updateWork(work.id, 'overtime', e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-700 p-2 text-sm dark:bg-slate-800 focus:ring-2"
+                    style={{ '--focus-ring-color': '#00A9B8' } as any}
+                  />
+                </div>
+              </div>
+
+              {/* Subtotal */}
+              <div
+                className="rounded-lg p-2 text-center"
+                style={{ background: 'linear-gradient(90deg, #E5ECEF 0%, #F8FAFB 100%)' }}
+              >
+                <div className="text-xs text-slate-600 dark:text-slate-400">Subtotal</div>
+                <div className="text-lg font-bold" style={{ color: '#00677F' }}>
+                  {(Number(work.hours) + Number(work.overtime)).toFixed(1)}h
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* Botão Adicionar Obra */}
+        <button
+          type="button"
+          onClick={addWork}
+          className="w-full rounded-2xl border-2 border-dashed p-4 text-center hover:border-solid transition-all group"
+          style={{ borderColor: '#00A9B8' }}
+        >
+          <div className="flex items-center justify-center gap-2" style={{ color: '#00A9B8' }}>
+            <Icon name="plus" className="w-5 h-5" />
+            <span className="font-semibold">Adicionar Outra Obra</span>
+          </div>
+          <div className="text-xs mt-1" style={{ color: '#64748b' }}>
+            Trabalhou em múltiplas obras hoje?
+          </div>
+        </button>
+      </div>
+
+      {/* Alertas */}
+      {isOverLimit && (
+        <div
+          className="rounded-xl p-3 flex items-start gap-3"
+          style={{ background: 'linear-gradient(90deg, #BE8A3A 0%, #D4A04D 100%)' }}
+        >
+          <div className="text-white text-xl">⚠️</div>
+          <div>
+            <div className="text-white font-semibold text-sm">Atenção: Limite Excedido</div>
+            <div className="text-white/90 text-xs mt-1">
+              O total de horas ({totalAll.toFixed(1)}h) ultrapassa as 24h disponíveis no dia.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ações */}
+      <div className="flex gap-3 pt-4">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 rounded-xl border-2 py-3 font-semibold transition-colors"
+          style={{
+            borderColor: '#E5ECEF',
+            color: '#64748b'
+          }}
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={isOverLimit}
+          className="flex-1 rounded-xl py-3 font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{
+            background: isOverLimit
+              ? '#94a3b8'
+              : 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)'
+          }}
+        >
+          {works.length > 1 ? `Guardar ${works.length} Registos` : 'Guardar Registo'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------
 // 📝 FORM DE TIMESHEET (CORRIGIDO)
 // ---------------------------------------------------------------
 const TimesheetTemplateForm = ({
@@ -6000,7 +6373,7 @@ function TimesheetsView() {
         Debug
       </Button>
 
-      <Button onClick={() => setModal({ name: "add-time" })}>
+      <Button onClick={() => setModal({ name: "multi-work-time", initial: { date: todayISO() } })}>
         <Icon name="plus" /> Novo Registo
       </Button>
     </>
@@ -6508,11 +6881,11 @@ function TableMaterials() {
 <Modal open={modal?.name==='day-actions'} title={`Ações — ${fmtDate(modal?.dateISO||todayISO())}`} onClose={()=>setModal(null)}>
   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
     <button className="rounded-2xl border p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
-      onClick={()=>setModal({name:'add-time', initial:{ date: modal?.dateISO, template:'Trabalho Normal' }})}
+      onClick={()=>setModal({name:'multi-work-time', initial:{ date: modal?.dateISO }})}
     >
       <div className="text-sm text-slate-500">Registar</div>
       <div className="mt-1 font-semibold">Registar horas</div>
-      <div className="text-xs text-slate-400 mt-1">Criar timesheet para este dia</div>
+      <div className="text-xs text-slate-400 mt-1">Uma ou múltiplas obras</div>
     </button>
 
     <button className="rounded-2xl border p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
@@ -6525,6 +6898,24 @@ function TableMaterials() {
   </div>
 </Modal>
 
+{/* 🚀 Novo Modal Multi-Work */}
+<Modal
+  open={modal?.name==='multi-work-time'}
+  title="Registar Tempo"
+  onClose={()=>setModal(null)}
+  wide
+>
+  <MultiWorkTimesheetForm
+    initial={modal?.initial}
+    projectNames={projectNames}
+    supervisorNames={supervisorNames}
+    auth={auth}
+    onSubmit={(data) => {
+      addTimeEntry(data);
+    }}
+    onCancel={() => setModal(null)}
+  />
+</Modal>
 
 {/* Agendamento rápido (formulário compacto) */}
 <Modal open={modal?.name==='agenda-add'} title="Agendar Trabalho" onClose={()=>setModal(null)}>
