@@ -29,7 +29,6 @@ case 'eye':
       <circle {...S} cx="12" cy="12" r="3"/>
     </svg>
   );
-;
 case 'eye-off':return<svg viewBox="0 0 24 24" className={className}><path {...S} d="M3 3l18 18"/><path {...S} d="M10.6 10.6A3 3 0 0 0 12 15a3 3 0 0 0 2.4-1.2"/><path {...S} d="M9.9 4.24A10.4 10.4 0 0 1 12 4c6 0 10 8 10 8a17.3 17.3 0 0 1-4.2 5.2"/><path {...S} d="M6.6 6.6C4.3 8.1 2.6 10.3 2 12c0 0 4 8 10 8 1.1 0 2.1-.2 3-.5"/></svg>;
 case 'building':return<svg viewBox="0 0 24 24" className={className}><rect {...S} x="3" y="3" width="18" height="18" rx="2"/><path {...S} d="M7 7h10M7 11h10M7 15h6M7 19V3"/></svg>;
     default:return null;
@@ -2743,16 +2742,16 @@ const [suppliers, setSuppliers] = useState(persisted?.suppliers || {});   // { [
   const [timeEntries,setTimeEntries]=useState(persisted?.timeEntries||defaultTime);
   const [orders,setOrders]=useState(persisted?.orders||defaultOrders);
   // ---- VISIBILIDADE POR PERFIL ----
-const visibleTimeEntries = React.useMemo(() => {
-  if (auth?.role === 'tecnico' || auth?.role === 'encarregado') {
-    return (timeEntries || []).filter(t =>
-      t.worker === auth?.name || t.supervisor === auth?.name
-    );
-  }
-  return timeEntries;
-}, [auth?.role, auth?.name, timeEntries]);
+  const visibleTimeEntries = React.useMemo(() => {
+    if (auth?.role === 'tecnico' || auth?.role === 'encarregado') {
+      return (timeEntries || []).filter(t =>
+        t.worker === auth?.name || t.supervisor === auth?.name
+      );
+    }
+    return timeEntries;
+  }, [auth?.role, auth?.name, timeEntries]);
 
- useEffect(() => {
+  useEffect(() => {
     let cancelled = false;
 
     (async () => {
@@ -2767,24 +2766,13 @@ const visibleTimeEntries = React.useMemo(() => {
     };
   }, []);
 
-  if (!auth) {
-    return (
-      <LoginView
-        onLogin={(u) => {
-          setAuth(u);
-          setView(defaultViewForRole(u.role));
-        }}
-      />
-    );
-  }
 
-
-const visibleOrders = React.useMemo(() => {
-  if (auth?.role === 'logistica' || auth?.role === 'admin') {
-    return orders;
-  }
-  return (orders || []).filter(o => o.requestedBy === auth?.name);
-}, [auth?.role, auth?.name, orders]);
+  const visibleOrders = React.useMemo(() => {
+    if (auth?.role === 'logistica' || auth?.role === 'admin') {
+      return orders;
+    }
+    return (orders || []).filter(o => o.requestedBy === auth?.name);
+  }, [auth?.role, auth?.name, orders]);
 
 
   const [projects,setProjects]=useState(persisted?.projects||defaultProjects);
@@ -2950,19 +2938,74 @@ const TimesheetsView = () => (
 
   const {start:cycStart,end:cycEnd}=getCycle(0);
 
- const registeredDays=useMemo(()=>{ /* igual ao teu código, mas varre visibleTimeEntries */
+ const registeredDays=useMemo(()=>{
+   const start=new Date(cycStart);start.setHours(0,0,0,0);
+   const end=new Date(cycEnd);end.setHours(23,59,59,999);
+
+   const isValidDate=(d)=>d instanceof Date&&!Number.isNaN(d.getTime());
+   const inRange=(iso)=>{
+     if(!iso) return false;
+     const d=new Date(iso);
+     if(!isValidDate(d)) return false;
+     d.setHours(0,0,0,0);
+     return d>=start&&d<=end;
+   };
+
    const s=new Set();
-   (visibleTimeEntries||[]).forEach(t=>{ /* ...mesma lógica... */ });
+   for(const t of (visibleTimeEntries||[])){
+     if(t?.template==='Férias'||t?.template==='Baixa'){
+       const a=new Date(t.periodStart||t.date);
+       const b=new Date(t.periodEnd||t.date);
+       if(!isValidDate(a)||!isValidDate(b)) continue;
+       a.setHours(0,0,0,0);b.setHours(0,0,0,0);
+       for(let d=new Date(a);d<=b;d.setDate(d.getDate()+1)){
+         if(d>=start&&d<=end&&isValidDate(d)){
+           s.add(d.toISOString().slice(0,10));
+         }
+       }
+     }else if(inRange(t?.date)){
+       const d=new Date(t.date);
+       if(isValidDate(d)){
+         s.add(d.toISOString().slice(0,10));
+       }
+     }
+   }
+
    return s.size;
  },[visibleTimeEntries,cycStart,cycEnd]);
 
   const startWeek=startOfWeek(new Date());
 
- const hoursByDay=useMemo(()=>{ /* mesma lógica, mas usa visibleTimeEntries */
-   const map=new Map(['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map(d=>[d,0]));
-   (visibleTimeEntries||[]).filter(t=>new Date(t.date)>=startWeek).forEach(t=>{ /* ... */ });
+  const hoursByDay=useMemo(()=>{
+    const labels=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+    const map=new Map(labels.map(d=>[d,0]));
+
+   const start=new Date(startWeek);start.setHours(0,0,0,0);
+   const end=new Date(start);end.setDate(end.getDate()+6);end.setHours(23,59,59,999);
+
+   for(const t of (visibleTimeEntries||[])){
+     if(!t?.date)continue;
+     const d=new Date(t.date);d.setHours(0,0,0,0);
+     if(d<start||d>end)continue;
+     if(t.template!=='Trabalho Normal')continue;
+     const label=labels[(d.getDay()+6)%7];
+     const total=(Number(t.hours)||0)+(Number(t.overtime)||0);
+     map.set(label,(map.get(label)||0)+total);
+   }
+
    return Array.from(map,([label,value])=>({label,value}));
-},[visibleTimeEntries]);
+},[visibleTimeEntries,startWeek]);
+
+  if (!auth) {
+    return (
+      <LoginView
+        onLogin={(u) => {
+          setAuth(u);
+          setView(defaultViewForRole(u.role));
+        }}
+      />
+    );
+  }
 
   const NavItem=({id,icon,label})=>(
     <button onClick={()=>{setView(id);setSidebarOpen(false)}} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm hover:bg-slate-100 dark:hover:bg-slate-800 ${view===id?'bg-slate-900 text-white hover:bg-slate-900 dark:bg-slate-200 dark:text-slate-900':'text-slate-700 dark:text-slate-200'}`}><Icon name={icon}/><span>{label}</span></button>
