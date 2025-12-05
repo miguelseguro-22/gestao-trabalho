@@ -2767,18 +2767,6 @@ const visibleTimeEntries = React.useMemo(() => {
     };
   }, []);
 
-  if (!auth) {
-    return (
-      <LoginView
-        onLogin={(u) => {
-          setAuth(u);
-          setView(defaultViewForRole(u.role));
-        }}
-      />
-    );
-  }
-
-
 const visibleOrders = React.useMemo(() => {
   if (auth?.role === 'logistica' || auth?.role === 'admin') {
     return orders;
@@ -3159,6 +3147,18 @@ const DashboardView = () => (
   const openReport = (p) => {
     if (can('obraReport')) { setProjectFocus(p); setView('obra-report'); }
   };
+
+
+  if (!auth) {
+    return (
+      <LoginView
+        onLogin={(u) => {
+          setAuth(u);
+          setView(defaultViewForRole(u.role));
+        }}
+      />
+    );
+  }
 
 
   return(
