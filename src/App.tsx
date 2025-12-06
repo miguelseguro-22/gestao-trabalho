@@ -897,14 +897,28 @@ function familyForProjectInput(projects, input){
 
 const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,onApprove,onReject,auth})=>{
   if(!dateISO) return null;
-  const target=new Date(dateISO);target.setHours(0,0,0,0);
+
+  // 🔧 FIX: Parse date manually to avoid timezone issues
+  const parseLocalDate = (isoStr) => {
+    if (!isoStr) return null;
+    const [year, month, day] = isoStr.split('-').map(Number);
+    if (!year || !month || !day) return null;
+    return new Date(year, month - 1, day, 0, 0, 0, 0);
+  };
+
+  const target = parseLocalDate(dateISO);
+  if (!target) return null;
+
   const matches=t=>{
     if(t.template==='Férias'||t.template==='Baixa'){
-      const s=new Date(t.periodStart||t.date);s.setHours(0,0,0,0);
-      const e=new Date(t.periodEnd||t.date);e.setHours(0,0,0,0);
-      return target>=s&&target<=e;
+      const s = parseLocalDate(t.periodStart || t.date);
+      const e = parseLocalDate(t.periodEnd || t.date);
+      if (!s || !e) return false;
+      return target >= s && target <= e;
     }
-    const d=new Date(t.date);d.setHours(0,0,0,0);return d.getTime()===target.getTime();
+    const d = parseLocalDate(t.date);
+    if (!d) return false;
+    return d.getTime() === target.getTime();
   };
   const list=timeEntries.filter(matches);
 
@@ -1109,12 +1123,12 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,onApp
                   {/* Conteúdo */}
                   <div className="p-4">
                     {isWork ? (
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                             🏗️ Obra
                           </div>
-                          <div className="font-semibold text-slate-800 dark:text-slate-100">
+                          <div className="font-semibold text-slate-800 dark:text-slate-100 truncate">
                             {t.project || '—'}
                           </div>
                         </div>
@@ -1122,7 +1136,7 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,onApp
                           <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                             👷 Encarregado
                           </div>
-                          <div className="font-semibold text-slate-800 dark:text-slate-100">
+                          <div className="font-semibold text-slate-800 dark:text-slate-100 truncate">
                             {t.supervisor || '—'}
                           </div>
                         </div>
@@ -1143,30 +1157,30 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,onApp
                           </div>
                         </div>
                         {t.notes && (
-                          <div className="col-span-2">
+                          <div className="col-span-1 sm:col-span-2">
                             <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                               📝 Notas
                             </div>
-                            <div className="text-sm text-slate-700 dark:text-slate-300 italic">
+                            <div className="text-sm text-slate-700 dark:text-slate-300 italic break-words">
                               {t.notes}
                             </div>
                           </div>
                         )}
                         {/* 🆕 Motivo de Rejeição */}
                         {t.status === 'rejected' && t.rejectionReason && (
-                          <div className="col-span-2">
+                          <div className="col-span-1 sm:col-span-2">
                             <div className="rounded-lg p-3" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444' }}>
                               <div className="flex items-start gap-2">
                                 <span className="text-lg">⚠️</span>
-                                <div className="flex-1">
+                                <div className="flex-1 min-w-0">
                                   <div className="text-xs font-semibold text-red-600 dark:text-red-400 mb-1">
                                     Motivo da Rejeição
                                   </div>
-                                  <div className="text-sm text-red-700 dark:text-red-300">
+                                  <div className="text-sm text-red-700 dark:text-red-300 break-words">
                                     {t.rejectionReason}
                                   </div>
                                   {t.approvedBy && (
-                                    <div className="text-xs text-red-600/70 dark:text-red-400/70 mt-1">
+                                    <div className="text-xs text-red-600/70 dark:text-red-400/70 mt-1 truncate">
                                       Rejeitado por: {t.approvedBy}
                                     </div>
                                   )}
@@ -1177,7 +1191,7 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,onApp
                         )}
                         {/* Informação de Aprovação */}
                         {t.status === 'approved' && t.approvedBy && (
-                          <div className="col-span-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                          <div className="col-span-1 sm:col-span-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 flex-wrap">
                             <span>✅</span> Aprovado por {t.approvedBy}
                             {t.approvedAt && <span className="text-slate-400">• {new Date(t.approvedAt).toLocaleDateString('pt-PT')}</span>}
                           </div>
@@ -4563,13 +4577,51 @@ const MultiWorkTimesheetForm = ({
       project: initial?.project || '',
       supervisor: initial?.supervisor || '',
       hours: initial?.hours || 8,
-      overtime: 0
+      overtime: 0,
+      weekendStartTime: '',
+      weekendEndTime: '',
+      extraStartTime: '',
+      extraEndTime: ''
     }
   ]);
 
+  // Verificar se é fim de semana
+  const isWeekendDate = (iso) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return false;
+    const dow = d.getDay();
+    return dow === 0 || dow === 6;
+  };
+
+  // Calcular horas a partir de horários
+  const diffHours = (start, end) => {
+    if (!start || !end) return 0;
+    const [h1, m1] = start.split(':').map(Number);
+    const [h2, m2] = end.split(':').map(Number);
+    if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return 0;
+    const total1 = h1 + m1 / 60;
+    const total2 = h2 + m2 / 60;
+    let diff = total2 - total1;
+    if (diff < 0) diff += 24;
+    return Math.round(diff * 2) / 2;
+  };
+
+  const isWeekend = isWeekendDate(date);
+
   // Calcular totais
-  const totalHours = works.reduce((sum, w) => sum + (Number(w.hours) || 0), 0);
-  const totalOvertime = works.reduce((sum, w) => sum + (Number(w.overtime) || 0), 0);
+  const totalHours = works.reduce((sum, w) => {
+    if (isWeekend) {
+      return sum + diffHours(w.weekendStartTime, w.weekendEndTime);
+    }
+    return sum + (Number(w.hours) || 0);
+  }, 0);
+
+  const totalOvertime = works.reduce((sum, w) => {
+    if (isWeekend) return sum;
+    return sum + (w.extraStartTime && w.extraEndTime ? diffHours(w.extraStartTime, w.extraEndTime) : (Number(w.overtime) || 0));
+  }, 0);
+
   const totalAll = totalHours + totalOvertime;
   const hoursLeft = 24 - totalAll;
   const isOverLimit = totalAll > 24;
@@ -4582,7 +4634,11 @@ const MultiWorkTimesheetForm = ({
       project: '',
       supervisor: '',
       hours: 0,
-      overtime: 0
+      overtime: 0,
+      weekendStartTime: '',
+      weekendEndTime: '',
+      extraStartTime: '',
+      extraEndTime: ''
     }]);
   };
 
@@ -4613,15 +4669,40 @@ const MultiWorkTimesheetForm = ({
       return;
     }
 
-    const validWorks = works.filter(w => w.project && w.supervisor && (Number(w.hours) > 0 || Number(w.overtime) > 0));
+    // Validar obras
+    const validWorks = works.filter(w => {
+      if (!w.project || !w.supervisor) return false;
+
+      if (isWeekend) {
+        // Fim de semana: precisa de horário início/fim
+        return w.weekendStartTime && w.weekendEndTime && diffHours(w.weekendStartTime, w.weekendEndTime) > 0;
+      } else {
+        // Dia normal: precisa de horas normais OU horas extra
+        const hasNormalHours = Number(w.hours) > 0;
+        const hasExtraHours = (w.extraStartTime && w.extraEndTime && diffHours(w.extraStartTime, w.extraEndTime) > 0) || Number(w.overtime) > 0;
+        return hasNormalHours || hasExtraHours;
+      }
+    });
 
     if (validWorks.length === 0) {
-      alert('Adicione pelo menos uma obra com horas válidas');
+      if (isWeekend) {
+        alert('Adicione pelo menos uma obra com horário de início e fim válido');
+      } else {
+        alert('Adicione pelo menos uma obra com horas válidas');
+      }
       return;
     }
 
     // Criar um registo para cada obra
     validWorks.forEach(work => {
+      const calculatedHours = isWeekend
+        ? diffHours(work.weekendStartTime, work.weekendEndTime)
+        : Number(work.hours) || 0;
+
+      const calculatedOvertime = isWeekend
+        ? 0
+        : (work.extraStartTime && work.extraEndTime ? diffHours(work.extraStartTime, work.extraEndTime) : (Number(work.overtime) || 0));
+
       onSubmit({
         id: initial?.id && works.length === 1 ? initial.id : undefined,
         template: 'Trabalho Normal',
@@ -4629,14 +4710,14 @@ const MultiWorkTimesheetForm = ({
         project: work.project,
         supervisor: work.supervisor,
         worker: auth?.name || 'Desconhecido',
-        hours: Number(work.hours) || 0,
-        overtime: Number(work.overtime) || 0,
-        weekendStartTime: '',
-        weekendEndTime: '',
-        extraStartTime: '',
-        extraEndTime: '',
+        hours: calculatedHours,
+        overtime: calculatedOvertime,
+        weekendStartTime: work.weekendStartTime || '',
+        weekendEndTime: work.weekendEndTime || '',
+        extraStartTime: work.extraStartTime || '',
+        extraEndTime: work.extraEndTime || '',
         notes: '',
-        status: 'pending', // 🆕 Status inicial: pendente
+        status: 'pending',
         rejectionReason: undefined,
         approvedBy: undefined,
         approvedAt: undefined
@@ -4768,118 +4849,153 @@ const MultiWorkTimesheetForm = ({
                 </datalist>
               </div>
 
-              {/* Horas */}
-              <div className="grid grid-cols-2 gap-3">
-                {/* Horas Normais */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
-                    ⏰ Horas Normais
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => updateWork(work.id, 'hours', Math.max(0, Number(work.hours) - 0.5))}
-                      className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg transition-all hover:scale-110"
-                      style={{ background: 'linear-gradient(135deg, #E5ECEF 0%, #CDD5D9 100%)', color: '#00677F' }}
-                    >
-                      −
-                    </button>
-                    <div className="flex-1 relative">
-                      <input
-                        type="number"
-                        min="0"
-                        max="24"
-                        step="0.5"
-                        value={work.hours}
-                        onChange={(e) => updateWork(work.id, 'hours', e.target.value)}
-                        className="w-full rounded-lg border-2 p-2 text-center text-lg font-bold dark:bg-slate-800 focus:ring-2"
-                        style={{ borderColor: '#00A9B8', color: '#00677F' }}
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: '#64748b' }}>h</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => updateWork(work.id, 'hours', Math.min(24, Number(work.hours) + 0.5))}
-                      className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg transition-all hover:scale-110"
-                      style={{ background: 'linear-gradient(135deg, #00A9B8 0%, #00C4D6 100%)', color: '#fff' }}
-                    >
-                      +
-                    </button>
+              {/* 🎯 CAMPOS CONDICIONAIS: Fim de Semana vs Dia Normal */}
+              {isWeekend ? (
+                /* FIM DE SEMANA: Horário Início → Fim */
+                <div className="space-y-3">
+                  <div
+                    className="rounded-lg p-2 text-center text-xs font-medium"
+                    style={{ background: 'linear-gradient(90deg, #BE8A3A 0%, #D4A04D 100%)', color: '#fff' }}
+                  >
+                    🌅 Fim de Semana - Horário de Trabalho
                   </div>
-                  {/* Botões rápidos */}
-                  <div className="flex gap-1 mt-2">
-                    {[2, 4, 8].map(h => (
-                      <button
-                        key={h}
-                        type="button"
-                        onClick={() => updateWork(work.id, 'hours', h)}
-                        className="flex-1 px-2 py-1 rounded text-xs font-medium transition-colors"
-                        style={{
-                          background: Number(work.hours) === h ? '#00A9B8' : '#E5ECEF',
-                          color: Number(work.hours) === h ? '#fff' : '#64748b'
-                        }}
-                      >
-                        {h}h
-                      </button>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Horas Extra */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
-                    ⚡ Horas Extra
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => updateWork(work.id, 'overtime', Math.max(0, Number(work.overtime) - 0.5))}
-                      className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg transition-all hover:scale-110"
-                      style={{ background: 'linear-gradient(135deg, #E5ECEF 0%, #CDD5D9 100%)', color: '#BE8A3A' }}
-                    >
-                      −
-                    </button>
-                    <div className="flex-1 relative">
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Hora Início */}
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+                        🕐 Hora Início
+                      </label>
                       <input
-                        type="number"
-                        min="0"
-                        max="24"
-                        step="0.5"
-                        value={work.overtime}
-                        onChange={(e) => updateWork(work.id, 'overtime', e.target.value)}
+                        type="time"
+                        value={work.weekendStartTime}
+                        onChange={(e) => updateWork(work.id, 'weekendStartTime', e.target.value)}
                         className="w-full rounded-lg border-2 p-2 text-center text-lg font-bold dark:bg-slate-800 focus:ring-2"
                         style={{ borderColor: '#BE8A3A', color: '#BE8A3A' }}
                       />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: '#64748b' }}>h</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => updateWork(work.id, 'overtime', Math.min(24, Number(work.overtime) + 0.5))}
-                      className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg transition-all hover:scale-110"
-                      style={{ background: 'linear-gradient(135deg, #BE8A3A 0%, #D4A04D 100%)', color: '#fff' }}
-                    >
-                      +
-                    </button>
+
+                    {/* Hora Fim */}
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+                        🕐 Hora Fim
+                      </label>
+                      <input
+                        type="time"
+                        value={work.weekendEndTime}
+                        onChange={(e) => updateWork(work.id, 'weekendEndTime', e.target.value)}
+                        className="w-full rounded-lg border-2 p-2 text-center text-lg font-bold dark:bg-slate-800 focus:ring-2"
+                        style={{ borderColor: '#BE8A3A', color: '#BE8A3A' }}
+                      />
+                    </div>
                   </div>
-                  {/* Botões rápidos */}
-                  <div className="flex gap-1 mt-2">
-                    {[1, 2, 4].map(h => (
+
+                  {/* Mostrar total calculado */}
+                  {work.weekendStartTime && work.weekendEndTime && (
+                    <div
+                      className="rounded-lg p-2 text-center"
+                      style={{ background: 'linear-gradient(90deg, #E5ECEF 0%, #F8FAFB 100%)' }}
+                    >
+                      <div className="text-xs text-slate-600 dark:text-slate-400">Total Calculado</div>
+                      <div className="text-lg font-bold" style={{ color: '#BE8A3A' }}>
+                        {diffHours(work.weekendStartTime, work.weekendEndTime).toFixed(1)}h
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* DIA NORMAL: Horas Normais + Horas Extra (com horário) */
+                <div className="space-y-3">
+                  {/* Horas Normais */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+                      ⏰ Horas Normais
+                    </label>
+                    <div className="flex items-center gap-2">
                       <button
-                        key={h}
                         type="button"
-                        onClick={() => updateWork(work.id, 'overtime', h)}
-                        className="flex-1 px-2 py-1 rounded text-xs font-medium transition-colors"
-                        style={{
-                          background: Number(work.overtime) === h ? '#BE8A3A' : '#E5ECEF',
-                          color: Number(work.overtime) === h ? '#fff' : '#64748b'
-                        }}
+                        onClick={() => updateWork(work.id, 'hours', Math.max(0, Number(work.hours) - 0.5))}
+                        className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg transition-all hover:scale-110"
+                        style={{ background: 'linear-gradient(135deg, #E5ECEF 0%, #CDD5D9 100%)', color: '#00677F' }}
                       >
-                        +{h}h
+                        −
                       </button>
-                    ))}
+                      <div className="flex-1 relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="24"
+                          step="0.5"
+                          value={work.hours}
+                          onChange={(e) => updateWork(work.id, 'hours', e.target.value)}
+                          className="w-full rounded-lg border-2 p-2 text-center text-lg font-bold dark:bg-slate-800 focus:ring-2"
+                          style={{ borderColor: '#00A9B8', color: '#00677F' }}
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: '#64748b' }}>h</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => updateWork(work.id, 'hours', Math.min(24, Number(work.hours) + 0.5))}
+                        className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg transition-all hover:scale-110"
+                        style={{ background: 'linear-gradient(135deg, #00A9B8 0%, #00C4D6 100%)', color: '#fff' }}
+                      >
+                        +
+                      </button>
+                    </div>
+                    {/* Botões rápidos */}
+                    <div className="flex gap-1 mt-2">
+                      {[2, 4, 8].map(h => (
+                        <button
+                          key={h}
+                          type="button"
+                          onClick={() => updateWork(work.id, 'hours', h)}
+                          className="flex-1 px-2 py-1 rounded text-xs font-medium transition-colors"
+                          style={{
+                            background: Number(work.hours) === h ? '#00A9B8' : '#E5ECEF',
+                            color: Number(work.hours) === h ? '#fff' : '#64748b'
+                          }}
+                        >
+                          {h}h
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Horas Extra - Com Horário Início/Fim */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+                      ⚡ Horas Extra (Horário)
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="time"
+                        value={work.extraStartTime}
+                        onChange={(e) => updateWork(work.id, 'extraStartTime', e.target.value)}
+                        placeholder="Início"
+                        className="w-full rounded-lg border-2 p-2 text-center text-sm font-bold dark:bg-slate-800 focus:ring-2"
+                        style={{ borderColor: '#BE8A3A', color: '#BE8A3A' }}
+                      />
+                      <input
+                        type="time"
+                        value={work.extraEndTime}
+                        onChange={(e) => updateWork(work.id, 'extraEndTime', e.target.value)}
+                        placeholder="Fim"
+                        className="w-full rounded-lg border-2 p-2 text-center text-sm font-bold dark:bg-slate-800 focus:ring-2"
+                        style={{ borderColor: '#BE8A3A', color: '#BE8A3A' }}
+                      />
+                    </div>
+                    {/* Mostrar total calculado */}
+                    {work.extraStartTime && work.extraEndTime && (
+                      <div className="text-center mt-2">
+                        <span className="text-xs text-slate-600 dark:text-slate-400">Total: </span>
+                        <span className="text-sm font-bold" style={{ color: '#BE8A3A' }}>
+                          +{diffHours(work.extraStartTime, work.extraEndTime).toFixed(1)}h
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Subtotal */}
               <div
