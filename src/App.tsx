@@ -5562,6 +5562,7 @@ const CAN = {
   // 🔧 CORRIGIDO: Qualquer pessoa pode ver pendentes/equipa se for supervisor de alguém
   pendingApprovals: new Set(["tecnico", "encarregado", "diretor", "admin"]),
   teamDashboard: new Set(["tecnico", "encarregado", "diretor", "admin"]),
+  cloudDiagnostic: new Set(["admin"]), // 🔧 Diagnóstico Cloud - apenas admin
 };
 
 
@@ -6707,6 +6708,228 @@ const generatePersonalTimesheetReport = ({ worker, timeEntries, cycle }) => {
   return html;
 };
 
+// 🔧 VIEW: DIAGNÓSTICO CLOUD
+const CloudDiagnosticView = ({ supabaseActive, cloudReady, cloudStamp, lastSyncTime, isOnline, isSyncing, timeEntries, forceSyncToCloud, forceSyncFromCloud }) => {
+  const [testResult, setTestResult] = React.useState<any>(null)
+  const [testing, setTesting] = React.useState(false)
+
+  const testCloudConnection = async () => {
+    setTesting(true)
+    setTestResult(null)
+
+    try {
+      const result = await fetchCloudState(CLOUD_ROW_ID)
+      setTestResult({
+        success: true,
+        hasData: !!result?.payload,
+        updatedAt: result?.updatedAt,
+        entriesCount: result?.payload?.timeEntries?.length || 0,
+      })
+    } catch (error) {
+      setTestResult({
+        success: false,
+        error: error.message || String(error),
+      })
+    }
+
+    setTesting(false)
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-6">
+        <h1 className="text-2xl font-bold mb-2">🔧 Diagnóstico de Sincronização Cloud</h1>
+        <p className="text-slate-600 dark:text-slate-400">Informações técnicas para debug</p>
+      </Card>
+
+      {/* Status Geral */}
+      <Card className="p-6">
+        <h2 className="text-xl font-bold mb-4">📊 Status Geral</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-3 h-3 rounded-full ${supabaseActive ? 'bg-green-500' : 'bg-red-500'}`}></div>
+            <div>
+              <div className="text-sm text-slate-500">Supabase</div>
+              <div className="font-semibold">{supabaseActive ? '✅ Configurado' : '❌ Não Configurado'}</div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className={`w-3 h-3 rounded-full ${cloudReady ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+            <div>
+              <div className="text-sm text-slate-500">Cloud Ready</div>
+              <div className="font-semibold">{cloudReady ? '✅ Pronto' : '⏳ A carregar...'}</div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}></div>
+            <div>
+              <div className="text-sm text-slate-500">Conexão Internet</div>
+              <div className="font-semibold">{isOnline ? '✅ Online' : '❌ Offline'}</div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className={`w-3 h-3 rounded-full ${isSyncing ? 'bg-blue-500 animate-pulse' : 'bg-slate-300'}`}></div>
+            <div>
+              <div className="text-sm text-slate-500">Sincronização</div>
+              <div className="font-semibold">{isSyncing ? '🔄 A sincronizar...' : '✅ Inativa'}</div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Variáveis de Ambiente */}
+      <Card className="p-6">
+        <h2 className="text-xl font-bold mb-4">🔑 Variáveis de Ambiente</h2>
+        <div className="space-y-3">
+          <div>
+            <div className="text-sm text-slate-500">VITE_SUPABASE_URL</div>
+            <div className="font-mono text-sm bg-slate-100 dark:bg-slate-800 p-2 rounded">
+              {import.meta.env.VITE_SUPABASE_URL || '❌ NÃO CONFIGURADO'}
+            </div>
+          </div>
+          <div>
+            <div className="text-sm text-slate-500">VITE_SUPABASE_ANON_KEY</div>
+            <div className="font-mono text-sm bg-slate-100 dark:bg-slate-800 p-2 rounded">
+              {import.meta.env.VITE_SUPABASE_ANON_KEY ? '✅ Configurado (***' + import.meta.env.VITE_SUPABASE_ANON_KEY.slice(-8) + ')' : '❌ NÃO CONFIGURADO'}
+            </div>
+          </div>
+          <div>
+            <div className="text-sm text-slate-500">VITE_CLOUD_ROW_ID</div>
+            <div className="font-mono text-sm bg-slate-100 dark:bg-slate-800 p-2 rounded">
+              {import.meta.env.VITE_CLOUD_ROW_ID || 'shared (default)'}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Timestamps */}
+      <Card className="p-6">
+        <h2 className="text-xl font-bold mb-4">⏰ Timestamps de Sincronização</h2>
+        <div className="space-y-3">
+          <div>
+            <div className="text-sm text-slate-500">Última Atualização Local (cloudStamp)</div>
+            <div className="font-mono text-sm bg-slate-100 dark:bg-slate-800 p-2 rounded">
+              {cloudStamp || '❌ Nunca'}
+            </div>
+          </div>
+          <div>
+            <div className="text-sm text-slate-500">Última Sincronização Completa</div>
+            <div className="font-mono text-sm bg-slate-100 dark:bg-slate-800 p-2 rounded">
+              {lastSyncTime ? new Date(lastSyncTime).toLocaleString('pt-PT') : '❌ Nunca'}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Dados Locais */}
+      <Card className="p-6">
+        <h2 className="text-xl font-bold mb-4">💾 Dados Locais</h2>
+        <div className="space-y-3">
+          <div>
+            <div className="text-sm text-slate-500">Total de Registos de Tempo</div>
+            <div className="text-2xl font-bold text-blue-600">{timeEntries.length}</div>
+          </div>
+          <div>
+            <div className="text-sm text-slate-500">Tamanho do localStorage</div>
+            <div className="font-mono text-sm bg-slate-100 dark:bg-slate-800 p-2 rounded">
+              {(() => {
+                const item = localStorage.getItem('wm_platform_import_v1')
+                return item ? `${(item.length / 1024).toFixed(2)} KB` : 'Vazio'
+              })()}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Teste de Conexão */}
+      <Card className="p-6">
+        <h2 className="text-xl font-bold mb-4">🧪 Testar Conexão ao Supabase</h2>
+
+        {!supabaseActive ? (
+          <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300">
+            ❌ Supabase não está configurado. Verifica as variáveis de ambiente acima.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <Button onClick={testCloudConnection} disabled={testing}>
+              {testing ? '🔄 A testar...' : '🧪 Testar Conexão'}
+            </Button>
+
+            {testResult && (
+              <div className={`p-4 rounded-lg ${testResult.success ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+                {testResult.success ? (
+                  <div className="space-y-2">
+                    <div className="font-bold text-green-700 dark:text-green-300">✅ Conexão bem-sucedida!</div>
+                    <div className="text-sm text-green-600 dark:text-green-400">
+                      <div>Dados na cloud: {testResult.hasData ? '✅ Sim' : '❌ Não'}</div>
+                      {testResult.hasData && (
+                        <>
+                          <div>Última atualização: {testResult.updatedAt}</div>
+                          <div>Registos na cloud: {testResult.entriesCount}</div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="font-bold text-red-700 dark:text-red-300">❌ Erro na conexão</div>
+                    <div className="text-sm text-red-600 dark:text-red-400 font-mono">
+                      {testResult.error}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {/* Ações Manuais */}
+      {supabaseActive && (
+        <Card className="p-6">
+          <h2 className="text-xl font-bold mb-4">🎛️ Ações Manuais</h2>
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={forceSyncToCloud} disabled={isSyncing}>
+              ☁️ Enviar para Cloud
+            </Button>
+            <Button onClick={forceSyncFromCloud} disabled={isSyncing} variant="secondary">
+              ⬇️ Carregar da Cloud
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Instruções */}
+      <Card className="p-6 bg-blue-50 dark:bg-blue-900/20">
+        <h2 className="text-xl font-bold mb-4">📖 Como Interpretar</h2>
+        <div className="space-y-3 text-sm">
+          <div>
+            <strong>Se Supabase = ❌ Não Configurado:</strong>
+            <p className="text-slate-600 dark:text-slate-400 ml-4">
+              Precisas adicionar as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no ficheiro .env
+            </p>
+          </div>
+          <div>
+            <strong>Se Teste de Conexão falhar:</strong>
+            <p className="text-slate-600 dark:text-slate-400 ml-4">
+              Verifica se a tabela 'app_state' existe no Supabase e se as permissões RLS estão corretas
+            </p>
+          </div>
+          <div>
+            <strong>Se há dados locais mas não na cloud:</strong>
+            <p className="text-slate-600 dark:text-slate-400 ml-4">
+              Clica em "☁️ Enviar para Cloud" e depois verifica no outro dispositivo
+            </p>
+          </div>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 // 🆕 VIEW: REGISTOS PENDENTES DE APROVAÇÃO
 const PendingApprovalsView = ({ timeEntries, auth, onApprove, onReject }) => {
   if (!timeEntries || !auth) {
@@ -7478,6 +7701,11 @@ function TableMaterials() {
     <NavItem id="monthly-report" icon="calendar" label="Relatório Mensal" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
 
+  {/* 🔧 Admin vê diagnóstico cloud */}
+  {can("cloudDiagnostic") && (
+    <NavItem id="cloud-diagnostic" icon="activity" label="🔧 Diagnóstico Cloud" setView={setView} setSidebarOpen={setSidebarOpen} />
+  )}
+
   {/* Timesheets - TODOS veem */}
   <NavItem id="timesheets" icon="clock" label="Timesheets" setView={setView} setSidebarOpen={setSidebarOpen} />
 
@@ -7669,7 +7897,22 @@ function TableMaterials() {
             />
           )}
 
-{view === "timesheets" && <TimesheetsView />}
+          {/* 🔧 VIEW DIAGNÓSTICO CLOUD */}
+          {view === "cloud-diagnostic" && (
+            <CloudDiagnosticView
+              supabaseActive={supabaseActive}
+              cloudReady={cloudReady}
+              cloudStamp={cloudStamp}
+              lastSyncTime={lastSyncTime}
+              isOnline={isOnline}
+              isSyncing={isSyncing}
+              timeEntries={timeEntries}
+              forceSyncToCloud={forceSyncToCloud}
+              forceSyncFromCloud={forceSyncFromCloud}
+            />
+          )}
+
+          {view === "timesheets" && <TimesheetsView />}
           {view === "materials" && <TableMaterials />}
           {view === "logistics" && (
             <LogisticsView
