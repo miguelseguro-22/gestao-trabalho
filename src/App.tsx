@@ -6220,37 +6220,57 @@ const visibleTimeEntries = useMemo(() => {
     name: auth?.name,
     totalEntries: timeEntries?.length,
   });
-  // ... resto do código
-
 
   // Admin, Diretor e Logística veem TUDO
   if (auth?.role === "admin" || auth?.role === "diretor" || auth?.role === "logistica") {
     console.log('✅ Admin/Diretor/Logística - mostrar TODOS os registos');
     return timeEntries || [];
   }
-  
-  // Técnico e Encarregado veem APENAS os seus próprios registos
-  if (auth?.role === "tecnico" || auth?.role === "encarregado") {
+
+  // Encarregado vê:
+  // 1. Registos onde ele é WORKER (registos próprios)
+  // 2. Registos onde ele é SUPERVISOR (registos da sua equipa)
+  if (auth?.role === "encarregado") {
     const filtered = (timeEntries || []).filter((t) => {
-      // ⬇️ CORRIGIDO: verifica worker OU supervisor
       const match = t.worker === auth?.name || t.supervisor === auth?.name;
-      
+
       if (match) {
-        console.log('✅ Match encontrado:', {
+        console.log('✅ Encarregado - Match encontrado:', {
           date: t.date,
           worker: t.worker,
           supervisor: t.supervisor,
           authName: auth?.name,
         });
       }
-      
+
       return match;
     });
 
-    console.log(`📊 Técnico/Encarregado - ${filtered.length} registos filtrados`);
+    console.log(`📊 Encarregado - ${filtered.length} registos filtrados`);
     return filtered;
   }
-  
+
+  // Técnico vê APENAS os seus próprios registos (onde ele é WORKER)
+  if (auth?.role === "tecnico") {
+    const filtered = (timeEntries || []).filter((t) => {
+      // ⬇️ APENAS onde ele é o trabalhador, NÃO onde ele é supervisor
+      const match = t.worker === auth?.name;
+
+      if (match) {
+        console.log('✅ Técnico - Match encontrado:', {
+          date: t.date,
+          worker: t.worker,
+          authName: auth?.name,
+        });
+      }
+
+      return match;
+    });
+
+    console.log(`📊 Técnico - ${filtered.length} registos filtrados`);
+    return filtered;
+  }
+
   // Fallback seguro
   console.warn('⚠️ Role desconhecido:', auth?.role);
   return [];
