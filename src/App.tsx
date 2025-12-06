@@ -7312,23 +7312,33 @@ const setters = {
 // 📊 DASHBOARD VIEW
 // ---------------------------------------------------------------
 function DashboardView() {
+  // 🔒 Verificação de segurança
+  if (!auth) {
+    return (
+      <div className="p-8 text-center">
+        <div className="text-4xl mb-4">⏳</div>
+        <div className="text-lg">A carregar...</div>
+      </div>
+    )
+  }
+
   return (
     <section className="space-y-4">
       <PageHeader icon="activity" title="Dashboard" subtitle="Visão geral da operação" />
-      
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <KpiCard
           icon="clock"
           title="Dias Registados"
-          value={registeredDays}
+          value={registeredDays || 0}
           subtitle={`Este ciclo (${fmtDate(cycStart)} - ${fmtDate(cycEnd)})`}
           onClick={() => setModal({ name: "kpi-overview" })}
         />
-        
+
         <KpiCard
           icon="package"
           title="Pedidos Ativos"
-          value={visibleOrders.filter((o) => o.status !== "Entregue").length}
+          value={(visibleOrders || []).filter((o) => o.status !== "Entregue").length}
           subtitle="Pendentes + Aprovados"
           onClick={() => setView("logistics")}
         />
@@ -7336,7 +7346,7 @@ function DashboardView() {
         <KpiCard
           icon="wrench"
           title="Obras Ativas"
-          value={projects.length}
+          value={(projects || []).length}
           subtitle="Obras em curso"
           onClick={() => setView("obras")}
         />
@@ -7345,7 +7355,7 @@ function DashboardView() {
       <Card className="p-4">
         <div className="font-semibold mb-3">Horas por Dia (Esta Semana)</div>
         <div className="h-48 flex items-end gap-2">
-          {hoursByDay.map((d) => (
+          {(hoursByDay || []).map((d) => (
             <div key={d.label} className="flex-1 flex flex-col items-center gap-1">
               <div
                 className="w-full bg-indigo-600 rounded-t"
@@ -7367,12 +7377,22 @@ function DashboardView() {
 // ⏰ TIMESHEETS VIEW (COM BOTÃO DE REMOVER)
 // ---------------------------------------------------------------
 function TimesheetsView() {
+  // 🔒 Verificação de segurança
+  if (!auth) {
+    return (
+      <div className="p-8 text-center">
+        <div className="text-4xl mb-4">⏳</div>
+        <div className="text-lg">A carregar...</div>
+      </div>
+    )
+  }
+
   return (
     <section className="space-y-4">
       <PageHeader
   icon="clock"
   title="Timesheets"
-  subtitle={`${visibleTimeEntries.length} registos`}
+  subtitle={`${visibleTimeEntries?.length || 0} registos`}
   actions={
     <>
       {/* ⬇️ BOTÃO DE DEBUG TEMPORÁRIO */}
@@ -7399,7 +7419,7 @@ function TimesheetsView() {
 />
 
       <CycleCalendar
-        timeEntries={visibleTimeEntries}
+        timeEntries={visibleTimeEntries || []}
         onDayClick={(iso) => {
           // Verifica se existem registos para este dia
           const target = new Date(iso);
@@ -7527,12 +7547,22 @@ function TimesheetsView() {
 // 📦 MATERIAIS VIEW
 // ---------------------------------------------------------------
 function TableMaterials() {
+  // 🔒 Verificação de segurança
+  if (!auth) {
+    return (
+      <div className="p-8 text-center">
+        <div className="text-4xl mb-4">⏳</div>
+        <div className="text-lg">A carregar...</div>
+      </div>
+    )
+  }
+
   return (
     <section className="space-y-4">
       <PageHeader
         icon="package"
         title="Pedidos de Material"
-        subtitle={`${visibleOrders.length} pedidos`}
+        subtitle={`${visibleOrders?.length || 0} pedidos`}
         actions={
           <Button onClick={() => setModal({ name: "add-order" })}>
             <Icon name="plus" /> Novo Pedido
@@ -7543,7 +7573,7 @@ function TableMaterials() {
       <Card className="p-4">
         <TableSimple
           columns={["Data", "Obra", "Requisitante", "Estado", "Itens"]}
-          rows={visibleOrders.map((o) => [
+          rows={(visibleOrders || []).map((o) => [
             fmtDate(o.requestedAt),
             o.project,
             o.requestedBy || "—",
