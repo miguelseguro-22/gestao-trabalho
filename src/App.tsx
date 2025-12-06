@@ -5681,6 +5681,8 @@ function App() {
   const [cloudStamp, setCloudStamp] = useState<string | null>(persisted?.updatedAt || null)
   const [cloudReady, setCloudReady] = useState(false)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null)
 
   // -------------------------------------------------------------
   // 🔐 AUTH E NAVEGAÇÃO
@@ -5858,26 +5860,48 @@ function App() {
 
     ;(async()=>{
       if(!supabaseActive){
+        console.log('ℹ️ Supabase não ativo - usando apenas localStorage')
         setCloudReady(true)
         return
       }
 
       try {
+        console.log('☁️ Carregando dados da cloud...')
+        setIsSyncing(true)
+
         const cloud = await fetchCloudState(cloudKey)
         if(cancelled)return
 
         const remoteTs = cloud?.updatedAt ? new Date(cloud.updatedAt).getTime() : 0
         const localTs = cloudStamp ? new Date(cloudStamp).getTime() : 0
 
-        if(cloud?.payload && remoteTs>localTs){
+        console.log('📊 Comparação de timestamps:', {
+          remoteTs: cloud?.updatedAt,
+          localTs: cloudStamp,
+          remoteNewer: remoteTs > localTs,
+          hasPayload: !!cloud?.payload
+        })
+
+        if(cloud?.payload && remoteTs > localTs){
+          console.log('✅ Aplicando dados da cloud (mais recentes)')
           applySnapshot({ ...cloud.payload, updatedAt: cloud.updatedAt })
+          setLastSyncTime(new Date().toISOString())
+        } else if (cloud?.payload && remoteTs === localTs) {
+          console.log('ℹ️ Dados locais e cloud estão sincronizados')
+          setLastSyncTime(new Date().toISOString())
+        } else if (!cloud?.payload) {
+          console.log('⚠️ Sem dados na cloud - primeira sincronização pendente')
+        } else {
+          console.log('ℹ️ Dados locais são mais recentes que a cloud')
         }
 
         setCloudReady(true)
+        setIsSyncing(false)
       } catch (error) {
         console.error('❌ Erro ao carregar dados da cloud:', error)
         // ✅ Mesmo com erro, marca como pronto para permitir uso offline
         setCloudReady(true)
+        setIsSyncing(false)
       }
     })()
 
@@ -6023,7 +6047,19 @@ useEffect(() => {
 
     // Debounce cloud sync para evitar muitas chamadas
     if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current)
-    cloudSaveTimer.current = setTimeout(() => saveCloudState(snapshot, cloudKey), 400)
+    cloudSaveTimer.current = setTimeout(async () => {
+      try {
+        console.log('☁️ Sincronizando para cloud...')
+        setIsSyncing(true)
+        await saveCloudState(snapshot, cloudKey)
+        setLastSyncTime(new Date().toISOString())
+        console.log('✅ Sincronização para cloud completa')
+        setIsSyncing(false)
+      } catch (error) {
+        console.error('❌ Erro ao sincronizar para cloud:', error)
+        setIsSyncing(false)
+      }
+    }, 400)
   }, [
     timeEntries,
     orders,
@@ -6042,6 +6078,117 @@ useEffect(() => {
     supabaseActive,
     cloudKey,
   ]);
+
+  // -------------------------------------------------------------
+  // 💾 GARANTIR SALVAMENTO ANTES DE FECHAR O NAVEGADOR
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const handleBeforeUnload = async (e: BeforeUnloadEvent) => {
+      if (!supabaseActive || !cloudReady) return
+
+      // Tenta salvar antes de fechar
+      const updatedAt = new Date().toISOString()
+      const snapshot = {
+        timeEntries,
+        orders,
+        projects,
+        activity,
+        theme,
+        density,
+        catalog,
+        people,
+        prefs,
+        vehicles,
+        agenda,
+        suppliers,
+        notifications,
+        updatedAt,
+      }
+
+      // Salva sincronamente (sem debounce)
+      try {
+        console.log('💾 Salvando dados antes de fechar...')
+        navigator.sendBeacon && supabase && saveCloudState(snapshot, cloudKey)
+      } catch (error) {
+        console.error('❌ Erro ao salvar antes de fechar:', error)
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [timeEntries, orders, projects, activity, theme, density, catalog, people, prefs, vehicles, agenda, suppliers, notifications, supabaseActive, cloudReady, cloudKey])
+
+  // -------------------------------------------------------------
+  // 🔄 FORÇAR SINCRONIZAÇÃO MANUAL
+  // -------------------------------------------------------------
+  const forceSyncToCloud = async () => {
+    if (!supabaseActive) {
+      addToast('Supabase não está configurado', 'error')
+      return
+    }
+
+    try {
+      console.log('🔄 Sincronização manual iniciada...')
+      setIsSyncing(true)
+
+      const updatedAt = new Date().toISOString()
+      const snapshot = {
+        timeEntries,
+        orders,
+        projects,
+        activity,
+        theme,
+        density,
+        catalog,
+        people,
+        prefs,
+        vehicles,
+        agenda,
+        suppliers,
+        notifications,
+        updatedAt,
+      }
+
+      await saveCloudState(snapshot, cloudKey)
+      setLastSyncTime(new Date().toISOString())
+      console.log('✅ Sincronização manual completa')
+      addToast('Dados sincronizados com sucesso!', 'success')
+      setIsSyncing(false)
+    } catch (error) {
+      console.error('❌ Erro na sincronização manual:', error)
+      addToast('Erro ao sincronizar dados', 'error')
+      setIsSyncing(false)
+    }
+  }
+
+  const forceSyncFromCloud = async () => {
+    if (!supabaseActive) {
+      addToast('Supabase não está configurado', 'error')
+      return
+    }
+
+    try {
+      console.log('🔄 Carregando dados da cloud...')
+      setIsSyncing(true)
+
+      const cloud = await fetchCloudState(cloudKey)
+
+      if (cloud?.payload) {
+        console.log('✅ Aplicando dados da cloud')
+        applySnapshot({ ...cloud.payload, updatedAt: cloud.updatedAt })
+        setLastSyncTime(new Date().toISOString())
+        addToast('Dados carregados da cloud com sucesso!', 'success')
+      } else {
+        addToast('Sem dados na cloud', 'error')
+      }
+
+      setIsSyncing(false)
+    } catch (error) {
+      console.error('❌ Erro ao carregar da cloud:', error)
+      addToast('Erro ao carregar dados', 'error')
+      setIsSyncing(false)
+    }
+  }
 
   // -------------------------------------------------------------
   // 🔍 MEMOS E DERIVADOS
@@ -7196,19 +7343,48 @@ function TableMaterials() {
       }`}
       data-density={density}
     >
-      {/* 🌐 INDICADOR DE ESTADO ONLINE/OFFLINE */}
-      {!isOnline && (
-        <div className="fixed top-4 right-4 z-50 px-3 py-2 rounded-lg shadow-lg flex items-center gap-2" style={{ background: '#f59e0b', color: '#fff' }}>
-          <div className="w-2 h-2 rounded-full bg-white animate-pulse"></div>
-          <span className="text-sm font-medium">Modo Offline</span>
-        </div>
-      )}
-      {isOnline && supabaseActive && cloudReady && (
-        <div className="fixed top-4 right-4 z-50 px-3 py-2 rounded-lg shadow-lg flex items-center gap-2" style={{ background: '#10b981', color: '#fff' }}>
-          <div className="w-2 h-2 rounded-full bg-white"></div>
-          <span className="text-sm font-medium">Sincronizado</span>
-        </div>
-      )}
+      {/* 🌐 INDICADOR DE ESTADO DE SINCRONIZAÇÃO */}
+      <div className="fixed top-4 right-4 z-50">
+        {isSyncing ? (
+          <div className="px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 mb-2" style={{ background: '#3b82f6', color: '#fff' }}>
+            <div className="w-2 h-2 rounded-full bg-white animate-pulse"></div>
+            <span className="text-sm font-medium">Sincronizando...</span>
+          </div>
+        ) : !isOnline ? (
+          <div className="px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 mb-2" style={{ background: '#f59e0b', color: '#fff' }}>
+            <div className="w-2 h-2 rounded-full bg-white"></div>
+            <span className="text-sm font-medium">Modo Offline</span>
+          </div>
+        ) : isOnline && supabaseActive && cloudReady && lastSyncTime ? (
+          <div className="px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 mb-2" style={{ background: '#10b981', color: '#fff' }}>
+            <div className="w-2 h-2 rounded-full bg-white"></div>
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">Sincronizado</span>
+              <span className="text-xs opacity-80">{new Date(lastSyncTime).toLocaleTimeString('pt-PT')}</span>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Botões de Sincronização Manual (apenas para admin) */}
+        {auth?.role === 'admin' && supabaseActive && !isSyncing && (
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={forceSyncToCloud}
+              className="px-3 py-2 rounded-lg shadow-lg text-sm font-medium transition hover:opacity-90"
+              style={{ background: '#00677F', color: '#fff' }}
+            >
+              ☁️ Enviar para Cloud
+            </button>
+            <button
+              onClick={forceSyncFromCloud}
+              className="px-3 py-2 rounded-lg shadow-lg text-sm font-medium transition hover:opacity-90"
+              style={{ background: '#00A9B8', color: '#fff' }}
+            >
+              ⬇️ Carregar da Cloud
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* HEADER MOBILE */}
       <div className="lg:hidden sticky top-0 z-40 glass border-b dark:border-slate-800">
