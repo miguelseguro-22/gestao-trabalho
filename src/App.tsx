@@ -116,6 +116,12 @@ const normalizeTemplate = (template) => {
   return template; // retorna original se não reconhecer
 };
 
+// ✅ EXIBIR NOME DO TEMPLATE (para mostrar ao utilizador)
+const displayTemplateName = (template) => {
+  if (template === 'Trabalho Normal') return 'Horas';
+  return template;
+};
+
 // ✅ VERIFICAR SE É TRABALHO NORMAL
 const isNormalWork = (template) => {
   const t = String(template || '').toLowerCase();
@@ -1055,7 +1061,7 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,onApp
                           </div>
                           <div>
                             <div className="font-semibold text-white text-sm">
-                              {t.template}
+                              {displayTemplateName(t.template)}
                             </div>
                             <div className="text-xs text-white/80">
                               Registo #{index + 1}
@@ -5357,7 +5363,7 @@ const TimesheetTemplateForm = ({
                 onClick={() => { setTemplate(t); next(); }}
                 className={`rounded-2xl border p-3 text-left hover:shadow-sm bg-white dark:bg-slate-900 dark:border-slate-800 ${template===t?'border-slate-900 dark:border-slate-300':''}`}
               >
-                <div className="font-medium">{t}</div>
+                <div className="font-medium">{displayTemplateName(t)}</div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   {t==='Trabalho Normal'&&'Obra + Encarregado + Horas'}
                   {t==='Férias'&&'Período de férias'}
@@ -5675,9 +5681,9 @@ const CAN = {
   people: new Set(["diretor", "admin"]),
   vehicles: new Set(["diretor", "admin"]),
   agenda: new Set(["encarregado", "diretor", "admin"]),
-  // 🔧 CORRIGIDO: Qualquer pessoa pode ver pendentes/equipa se for supervisor de alguém
-  pendingApprovals: new Set(["tecnico", "encarregado", "diretor", "admin"]),
-  teamDashboard: new Set(["tecnico", "encarregado", "diretor", "admin"]),
+  // 🔧 Apenas diretor e admin podem ver registos pendentes e dashboard de equipa
+  pendingApprovals: new Set(["diretor", "admin"]),
+  teamDashboard: new Set(["diretor", "admin"]),
   cloudDiagnostic: new Set(["admin"]), // 🔧 Diagnóstico Cloud - apenas admin
 };
 
