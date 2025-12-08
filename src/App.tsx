@@ -1646,6 +1646,61 @@ const handleCatalog = (file) => {
   const normalizeDate = normalizeISODate;
   const toNumber=(v)=>{if(v==null||v==='')return 0; const s=String(v).replace(/\./g,'').replace(',','.'); const n=parseFloat(s); return isNaN(n)?0:n};
 
+  // 🆕 EXPANDIR OBRAS MÚLTIPLAS (separadas por vírgula ou ponto e vírgula)
+  const expandRow = (r) => {
+    if (section !== 'timesheets') return [r];
+
+    const val = k => {
+      const colName = map[k];
+      if (!colName) return '';
+      return r[colName] ?? '';
+    };
+
+    // Determinar qual coluna de obra usar (prioridade: AC → AH → AG)
+    const projectNormal = val('projectNormal');
+    const projectWeekend = val('projectWeekend');
+    const projectShifted = val('projectShifted');
+
+    let projectColumn = '';
+    let projectKey = '';
+
+    if (projectNormal && projectNormal.trim()) {
+      projectColumn = projectNormal;
+      projectKey = 'projectNormal';
+    } else if (projectWeekend && projectWeekend.trim()) {
+      projectColumn = projectWeekend;
+      projectKey = 'projectWeekend';
+    } else if (projectShifted && projectShifted.trim()) {
+      projectColumn = projectShifted;
+      projectKey = 'projectShifted';
+    }
+
+    // Se não há obra preenchida, retorna a linha original
+    if (!projectColumn) return [r];
+
+    // Split por vírgula ou ponto e vírgula
+    const projects = projectColumn
+      .split(/[,;]/)
+      .map(p => p.trim())
+      .filter(p => p.length > 0);
+
+    // Se só há 1 obra, retorna a linha original
+    if (projects.length <= 1) return [r];
+
+    // Criar uma linha expandida para cada obra
+    return projects.map(project => {
+      const expandedRow = { ...r };
+
+      // Substituir a coluna da obra pela obra individual
+      const originalColName = map[projectKey];
+      if (originalColName) {
+        expandedRow[originalColName] = project;
+      }
+
+      return expandedRow;
+    });
+  };
+
   const mapRow = (r) => {
   const val = k => {
     const colName = map[k];
@@ -1870,7 +1925,10 @@ const handleCatalog = (file) => {
   };
 
   const importCSV=(mode)=>{
-    const mapped=csvPreview.rows.map(mapRow);
+    // 🆕 Expandir linhas com múltiplas obras ANTES de mapear
+    const expanded = csvPreview.rows.flatMap(expandRow);
+    console.log(`📊 Expansão: ${csvPreview.rows.length} linhas → ${expanded.length} linhas (após split de obras)`);
+    const mapped = expanded.map(mapRow);
     const valOk=mapped.filter(o=>validateMapped(o).length===0);
     if(!valOk.length){addToast('Nenhuma linha válida.','err');return;}
     if (section === 'timesheets') {
