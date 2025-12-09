@@ -1316,56 +1316,56 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
       {k:'notes',label:'observações',opt:true}
     ]
   };
-  const AUTO_KEYS={ 
-    worker:['colaborador','worker','ax'],
-    template:['template','tipo','d'],
-    date:['data','date','dia','c'],
-    
+  const AUTO_KEYS={
+    worker:['colaborador','worker','coluna 1'],
+    template:['situacao','template','tipo','qual foi a sua situacao hoje'],
+    date:['dia da semana','data','date','dia'],
+
     // Trabalho Normal
-    projectNormal:['obra','project','ac','obra normal'],
-    supervisorNormal:['encarregado','supervisor','f'],
-    overtimeStart:['extra inicio','overtime start','v'],
-    overtimeEnd:['extra fim','overtime end','w'],
-    overtimeCalc:['horas extra','extra','extra calculado','overtime calc','l','coluna l'],
-    
+    projectNormal:['obra normal','obra','project'],
+    supervisorNormal:['encarregado normal','encarregado','supervisor'],
+    displacementNormal:['deslocacao normal','deslocacao'],
+    overtimeStart:['hora extra - inicio','extra inicio','overtime start'],
+    overtimeEnd:['hora extra - fim','extra fim','overtime end'],
+    overtimeCalc:['horas extra normal','horas extra','extra','extra calculado','overtime calc','total de horas extras'],
+
     // Fim de Semana
-    projectWeekend:['obra fds','obra fim semana','ah'],
-    supervisorWeekend:['encarregado fds','af'],
-    weekendStart:['fds inicio','ao'],
-    weekendEnd:['fds fim','ap'],
-    weekendCalc:['fds calculado','aq'],
-    
+    projectWeekend:['obra fds','obra fim semana'],
+    supervisorWeekend:['encarregado fds','encarregado fim de semana'],
+    displacementWeekend:['deslocacao fim de semana'],
+    weekendStart:['hora - inicio','fds inicio','hora de comeco'],
+    weekendEnd:['hora - fim','fds fim','hora de saida'],
+    weekendCalc:['horas fds','horas trabalhadas','fds calculado'],
+
     // Deslocado
-    projectShifted:['obra deslocada','ag'],
+    projectShifted:['obra deslocada','local de deslocacao'],
     supervisorShifted:['encarregado deslocado'],
-    
+
     // Férias
-    holidayStart:['ferias inicio','m'],
-    holidayEnd:['ferias fim','n'],
-    holidayFlag:['feriado','feriad','aw'],
+    holidayStart:['duracao das ferias - inicio','ferias inicio','inicio ferias'],
+    holidayEnd:['duracao das ferias - fim','ferias fim','fim ferias'],
+    holidayFlag:['feriado','feriad','feriado day','feriados'],
 
     // Baixa
     sickStart:[
-      'baixa inicio','inicio baixa','r',
-      'duracao da baixa - inicio','duração da baixa - inicio','duracao baixa inicio','duração baixa inicio'
+      'duracao da baixa - inicio','baixa inicio','inicio baixa'
     ],
     sickEnd:[
-      'baixa fim','fim baixa','s',
-      'duracao da baixa - fim','duração da baixa - fim','duracao baixa fim','duração baixa fim'
+      'duracao da baixa - fim','baixa fim','fim baixa'
     ],
-    sickDays:['dias baixa','baixa dias','t'],
-    
-    notes:['observações','notas','notes','obs'],
-    
-    // Materials (mantém)
+    sickDays:['duracao da baixa','duracao - dias uteis','dias baixa','baixa dias'],
+
+    notes:['motivo (opcional)','observacoes','notas','notes','obs'],
+
+    // Materials (mantem)
     requestedAt:['data','pedido','data pedido','request date'],
     project:['obra','projeto','project','site'],
     item:['item','material','produto'],
-    qty:['quantidade','qty','qtd','quantity'], 
+    qty:['quantidade','qty','qtd','quantity'],
     requestedBy:['requisitante','solicitante','quem pediu','requested by'],
-    status:['estado','status','situação']
+    status:['estado','status','situacao']
   };
-  const norm=(s)=>String(s||'').trim().toLowerCase();
+  const norm=(s)=>String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
   const buildAutoMap=(headers)=>{const m={};const pick=k=>{const c=AUTO_KEYS[k]||[];const f=headers.find(h=>c.includes(norm(h)));if(f)m[k]=f;};Object.keys(AUTO_KEYS).forEach(pick);return m;};
 
   function parseCSV(text){
