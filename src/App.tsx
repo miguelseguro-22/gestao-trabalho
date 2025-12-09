@@ -6411,8 +6411,12 @@ const visibleTimeEntries = useMemo(() => {
   // 1. Registos onde ele é WORKER (registos próprios)
   // 2. Registos onde ele é SUPERVISOR (registos da sua equipa)
   if (auth?.role === "encarregado") {
+    const normalizedAuthName = String(auth?.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
     const filtered = (timeEntries || []).filter((t) => {
-      const match = t.worker === auth?.name || t.supervisor === auth?.name;
+      const normalizedWorker = String(t.worker || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const normalizedSupervisor = String(t.supervisor || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const match = normalizedWorker === normalizedAuthName || normalizedSupervisor === normalizedAuthName;
 
       if (match) {
         console.log('✅ Encarregado - Match encontrado:', {
@@ -6432,15 +6436,20 @@ const visibleTimeEntries = useMemo(() => {
 
   // Técnico vê APENAS os seus próprios registos (onde ele é WORKER)
   if (auth?.role === "tecnico") {
+    const normalizedAuthName = String(auth?.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
     const filtered = (timeEntries || []).filter((t) => {
       // ⬇️ APENAS onde ele é o trabalhador, NÃO onde ele é supervisor
-      const match = t.worker === auth?.name;
+      const normalizedWorker = String(t.worker || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const match = normalizedWorker === normalizedAuthName;
 
       if (match) {
         console.log('✅ Técnico - Match encontrado:', {
           date: t.date,
           worker: t.worker,
+          normalizedWorker,
           authName: auth?.name,
+          normalizedAuthName,
         });
       }
 
@@ -8484,7 +8493,7 @@ function TableMaterials() {
       <Modal open={modal?.name==='day-details'} title="" onClose={()=>setModal(null)} wide>
         <DayDetails
           dateISO={modal?.dateISO}
-          timeEntries={timeEntries}
+          timeEntries={visibleTimeEntries}
           onNew={iso=>setModal({name:'add-time',initial:{date:iso,template:'Trabalho Normal'}})}
           onEdit={t=>setModal({name:'add-time',initial:t})}
           onDuplicate={t=>{duplicateTimeEntry({...t,date:modal?.dateISO});setModal(null)}}
