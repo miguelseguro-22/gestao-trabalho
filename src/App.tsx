@@ -721,17 +721,40 @@ const countWeekdaysInclusive = (start, end, holidaySet = new Set()) => {
 const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = () => {} }) => {
   // offset e setOffset agora vêm de props - mantém o mês ao fechar modals
   const { start, end } = useMemo(()=>getCycle(offset),[offset]);
+
+  // 🔧 FIX: Parse local para evitar timezone issues
+  const parseLocalISO = (isoStr) => {
+    if (!isoStr) return null;
+    const [y, m, d] = isoStr.split('-').map(Number);
+    return new Date(y, m - 1, d, 0, 0, 0, 0);
+  };
+
+  const toLocalISO = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
   const dayTypes = useMemo(()=>{
     const m=new Map(); const push=(iso,t)=>{if(!m.has(iso))m.set(iso,new Set()); m.get(iso).add(t);};
     timeEntries.forEach(t=>{
       const inRange=d=>(d>=start&&d<=end);
 
       if (t.template === 'Férias' || t.template === 'Baixa') { // ⬅️ JÁ VEM NORMALIZADO
-        const s=new Date(t.periodStart||t.date),e=new Date(t.periodEnd||t.date);
-        const cur=new Date(s);cur.setHours(0,0,0,0);const last=new Date(e);last.setHours(0,0,0,0);
-        while(cur<=last){if(inRange(cur)) push(cur.toISOString().slice(0,10),t.template); cur.setDate(cur.getDate()+1);}
+        const s=parseLocalISO(t.periodStart||t.date);
+        const e=parseLocalISO(t.periodEnd||t.date);
+        if (!s || !e) return;
+        const cur=new Date(s);
+        const last=new Date(e);
+        while(cur<=last){
+          if(inRange(cur)) push(toLocalISO(cur),t.template);
+          cur.setDate(cur.getDate()+1);
+        }
       }else{
-        const d=new Date(t.date); if(inRange(d)) push(d.toISOString().slice(0,10),t.template);
+        const d=parseLocalISO(t.date);
+        if (!d) return;
+        if(inRange(d)) push(toLocalISO(d),t.template);
       }
     });
     return m;
@@ -933,7 +956,17 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,onApp
     if (t.template !== 'Trabalho Normal') return t;
 
     // Verifica se é deslocado
-    const isDisplaced = (t.displacement || '').toLowerCase().trim() === 'sim';
+    const displacementValue = String(t.displacement || '').toLowerCase().trim();
+    const isDisplaced = displacementValue === 'sim';
+
+    // 🐛 DEBUG: Mostrar valor do displacement
+    console.log('🔍 Displacement check:', {
+      worker: t.worker,
+      project: t.project,
+      displacement: t.displacement,
+      normalized: displacementValue,
+      isDisplaced
+    });
 
     // Conta registos do mesmo tipo (deslocado/não deslocado) no mesmo dia
     const sameTypeCount = list.filter(entry =>
@@ -1878,6 +1911,17 @@ const handleCatalog = (file) => {
       : template.includes('Fim') || template.includes('FDS') || template.includes('semana')
       ? val('displacementWeekend')
       : '';
+
+    // 🐛 DEBUG: Mostrar displacement no import
+    if (template.includes('Normal')) {
+      console.log('📥 Import displacement:', {
+        worker,
+        template,
+        displacement,
+        'val(displacementNormal)': val('displacementNormal'),
+        'map.displacementNormal': map['displacementNormal']
+      });
+    }
 
     return {
       id: uid(),
