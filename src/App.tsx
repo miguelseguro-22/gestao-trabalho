@@ -927,7 +927,7 @@ function familyForProjectInput(projects, input){
   return '';
 }
 
-const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,onApprove,onReject,auth})=>{
+const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,auth})=>{
   if(!dateISO) return null;
 
   // 🔧 FIX: Parse date manually to avoid timezone issues
@@ -1131,45 +1131,8 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,onApp
                             </div>
                           </div>
                         </div>
-                        {/* 🆕 Badge de Status */}
-                        <div className="flex items-center gap-2">
-                          {t.status === 'pending' && (
-                            <div className="px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24' }}>
-                              <span>🟡</span> Pendente
-                            </div>
-                          )}
-                          {t.status === 'approved' && (
-                            <div className="px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1" style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' }}>
-                              <span>✅</span> Aprovado
-                            </div>
-                          )}
-                          {t.status === 'rejected' && (
-                            <div className="px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}>
-                              <span>❌</span> Rejeitado
-                            </div>
-                          )}
-                        </div>
                       </div>
                       <div className="flex gap-2">
-                        {/* 🔧 Botões de Aprovação (para o supervisor do registo OU admin) */}
-                        {isWork && t.status === 'pending' && (auth?.name === t.supervisor || auth?.role === 'admin') && onApprove && onReject && (
-                          <>
-                            <Button
-                              size="sm"
-                              onClick={() => onApprove(t)}
-                              className="!bg-green-500 !text-white hover:!bg-green-600 !border-0"
-                            >
-                              ✅ Aprovar
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => onReject(t)}
-                              className="!bg-red-500 !text-white hover:!bg-red-600 !border-0"
-                            >
-                              ❌ Rejeitar
-                            </Button>
-                          </>
-                        )}
                         <Button
                           variant="secondary"
                           size="sm"
@@ -4877,11 +4840,7 @@ const MultiWorkTimesheetForm = ({
         weekendEndTime: work.weekendEndTime || '',
         extraStartTime: work.extraStartTime || '',
         extraEndTime: work.extraEndTime || '',
-        notes: '',
-        status: 'pending',
-        rejectionReason: undefined,
-        approvedBy: undefined,
-        approvedAt: undefined
+        notes: ''
       });
     });
 
@@ -5526,12 +5485,7 @@ const TimesheetTemplateForm = ({
     
     const payload = {
       ...adjusted,
-      template,
-      // 🆕 Campos de aprovação
-      status: initial?.status || 'pending',
-      rejectionReason: initial?.rejectionReason || undefined,
-      approvedBy: initial?.approvedBy || undefined,
-      approvedAt: initial?.approvedAt || undefined
+      template
     };
     const e = validate(payload);
     setErrors(e);
@@ -8662,85 +8616,8 @@ function TableMaterials() {
           onEdit={t=>setModal({name:'add-time',initial:t})}
           onDuplicate={t=>{duplicateTimeEntry({...t,date:modal?.dateISO});setModal(null)}}
           onNavigate={(newDateISO) => setModal({name:'day-details', dateISO: newDateISO})}
-          onApprove={(entry) => {
-            handleApproveTimesheet(entry);
-            // Mantém modal aberto para ver mudança
-          }}
-          onReject={(entry) => {
-            // Abrir modal de rejeição
-            setModal({name: 'reject-timesheet', entry, returnTo: 'day-details', returnData: modal});
-          }}
           auth={auth}
         />
-      </Modal>
-
-      {/* 🆕 Modal de Rejeição */}
-      <Modal open={modal?.name==='reject-timesheet'} title="Rejeitar Registo" onClose={()=>setModal(null)}>
-        {modal?.entry && (() => {
-          const entry = modal.entry;
-          const [reason, setReason] = React.useState('');
-
-          const handleSubmit = () => {
-            handleRejectTimesheet(entry, reason);
-            // Voltar para o modal anterior
-            if (modal.returnTo && modal.returnData) {
-              setModal(modal.returnData);
-            } else {
-              setModal(null);
-            }
-          };
-
-          return (
-            <div className="space-y-4">
-              <div className="rounded-lg p-4 bg-slate-50 dark:bg-slate-800">
-                <div className="text-sm text-slate-600 dark:text-slate-400 mb-2">
-                  A rejeitar registo:
-                </div>
-                <div className="font-semibold text-slate-800 dark:text-slate-100">
-                  {entry.template} - {new Date(entry.date).toLocaleDateString('pt-PT')}
-                </div>
-                {entry.project && (
-                  <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                    Obra: {entry.project} • Encarregado: {entry.supervisor}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Motivo da Rejeição *
-                </label>
-                <textarea
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="Ex: Horas incorretas, obra errada, etc."
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 p-3 dark:bg-slate-900 min-h-[100px] focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  autoFocus
-                />
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Este motivo será visível para o técnico
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <Button
-                  variant="secondary"
-                  onClick={() => setModal(null)}
-                  className="flex-1"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleSubmit}
-                  disabled={!reason.trim()}
-                  className="flex-1 !bg-red-500 hover:!bg-red-600 disabled:!bg-slate-300 disabled:cursor-not-allowed"
-                >
-                  ❌ Rejeitar Registo
-                </Button>
-              </div>
-            </div>
-          );
-        })()}
       </Modal>
 
 <Modal open={modal?.name==='order-detail'} title="Detalhe do Pedido" onClose={()=>setModal(null)} wide>
