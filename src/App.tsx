@@ -5010,20 +5010,35 @@ const MultiWorkTimesheetForm = ({
                 </datalist>
               </div>
 
-              {/* 🆕 DESLOCAÇÃO */}
+              {/* 🆕 DESLOCAÇÃO - Botões */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
                   Deslocação
                 </label>
-                <select
-                  value={work.displacement}
-                  onChange={(e) => updateWork(work.id, 'displacement', e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 p-2 text-sm dark:bg-slate-800 focus:ring-2"
-                  style={{ '--focus-ring-color': '#00A9B8' } as any}
-                >
-                  <option value="Não">Não</option>
-                  <option value="Sim">Sim</option>
-                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateWork(work.id, 'displacement', 'Não')}
+                    className={`rounded-lg p-2 text-sm font-medium transition-colors ${
+                      work.displacement === 'Não'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    Não
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateWork(work.id, 'displacement', 'Sim')}
+                    className={`rounded-lg p-2 text-sm font-medium transition-colors ${
+                      work.displacement === 'Sim'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    Sim
+                  </button>
+                </div>
               </div>
 
               {/* 🎯 CAMPOS CONDICIONAIS: Fim de Semana vs Dia Normal */}
@@ -5600,19 +5615,35 @@ const TimesheetTemplateForm = ({
               </label>
             )}
 
-            {/* 🆕 DESLOCAÇÃO (só para Trabalho Normal) */}
+            {/* 🆕 DESLOCAÇÃO - Botões (só para Trabalho Normal) */}
             {template === 'Trabalho Normal' && (
-              <label className="text-sm">
-                Deslocação
-                <select
-                  value={form.displacement}
-                  onChange={e=>update('displacement',e.target.value)}
-                  className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                >
-                  <option value="Não">Não</option>
-                  <option value="Sim">Sim</option>
-                </select>
-              </label>
+              <div className="text-sm">
+                <div className="mb-1">Deslocação</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => update('displacement', 'Não')}
+                    className={`rounded-xl p-2 font-medium transition-colors ${
+                      form.displacement === 'Não'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border dark:border-slate-700'
+                    }`}
+                  >
+                    Não
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => update('displacement', 'Sim')}
+                    className={`rounded-xl p-2 font-medium transition-colors ${
+                      form.displacement === 'Sim'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border dark:border-slate-700'
+                    }`}
+                  >
+                    Sim
+                  </button>
+                </div>
+              </div>
             )}
 
             {/* PERÍODO (para Férias e Baixa) */}
