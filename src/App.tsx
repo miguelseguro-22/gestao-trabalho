@@ -1799,7 +1799,21 @@ const handleCatalog = (file) => {
       }
 
       // 🔧 FIX: Horas extra APENAS na obra especificada na coluna AH (projectShifted)
-      const projectMatch = overtimeProject && project.toLowerCase().trim() === overtimeProject.toLowerCase().trim();
+      const projectNormalized = project.toLowerCase().trim();
+      const overtimeProjectNormalized = overtimeProject ? overtimeProject.toLowerCase().trim() : '';
+      const projectMatch = overtimeProjectNormalized && projectNormalized === overtimeProjectNormalized;
+
+      console.log(`🔍 Comparing project #${index + 1}:`, {
+        original: project,
+        normalized: projectNormalized,
+        overtimeProjectOriginal: overtimeProject,
+        overtimeProjectNormalized,
+        match: projectMatch,
+        lengths: {
+          project: projectNormalized.length,
+          overtimeProject: overtimeProjectNormalized.length
+        }
+      });
 
       if (!projectMatch) {
         // Zerar horas extra nas obras que NÃO correspondem à coluna AH
