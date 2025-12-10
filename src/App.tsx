@@ -718,8 +718,8 @@ const countWeekdaysInclusive = (start, end, holidaySet = new Set()) => {
   }
   return c;
 };
-const CycleCalendar = ({ timeEntries, onDayClick, auth }) => {
-  const [offset, setOffset] = useState(0);
+const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = () => {} }) => {
+  // offset e setOffset agora vêm de props - mantém o mês ao fechar modals
   const { start, end } = useMemo(()=>getCycle(offset),[offset]);
   const dayTypes = useMemo(()=>{
     const m=new Map(); const push=(iso,t)=>{if(!m.has(iso))m.set(iso,new Set()); m.get(iso).add(t);};
@@ -5878,6 +5878,7 @@ function App() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modal, setModal] = useState<any | null>(null);
+  const [cycleOffset, setCycleOffset] = useState(0); // 🆕 Estado para manter o mês do calendário
   // 🆕 Sistema de Notificações
   const [notifications, setNotifications] = useState<any[]>(persisted?.notifications || []);
   const cloudSaveTimer = useRef<any>(null)
@@ -7629,6 +7630,8 @@ function TimesheetsView() {
 
       <CycleCalendar
         timeEntries={visibleTimeEntries || []}
+        offset={cycleOffset}
+        setOffset={setCycleOffset}
         onDayClick={(iso) => {
           // Verifica se existem registos para este dia
           const target = new Date(iso);
