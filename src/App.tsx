@@ -928,9 +928,32 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,onApp
   };
   const list=timeEntries.filter(matches);
 
+  // 🆕 Calcular horas automáticas para Trabalho Normal baseado em deslocação
+  const listWithCalculatedHours = list.map(t => {
+    if (t.template !== 'Trabalho Normal') return t;
+
+    // Verifica se é deslocado
+    const isDisplaced = (t.displacement || '').toLowerCase().trim() === 'sim';
+
+    // Conta registos do mesmo tipo (deslocado/não deslocado) no mesmo dia
+    const sameTypeCount = list.filter(entry =>
+      entry.template === 'Trabalho Normal' &&
+      ((entry.displacement || '').toLowerCase().trim() === 'sim') === isDisplaced
+    ).length;
+
+    // Divide 8h pelo número de registos do mesmo tipo
+    const calculatedHours = sameTypeCount > 0 ? 8 / sameTypeCount : 8;
+
+    return {
+      ...t,
+      hours: calculatedHours,
+      isDisplaced // Adiciona flag para usar no render
+    };
+  });
+
   // Calcular totais
-  const totalHours = list.reduce((sum, t) => sum + (Number(t.hours) || 0), 0);
-  const totalOvertime = list.reduce((sum, t) => sum + (Number(t.overtime) || 0), 0);
+  const totalHours = listWithCalculatedHours.reduce((sum, t) => sum + (Number(t.hours) || 0), 0);
+  const totalOvertime = listWithCalculatedHours.reduce((sum, t) => sum + (Number(t.overtime) || 0), 0);
 
   // Navegação
   const prevDay = () => {
@@ -1027,7 +1050,7 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,onApp
           </div>
         ) : (
           <>
-            {list.map((t, index) => {
+            {listWithCalculatedHours.map((t, index) => {
               const isWork = t.template === 'Trabalho Normal';
               const isHoliday = t.template === 'Férias';
               const isSick = t.template === 'Baixa';
@@ -1148,7 +1171,7 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,onApp
                         </div>
                         <div>
                           <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-                            ⏰ Horas Normais
+                            ⏰ {t.isDisplaced ? 'Horas Deslocado' : 'Horas Normais'}
                           </div>
                           <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
                             {t.hours || 0}h
@@ -1846,6 +1869,13 @@ const handleCatalog = (file) => {
       overtime = 0;
     }
     
+    // 🆕 Guardar informação de deslocação
+    const displacement = template.includes('Normal')
+      ? val('displacementNormal')
+      : template.includes('Fim') || template.includes('FDS') || template.includes('semana')
+      ? val('displacementWeekend')
+      : '';
+
     return {
       id: uid(),
       template,
@@ -1858,6 +1888,7 @@ const handleCatalog = (file) => {
       periodStart,
       periodEnd,
       sickDays,
+      displacement, // 🆕 Campo de deslocação
       notes: val('notes')
     };
   }
