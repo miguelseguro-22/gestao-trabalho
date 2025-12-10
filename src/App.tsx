@@ -784,6 +784,7 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
     return m;
   }, [timeEntries, start, end]);
   const days = useMemo(()=>{
+    // Calendário começa em Segunda-feira
     const first=(()=>{const d=new Date(start);const diff=mondayIndex(d);d.setDate(d.getDate()-diff);return d})();
     const last=(()=>{const d=new Date(end);const diff=6-mondayIndex(d);d.setDate(d.getDate()+diff);d.setHours(0,0,0,0);return d})();
     const arr=[]; for(let d=new Date(first);d<=last;d.setDate(d.getDate()+1)) arr.push(new Date(d));
@@ -832,7 +833,7 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
     <CalendarLegend />
 
       <div className="grid grid-cols-7 text-xs text-slate-500 dark:text-slate-400 px-1">
-        {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d => (<div key={d} className="py-1">{d}</div>))}
+        {['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map(d => (<div key={d} className="py-1">{d}</div>))}
       </div>
 
       <div className="grid grid-cols-7 gap-2">
