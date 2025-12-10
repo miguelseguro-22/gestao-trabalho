@@ -4734,6 +4734,7 @@ const MultiWorkTimesheetForm = ({
       id: Date.now(),
       project: initial?.project || '',
       supervisor: initial?.supervisor || '',
+      displacement: initial?.displacement || 'Não', // 🆕 Campo de deslocação
       hours: initial?.hours || 8,
       overtime: 0,
       weekendStartTime: '',
@@ -4791,6 +4792,7 @@ const MultiWorkTimesheetForm = ({
       id: Date.now(),
       project: '',
       supervisor: '',
+      displacement: 'Não', // 🆕 Campo de deslocação
       hours: 0,
       overtime: 0,
       weekendStartTime: '',
@@ -4867,6 +4869,7 @@ const MultiWorkTimesheetForm = ({
         date,
         project: work.project,
         supervisor: work.supervisor,
+        displacement: work.displacement, // 🆕 Campo de deslocação
         worker: auth?.name || 'Desconhecido',
         hours: calculatedHours,
         overtime: calculatedOvertime,
@@ -5005,6 +5008,22 @@ const MultiWorkTimesheetForm = ({
                     <option key={name} value={name} />
                   ))}
                 </datalist>
+              </div>
+
+              {/* 🆕 DESLOCAÇÃO */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                  Deslocação
+                </label>
+                <select
+                  value={work.displacement}
+                  onChange={(e) => updateWork(work.id, 'displacement', e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 p-2 text-sm dark:bg-slate-800 focus:ring-2"
+                  style={{ '--focus-ring-color': '#00A9B8' } as any}
+                >
+                  <option value="Não">Não</option>
+                  <option value="Sim">Sim</option>
+                </select>
               </div>
 
               {/* 🎯 CAMPOS CONDICIONAIS: Fim de Semana vs Dia Normal */}
