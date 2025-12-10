@@ -959,13 +959,17 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,onApp
   const prevDay = () => {
     const prev = new Date(target);
     prev.setDate(prev.getDate() - 1);
-    onNavigate?.(prev.toISOString().slice(0, 10));
+    // 🔧 FIX: Usar formatação local em vez de ISO para evitar timezone issues
+    const isoDate = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-${String(prev.getDate()).padStart(2, '0')}`;
+    onNavigate?.(isoDate);
   };
 
   const nextDay = () => {
     const next = new Date(target);
     next.setDate(next.getDate() + 1);
-    onNavigate?.(next.toISOString().slice(0, 10));
+    // 🔧 FIX: Usar formatação local em vez de ISO para evitar timezone issues
+    const isoDate = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+    onNavigate?.(isoDate);
   };
 
   // Formatação bonita da data
@@ -1412,37 +1416,20 @@ const handleCSV = (file) => {
     const parsed = parseCSV(text);
     setCsvPreview(parsed);
 
-    // ✅ AUTO-MAPEAR COLUNAS POR LETRA
+    // ✅ AUTO-MAPEAR COLUNAS POR NOME (não por letra!)
     const autoMap = {};
-    
-    if (section === 'timesheets') {
-      const colIndex = (letter) => {
-        let index = 0;
-        for (let i = 0; i < letter.length; i++) {
-          index = index * 26 + (letter.charCodeAt(i) - 64);
-        }
-        return index - 1;
-      };
-      
-        const mapping = {
-          worker: 'AX', template: 'D', date: 'C',
-          projectNormal: 'AC', supervisorNormal: 'F',
-          overtimeCalc: 'L', projectWeekend: 'AH',
-          supervisorWeekend: 'AF', weekendCalc: 'AQ',
-          projectShifted: 'AG', holidayStart: 'M',
-          holidayEnd: 'N', sickStart: 'R', sickEnd: 'S', sickDays: 'T',
-          holidayFlag: 'AW'
-        };
-      
-      for (const [field, letter] of Object.entries(mapping)) {
-        const idx = colIndex(letter);
-        if (parsed.headers[idx]) {
-          autoMap[field] = parsed.headers[idx];
-        }
-      }
-    } else if (section === 'materials') {
+
+    if (section === 'timesheets' || section === 'materials') {
       const auto = buildAutoMap(parsed.headers.map(h => norm(h)));
       Object.assign(autoMap, auto);
+
+      // 🐛 DEBUG: Mostrar mapeamento completo
+      console.log('🗺️ Mapeamento de Colunas:', {
+        'Total headers': parsed.headers.length,
+        'Primeiros 10 headers': parsed.headers.slice(0, 10),
+        'Últimos 10 headers': parsed.headers.slice(-10),
+        'Mapeamento AUTO encontrado': autoMap
+      });
     }
 
     setMap(autoMap);
@@ -1679,7 +1666,7 @@ const handleCatalog = (file) => {
       return r[colName] ?? '';
     };
 
-    // Determinar qual coluna de obra usar (prioridade: AC → AH → AG)
+    // Determinar qual coluna de obra usar (prioridade: Normal → Weekend → Shifted)
     const projectNormal = val('projectNormal');
     const projectWeekend = val('projectWeekend');
     const projectShifted = val('projectShifted');
@@ -1701,11 +1688,27 @@ const handleCatalog = (file) => {
     // Se não há obra preenchida, retorna a linha original
     if (!projectColumn) return [r];
 
+    // 🔧 FIX: Não dividir se parecer ser um número (como "1,5" ou "22:30:00")
+    // Números decimais: padrão como "1,5" ou "12,34"
+    const isNumber = /^\d+[,\.]\d+$/.test(projectColumn.trim());
+    // Horário: padrão como "22:30:00" ou "08:45"
+    const isTime = /^\d{1,2}:\d{2}(:\d{2})?$/.test(projectColumn.trim());
+
+    if (isNumber || isTime) {
+      console.warn(`⚠️ expandRow: Ignorando divisão de "${projectColumn}" (parece ser número/horário)`);
+      return [r];
+    }
+
     // Split por vírgula ou ponto e vírgula
     const projects = projectColumn
       .split(/[,;]/)
       .map(p => p.trim())
       .filter(p => p.length > 0);
+
+    // 🐛 DEBUG: Log de expansão
+    if (projects.length > 1) {
+      console.log(`📊 expandRow: Dividindo "${projectColumn}" em ${projects.length} obras:`, projects);
+    }
 
     // Se só há 1 obra, retorna a linha original
     if (projects.length <= 1) return [r];
@@ -7665,21 +7668,22 @@ function TimesheetsView() {
         setOffset={setCycleOffset}
         onDayClick={(iso) => {
           // Verifica se existem registos para este dia
-          const target = new Date(iso);
-          target.setHours(0, 0, 0, 0);
+          // 🔧 FIX: Parse date corretamente para evitar timezone issues
+          const [year, month, day] = iso.split('-').map(Number);
+          const target = new Date(year, month - 1, day, 0, 0, 0, 0);
 
           const hasEntries = visibleTimeEntries.some(t => {
             // Para Férias e Baixa, verificar se o dia está dentro do período
             if (t.template === 'Férias' || t.template === 'Baixa') {
-              const start = new Date(t.periodStart || t.date);
-              start.setHours(0, 0, 0, 0);
-              const end = new Date(t.periodEnd || t.date);
-              end.setHours(0, 0, 0, 0);
+              const [y1, m1, d1] = (t.periodStart || t.date).split('-').map(Number);
+              const start = new Date(y1, m1 - 1, d1, 0, 0, 0, 0);
+              const [y2, m2, d2] = (t.periodEnd || t.date).split('-').map(Number);
+              const end = new Date(y2, m2 - 1, d2, 0, 0, 0, 0);
               return target >= start && target <= end;
             }
             // Para outros tipos, verificar se a data é igual
-            const entryDate = new Date(t.date);
-            entryDate.setHours(0, 0, 0, 0);
+            const [y, m, d] = t.date.split('-').map(Number);
+            const entryDate = new Date(y, m - 1, d, 0, 0, 0, 0);
             return entryDate.getTime() === target.getTime();
           });
 
