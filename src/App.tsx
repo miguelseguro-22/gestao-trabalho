@@ -3377,7 +3377,8 @@ const MonthlyReportView = ({ timeEntries, people }) => {
 
       const isWeekend = rec.isWeekend;
       const isHoliday = holidaySet.has(ymd);
-      const isDesloc = String(entry.template || '').toLowerCase().includes('desloc');
+      // 🔧 FIX: Verificar o campo displacement em vez do template
+      const isDesloc = entry.displacement === 'Sim' || String(entry.template || '').toLowerCase().includes('desloc');
       const isFeriadoTpl = String(entry.template || '').toLowerCase().includes('feriado');
       const isFimSemanaTpl = String(entry.template || '').toLowerCase().includes('fim');
 
@@ -3395,6 +3396,15 @@ const MonthlyReportView = ({ timeEntries, people }) => {
 
       if (isDesloc) {
         rec.deslocHours += hours + overtime;
+        console.log('✅ Displacement detected:', {
+          worker: workerName,
+          date: entry.date,
+          displacement: entry.displacement,
+          template: entry.template,
+          hours,
+          overtime,
+          total: hours + overtime
+        });
       }
 
       // Contabilizar horas globais
@@ -3421,6 +3431,13 @@ const MonthlyReportView = ({ timeEntries, people }) => {
         });
 
         const presence = workDays > 0 ? Math.round((daysWorked / workDays) * 100) : 0;
+
+        console.log('📊 Final stats for worker:', {
+          name: worker.name,
+          deslocHours,
+          totalEntries: worker.entries.length,
+          withDisplacement: worker.entries.filter(e => e.displacement === 'Sim').length
+        });
 
         return {
           ...worker,
