@@ -792,7 +792,8 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
   const holidays = useMemo(()=>getHolidayDatesInRange(timeEntries,start,end),[timeEntries,start,end]);
   const wd = countWeekdaysInclusive(start, end, holidays);
   const isToday = (d) => { const t=new Date();t.setHours(0,0,0,0); const x=new Date(d);x.setHours(0,0,0,0); return t.getTime()===x.getTime(); };
-  const click = (d) => { if (onDayClick && d >= start && d <= end) onDayClick(d.toISOString().slice(0,10)); };
+  // 🔧 FIX: Usar toLocalISO em vez de toISOString para evitar timezone offset
+  const click = (d) => { if (onDayClick && d >= start && d <= end) onDayClick(toLocalISO(d)); };
 
   return (
     <div className="space-y-3">
@@ -837,7 +838,8 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
       <div className="grid grid-cols-7 gap-2">
         {days.map((d, i) => {
           const inCycle = d >= start && d <= end;
-          const iso = d.toISOString().slice(0,10);
+          // 🔧 FIX: Usar toLocalISO em vez de toISOString
+          const iso = toLocalISO(d);
           const types = Array.from(dayTypes.get(iso) || []);
           const has = types.length > 0;
           const primary = has ? types[0] : null;
@@ -1426,7 +1428,19 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     status:['estado','status','situacao']
   };
   const norm=(s)=>String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
-  const buildAutoMap=(headers)=>{const m={};const pick=k=>{const c=AUTO_KEYS[k]||[];const f=headers.find(h=>c.includes(norm(h)));if(f)m[k]=f;};Object.keys(AUTO_KEYS).forEach(pick);return m;};
+
+  // 🔧 FIX: buildAutoMap agora retorna nome ORIGINAL (não normalizado)
+  const buildAutoMap=(headers)=>{
+    const m={};
+    const pick=k=>{
+      const c=AUTO_KEYS[k]||[];
+      // Encontra o header ORIGINAL que, quando normalizado, faz match
+      const f=headers.find(h=>c.includes(norm(h)));
+      if(f)m[k]=f; // Retorna o header ORIGINAL (ex: "Deslocação Normal")
+    };
+    Object.keys(AUTO_KEYS).forEach(pick);
+    return m;
+  };
 
   function parseCSV(text){
     const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
@@ -1453,7 +1467,8 @@ const handleCSV = (file) => {
     const autoMap = {};
 
     if (section === 'timesheets' || section === 'materials') {
-      const auto = buildAutoMap(parsed.headers.map(h => norm(h)));
+      // 🔧 FIX: Passa headers ORIGINAIS (não normalizados) para buildAutoMap
+      const auto = buildAutoMap(parsed.headers);
       Object.assign(autoMap, auto);
 
       // 🐛 DEBUG: Mostrar mapeamento completo
@@ -5334,6 +5349,7 @@ const TimesheetTemplateForm = ({
     project: initial?.project || '',
     supervisor: initial?.supervisor || '',
     worker: initial?.worker || '',
+    displacement: initial?.displacement || 'Não', // 🆕 Campo de deslocação
     hours: initial?.hours ?? 8,
     overtime: initial?.overtime ?? 0,
     weekendStartTime: initial?.weekendStartTime || '',
@@ -5561,6 +5577,21 @@ const TimesheetTemplateForm = ({
                   />
                 </div>
                 {errors.supervisor && <div className="text-xs text-rose-600 mt-1">{errors.supervisor}</div>}
+              </label>
+            )}
+
+            {/* 🆕 DESLOCAÇÃO (só para Trabalho Normal) */}
+            {template === 'Trabalho Normal' && (
+              <label className="text-sm">
+                Deslocação
+                <select
+                  value={form.displacement}
+                  onChange={e=>update('displacement',e.target.value)}
+                  className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+                >
+                  <option value="Não">Não</option>
+                  <option value="Sim">Sim</option>
+                </select>
               </label>
             )}
 
