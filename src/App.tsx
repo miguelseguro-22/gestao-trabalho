@@ -1388,8 +1388,15 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     weekendEnd:['hora - fim','fds fim','hora de saida'],
     weekendCalc:['horas fds','horas trabalhadas','fds calculado'],
 
-    // Deslocado
-    projectShifted:['obra deslocada','local de deslocacao'],
+    // Deslocado / Horas Extra
+    projectShifted:[
+      'obra deslocada',
+      'local de deslocacao',
+      'local de trabalho (obra) - horas extra',
+      'local de trabalho (obra) – horas extra', // travessão especial
+      'obra horas extra',
+      'local horas extra'
+    ],
     supervisorShifted:['encarregado deslocado'],
 
     // Férias
