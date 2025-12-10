@@ -1772,6 +1772,8 @@ const handleCatalog = (file) => {
       map['overtimeEnd']
     ].filter(Boolean);
 
+    console.log('🔧 Overtime columns to zero:', overtimeColumns);
+
     // Criar uma linha expandida para cada obra
     return projects.map((project, index) => {
       const expandedRow = { ...r };
@@ -1786,11 +1788,15 @@ const handleCatalog = (file) => {
       const isLastProject = index === projects.length - 1;
       if (!isLastProject) {
         // Zerar horas extra nas obras que NÃO são a última
+        console.log(`🚫 Zeroing overtime for project ${index + 1}/${projects.length}: ${project}`);
         overtimeColumns.forEach(col => {
           if (col && expandedRow[col]) {
+            console.log(`   Zeroing column "${col}": "${expandedRow[col]}" → ""`);
             expandedRow[col] = '';
           }
         });
+      } else {
+        console.log(`✅ Keeping overtime for LAST project ${index + 1}/${projects.length}: ${project}`);
       }
 
       return expandedRow;
@@ -3457,7 +3463,8 @@ const MonthlyReportView = ({ timeEntries, people }) => {
       }
 
       if (isDesloc) {
-        rec.deslocHours += hours + overtime;
+        // 🔧 FIX: Horas deslocadas = 8h por dia deslocado (não as horas reais)
+        rec.deslocHours += 8;
         console.log('✅ Displacement detected:', {
           worker: workerName,
           date: entry.date,
@@ -3465,7 +3472,7 @@ const MonthlyReportView = ({ timeEntries, people }) => {
           template: entry.template,
           hours,
           overtime,
-          total: hours + overtime
+          deslocHours: 8
         });
       }
 
@@ -3749,7 +3756,8 @@ const MonthlyReportView = ({ timeEntries, people }) => {
 
                       const fdsHours = (isWeekend || isFimSemana) ? hours + overtime : 0;
                       const feriadoHours = isHoliday ? hours + overtime : 0;
-                      const deslocHours = isDisplaced ? hours + overtime : 0;
+                      // 🔧 FIX: Horas deslocadas = 8h por dia deslocado (não as horas reais)
+                      const deslocHours = isDisplaced ? 8 : 0;
 
                       return (
                       <tr key={entry.id} className="border-t dark:border-slate-800">
@@ -7834,7 +7842,7 @@ function TimesheetsView() {
         Debug
       </Button>
 
-      <Button onClick={() => setModal({ name: "multi-work-time", initial: { date: todayISO() } })}>
+      <Button onClick={() => setModal({ name: "add-time", initial: { date: todayISO() } })}>
         <Icon name="plus" /> Novo Registo
       </Button>
     </>
