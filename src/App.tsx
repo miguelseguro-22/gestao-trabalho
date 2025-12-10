@@ -1401,6 +1401,16 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
       // Encontra o header ORIGINAL que, quando normalizado, faz match
       const f=headers.find(h=>c.includes(norm(h)));
       if(f)m[k]=f; // Retorna o header ORIGINAL (ex: "Deslocação Normal")
+
+      // 🐛 DEBUG: Log especial para displacement
+      if(k === 'displacementNormal') {
+        console.log('🔍 buildAutoMap - displacementNormal:', {
+          key: k,
+          possibleNames: c,
+          foundHeader: f,
+          allHeadersNormalized: headers.map(h => `${h} → ${norm(h)}`).slice(0, 15)
+        });
+      }
     };
     Object.keys(AUTO_KEYS).forEach(pick);
     return m;
@@ -1891,14 +1901,18 @@ const handleCatalog = (file) => {
       ? val('displacementWeekend')
       : '';
 
-    // 🐛 DEBUG: Mostrar displacement no import
+    // 🐛 DEBUG: Mostrar displacement no import - DETALHADO
     if (template.includes('Normal')) {
-      console.log('📥 Import displacement:', {
+      console.log('📥 Import displacement - DETALHADO:', {
         worker,
+        date,
         template,
         displacement,
         'val(displacementNormal)': val('displacementNormal'),
-        'map.displacementNormal': map['displacementNormal']
+        'map.displacementNormal': map['displacementNormal'],
+        'r[map.displacementNormal]': map['displacementNormal'] ? r[map['displacementNormal']] : 'N/A',
+        'Todas as chaves do row r': Object.keys(r),
+        'Valor raw': r['Deslocação Normal']
       });
     }
 
