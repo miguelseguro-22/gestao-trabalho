@@ -1386,16 +1386,16 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     displacementWeekend:['deslocacao fim de semana'],
     weekendStart:['hora - inicio','fds inicio','hora de comeco'],
     weekendEnd:['hora - fim','fds fim','hora de saida'],
-    weekendCalc:['horas fds','horas trabalhadas','fds calculado'],
+    weekendCalc:['horas fds','fds calculado','horas trabalhadas'],  // "Horas FDS" primeiro!
 
-    // Deslocado / Horas Extra
+    // Deslocado / Horas Extra - ORDEM IMPORTA! Mais específico primeiro
     projectShifted:[
-      'obra deslocada',
-      'local de deslocacao',
-      'local de trabalho (obra) - horas extra',
-      'local de trabalho (obra) – horas extra', // travessão especial
+      'local de trabalho (obra) - horas extra',  // ← PRIORIDADE 1: Hífen normal
+      'local de trabalho (obra) – horas extra',  // ← PRIORIDADE 2: Travessão especial
       'obra horas extra',
-      'local horas extra'
+      'local horas extra',
+      'obra deslocada',
+      'local de deslocacao'  // ← Menos específico por último
     ],
     supervisorShifted:['encarregado deslocado'],
 
