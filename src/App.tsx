@@ -1755,24 +1755,31 @@ const handleCatalog = (file) => {
     // 🐛 DEBUG: Log de expansão
     if (projects.length > 1) {
       const overtimeValue = val('overtimeCalc') || val('overtimeStart') || '';
+      const overtimeProject = val('projectShifted'); // Coluna AH - obra das horas extra
       console.log(`📊 expandRow: Dividindo "${projectColumn}" em ${projects.length} obras:`, {
         projects,
         overtimeValue,
-        note: 'Horas extra serão atribuídas apenas à última obra'
+        overtimeProject,
+        note: 'Horas extra vão para a obra especificada em projectShifted (coluna AH)'
       });
     }
 
     // Se só há 1 obra, retorna a linha original
     if (projects.length <= 1) return [r];
 
-    // 🔧 FIX: Identificar colunas de horas extra para evitar duplicação
+    // 🔧 FIX: Identificar obra que deve receber horas extra (coluna AH)
+    const overtimeProject = val('projectShifted'); // Coluna AH - Local de Trabalho (Obra) – Horas Extra
     const overtimeColumns = [
       map['overtimeCalc'],
       map['overtimeStart'],
       map['overtimeEnd']
     ].filter(Boolean);
 
-    console.log('🔧 Overtime columns to zero:', overtimeColumns);
+    console.log('🔧 Overtime config:', {
+      overtimeProject,
+      overtimeColumns,
+      columnAH: map['projectShifted']
+    });
 
     // Criar uma linha expandida para cada obra
     return projects.map((project, index) => {
@@ -1784,11 +1791,12 @@ const handleCatalog = (file) => {
         expandedRow[originalColName] = project;
       }
 
-      // 🔧 FIX: Horas extra APENAS na última obra para evitar duplicação
-      const isLastProject = index === projects.length - 1;
-      if (!isLastProject) {
-        // Zerar horas extra nas obras que NÃO são a última
-        console.log(`🚫 Zeroing overtime for project ${index + 1}/${projects.length}: ${project}`);
+      // 🔧 FIX: Horas extra APENAS na obra especificada na coluna AH (projectShifted)
+      const projectMatch = overtimeProject && project.toLowerCase().trim() === overtimeProject.toLowerCase().trim();
+
+      if (!projectMatch) {
+        // Zerar horas extra nas obras que NÃO correspondem à coluna AH
+        console.log(`🚫 Zeroing overtime for project "${project}" (not matching AH: "${overtimeProject}")`);
         overtimeColumns.forEach(col => {
           if (col && expandedRow[col]) {
             console.log(`   Zeroing column "${col}": "${expandedRow[col]}" → ""`);
@@ -1796,7 +1804,7 @@ const handleCatalog = (file) => {
           }
         });
       } else {
-        console.log(`✅ Keeping overtime for LAST project ${index + 1}/${projects.length}: ${project}`);
+        console.log(`✅ Keeping overtime for project "${project}" (matches AH column)`);
       }
 
       return expandedRow;
@@ -1888,7 +1896,24 @@ const handleCatalog = (file) => {
       project = pickWeekendProject();
       supervisor = val('supervisorWeekend') || val('supervisor');
 
-      hours = weekendHours || hours || 0;
+      // 🔧 FIX: Calcular horas de FDS a partir de weekendStart e weekendEnd se weekendCalc não existir
+      const calculatedWeekendHours = (val('weekendStart') && val('weekendEnd'))
+        ? toNumber(calculateHoursDiff(val('weekendStart'), val('weekendEnd')))
+        : 0;
+      hours = weekendHours || calculatedWeekendHours || hours || 0;
+
+      // 🐛 DEBUG: Log de horas FDS
+      if (hours > 0) {
+        console.log('📅 Weekend hours detected:', {
+          date,
+          project,
+          weekendCalc: val('weekendCalc'),
+          weekendStart: val('weekendStart'),
+          weekendEnd: val('weekendEnd'),
+          calculatedWeekendHours,
+          finalHours: hours
+        });
+      }
 
     } else if (template.includes('Deslocad') || template.includes('deslocad')) {
       // TRABALHO DESLOCADO
