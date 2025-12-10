@@ -695,6 +695,31 @@ const getHolidayDatesInRange = (entries = [], start, end) => {
     return d >= start && d <= end;
   };
 
+  // 🎉 Feriados de Portugal 2025 (hardcoded)
+  const HOLIDAYS_2025 = [
+    '2025-01-01', // Ano Novo
+    '2025-04-18', // Sexta-feira Santa
+    '2025-04-20', // Páscoa
+    '2025-04-25', // Dia da Liberdade
+    '2025-05-01', // Dia do Trabalhador
+    '2025-06-10', // Dia de Portugal
+    '2025-06-19', // Corpo de Deus
+    '2025-08-15', // Assunção de Nossa Senhora
+    '2025-10-05', // Implantação da República
+    '2025-11-01', // Todos os Santos
+    '2025-12-01', // Restauração da Independência
+    '2025-12-08', // Imaculada Conceição
+    '2025-12-25', // Natal
+  ];
+
+  // Adicionar feriados hardcoded que estão no range
+  HOLIDAYS_2025.forEach(iso => {
+    if (inRange(iso)) {
+      holidaySet.add(iso);
+    }
+  });
+
+  // Adicionar feriados importados do CSV (para manter compatibilidade)
   entries.forEach((t) => {
     if (t.template !== 'Feriado') return;
     const iso = t.date || t.periodStart || t.periodEnd;
@@ -1729,20 +1754,43 @@ const handleCatalog = (file) => {
 
     // 🐛 DEBUG: Log de expansão
     if (projects.length > 1) {
-      console.log(`📊 expandRow: Dividindo "${projectColumn}" em ${projects.length} obras:`, projects);
+      const overtimeValue = val('overtimeCalc') || val('overtimeStart') || '';
+      console.log(`📊 expandRow: Dividindo "${projectColumn}" em ${projects.length} obras:`, {
+        projects,
+        overtimeValue,
+        note: 'Horas extra serão atribuídas apenas à última obra'
+      });
     }
 
     // Se só há 1 obra, retorna a linha original
     if (projects.length <= 1) return [r];
 
+    // 🔧 FIX: Identificar colunas de horas extra para evitar duplicação
+    const overtimeColumns = [
+      map['overtimeCalc'],
+      map['overtimeStart'],
+      map['overtimeEnd']
+    ].filter(Boolean);
+
     // Criar uma linha expandida para cada obra
-    return projects.map(project => {
+    return projects.map((project, index) => {
       const expandedRow = { ...r };
 
       // Substituir a coluna da obra pela obra individual
       const originalColName = map[projectKey];
       if (originalColName) {
         expandedRow[originalColName] = project;
+      }
+
+      // 🔧 FIX: Horas extra APENAS na última obra para evitar duplicação
+      const isLastProject = index === projects.length - 1;
+      if (!isLastProject) {
+        // Zerar horas extra nas obras que NÃO são a última
+        overtimeColumns.forEach(col => {
+          if (col && expandedRow[col]) {
+            expandedRow[col] = '';
+          }
+        });
       }
 
       return expandedRow;
@@ -3682,12 +3730,28 @@ const MonthlyReportView = ({ timeEntries, people }) => {
                     <th className="px-3 py-2 text-left">Obra</th>
                     <th className="px-3 py-2 text-right">Horas</th>
                     <th className="px-3 py-2 text-right">Extra</th>
+                    <th className="px-3 py-2 text-right">FDS (h)</th>
+                    <th className="px-3 py-2 text-right">Feriado (h)</th>
+                    <th className="px-3 py-2 text-right">Deslocadas (h)</th>
                   </tr>
                 </thead>
                 <tbody>
                   {workerDetail.entries
                     .sort((a, b) => (b.date || b.periodStart || '').localeCompare(a.date || a.periodStart || ''))
-                    .map((entry) => (
+                    .map((entry) => {
+                      const hours = Number(entry.hours) || 0;
+                      const overtime = Number(entry.overtime) || 0;
+                      const entryDate = new Date(entry.date);
+                      const isWeekend = entryDate.getDay() === 0 || entryDate.getDay() === 6;
+                      const isHoliday = String(entry.template || '').toLowerCase().includes('feriado');
+                      const isDisplaced = entry.displacement === 'Sim' || String(entry.template || '').toLowerCase().includes('desloc');
+                      const isFimSemana = String(entry.template || '').toLowerCase().includes('fim');
+
+                      const fdsHours = (isWeekend || isFimSemana) ? hours + overtime : 0;
+                      const feriadoHours = isHoliday ? hours + overtime : 0;
+                      const deslocHours = isDisplaced ? hours + overtime : 0;
+
+                      return (
                       <tr key={entry.id} className="border-t dark:border-slate-800">
                         <td className="px-3 py-2">
                           {entry.template === 'Trabalho Normal' || entry.template === 'Falta'
@@ -3711,13 +3775,17 @@ const MonthlyReportView = ({ timeEntries, people }) => {
                         </td>
                         <td className="px-3 py-2">{entry.project || '—'}</td>
                         <td className="px-3 py-2 text-right">
-  {entry.template === 'Falta' 
-    ? `${entry.hours || 8}h (falta)` 
+  {entry.template === 'Falta'
+    ? `${entry.hours || 8}h (falta)`
     : entry.hours || '—'}
 </td>
 <td className="px-3 py-2 text-right">{entry.overtime || '—'}</td>
+                        <td className="px-3 py-2 text-right">{fdsHours || '—'}</td>
+                        <td className="px-3 py-2 text-right">{feriadoHours || '—'}</td>
+                        <td className="px-3 py-2 text-right">{deslocHours || '—'}</td>
                       </tr>
-                    ))}
+                    );
+                    })}
                 </tbody>
               </table>
             </div>
@@ -7798,10 +7866,11 @@ function TimesheetsView() {
             return entryDate.getTime() === target.getTime();
           });
 
-          // Se existem registos, mostra detalhes; caso contrário, mostra ações
+          // 🔧 FIX: Se existem registos, mostra detalhes; caso contrário, abre formulário de seleção de template
           setModal({
-            name: hasEntries ? "day-details" : "day-actions",
-            dateISO: iso
+            name: hasEntries ? "day-details" : "add-time",
+            dateISO: iso,
+            initial: hasEntries ? undefined : { date: iso }
           });
         }}
         auth={auth}
