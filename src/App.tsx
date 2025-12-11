@@ -8012,7 +8012,7 @@ function TimesheetsView() {
         Debug
       </Button>
 
-      <Button onClick={() => setModal({ name: "add-time", initial: { date: todayISO() } })}>
+      <Button onClick={() => setModal({ name: "multi-work-time", initial: { date: todayISO() } })}>
         <Icon name="plus" /> Novo Registo
       </Button>
     </>
@@ -8478,7 +8478,7 @@ function TableMaterials() {
             <div className="flex flex-wrap gap-2">
               {can("timesheets") && (
                 <Button
-                  onClick={() => setModal({ name: "add-time" })}
+                  onClick={() => setModal({ name: "multi-work-time", initial: { date: todayISO() } })}
                 >
                   <Icon name="clock" /> Registar Tempo
                 </Button>
