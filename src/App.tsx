@@ -3417,6 +3417,27 @@ const MonthlyReportView = ({ timeEntries, people }) => {
         byWorker.set(name, {
           name,
           days: new Map(),
+          // HORAS (Trabalho Normal)
+          horasDia: 0,        // Vazio (nunca preenchido)
+          horasNoite: 0,      // Vazio (nunca preenchido)
+          horasExtra: 0,      // Coluna L - Horas Extra Normal
+          horasSabado: 0,     // Horas FDS se dia = Sábado
+          horasDomingo: 0,    // Horas FDS se dia = Domingo
+          // DESLOCADO
+          deslocDia: 0,       // 8h por dia deslocado
+          deslocNoite: 0,     // Vazio (não usado)
+          deslocExtra: 0,     // Horas trabalhadas deslocado
+          deslocSabado: 0,    // 8h se deslocado em sábado
+          deslocDomingo: 0,   // 8h se deslocado em domingo
+          // DEDUÇÕES
+          diasTrabalhados: 0, // Nº DE DIAS
+          diasFerias: 0,      // FÉRIAS
+          bancoHoras: 0,      // Não usado
+          faltasComRemun: 0,  // Não usado (sempre 0)
+          faltasSemRemun: 0,  // FALTAS s/REMUN (template Falta)
+          faltasInjustif: 0,  // Não usado (sempre 0)
+          diasBaixa: 0,       // BAIXA
+          // Legacy (manter para compatibilidade)
           totalHours: 0,
           totalOvertime: 0,
           totalOvertimeWeekend: 0,
@@ -3467,7 +3488,8 @@ const MonthlyReportView = ({ timeEntries, people }) => {
           const ymd = d.toISOString().slice(0, 10);
           const dow = d.getDay();
           if (d >= startDate && d <= endDate && dow !== 0 && dow !== 6 && !holidaySet.has(ymd)) {
-            worker.holidays++;
+            worker.holidays++; // Legacy
+            worker.diasFerias++; // ✅ NOVA COLUNA: DEDUÇÕES - FÉRIAS
           }
         }
         return;
@@ -3499,7 +3521,8 @@ const MonthlyReportView = ({ timeEntries, people }) => {
             const ymd = d.toISOString().slice(0, 10);
             const dow = d.getDay();
             if (d >= startDate && d <= endDate && dow !== 0 && dow !== 6 && !holidaySet.has(ymd)) {
-              worker.sickLeave++;
+              worker.sickLeave++; // Legacy
+              worker.diasBaixa++; // ✅ NOVA COLUNA: DEDUÇÕES - BAIXA
             }
           }
         }
@@ -3508,8 +3531,9 @@ const MonthlyReportView = ({ timeEntries, people }) => {
       }
 
       if (entry.template === 'Falta') {
-        worker.absences++;
-        worker.totalAbsenceHours += hours || 8;
+        worker.absences++; // Legacy
+        worker.totalAbsenceHours += hours || 8; // Legacy
+        worker.faltasSemRemun++; // ✅ NOVA COLUNA: DEDUÇÕES - FALTAS s/REMUN
         return;
       }
 
@@ -3517,13 +3541,69 @@ const MonthlyReportView = ({ timeEntries, people }) => {
       if (!dayInfo) return;
       const { rec, ymd } = dayInfo;
 
+      const entryDate = new Date(ymd);
+      const dayOfWeek = entryDate.getDay(); // 0=Dom, 6=Sáb
+      const isSaturday = dayOfWeek === 6;
+      const isSunday = dayOfWeek === 0;
       const isWeekend = rec.isWeekend;
       const isHoliday = holidaySet.has(ymd);
+
       // 🔧 FIX: Verificar o campo displacement em vez do template
       const isDesloc = entry.displacement === 'Sim' || String(entry.template || '').toLowerCase().includes('desloc');
       const isFeriadoTpl = String(entry.template || '').toLowerCase().includes('feriado');
       const isFimSemanaTpl = String(entry.template || '').toLowerCase().includes('fim');
 
+      // ✅ HORAS (Trabalho Normal)
+      if (!isDesloc) {
+        // horasDia e horasNoite ficam sempre 0 (nunca preenchidos)
+        // horasExtra = coluna L (Horas Extra Normal)
+        worker.horasExtra += overtime;
+
+        // horasSabado/horasDomingo = Horas FDS se dia = Sábado/Domingo
+        if (isSaturday && (isWeekend || isFimSemanaTpl || isFeriadoTpl)) {
+          worker.horasSabado += hours;
+        }
+        if (isSunday && (isWeekend || isFimSemanaTpl || isFeriadoTpl)) {
+          worker.horasDomingo += hours;
+        }
+      }
+
+      // ✅ DESLOCADO
+      if (isDesloc) {
+        // deslocDia = 8h fixas por dia deslocado (em dias úteis)
+        if (!isWeekend && !isHoliday) {
+          worker.deslocDia += 8;
+        }
+
+        // deslocNoite fica sempre 0 (não usado)
+
+        // deslocExtra = Horas trabalhadas deslocado (hours do entry)
+        worker.deslocExtra += hours;
+
+        // deslocSabado/deslocDomingo = 8h se deslocado em fim de semana
+        if (isSaturday) {
+          worker.deslocSabado += 8;
+        }
+        if (isSunday) {
+          worker.deslocDomingo += 8;
+        }
+
+        console.log('✅ Deslocado processado:', {
+          worker: workerName,
+          date: entry.date,
+          dayOfWeek,
+          isSaturday,
+          isSunday,
+          displacement: entry.displacement,
+          hours,
+          deslocDia: !isWeekend && !isHoliday ? 8 : 0,
+          deslocExtra: hours,
+          deslocSabado: isSaturday ? 8 : 0,
+          deslocDomingo: isSunday ? 8 : 0
+        });
+      }
+
+      // Legacy (manter compatibilidade)
       rec.hours += hours;
       rec.overtime += overtime;
       rec.hasNormalWork = rec.hasNormalWork || isNormalWork(entry.template);
@@ -3537,17 +3617,7 @@ const MonthlyReportView = ({ timeEntries, people }) => {
       }
 
       if (isDesloc) {
-        // 🔧 FIX: Horas deslocadas = 8h por dia deslocado (não as horas reais)
         rec.deslocHours += 8;
-        console.log('✅ Displacement detected:', {
-          worker: workerName,
-          date: entry.date,
-          displacement: entry.displacement,
-          template: entry.template,
-          hours,
-          overtime,
-          deslocHours: 8
-        });
       }
 
       // Contabilizar horas globais
@@ -3573,13 +3643,29 @@ const MonthlyReportView = ({ timeEntries, people }) => {
           deslocHours += rec.deslocHours;
         });
 
+        // ✅ NOVA COLUNA: DEDUÇÕES - Nº DE DIAS (dias trabalhados)
+        worker.diasTrabalhados = daysWorked;
+
         const presence = workDays > 0 ? Math.round((daysWorked / workDays) * 100) : 0;
 
         console.log('📊 Final stats for worker:', {
           name: worker.name,
           deslocHours,
           totalEntries: worker.entries.length,
-          withDisplacement: worker.entries.filter(e => e.displacement === 'Sim').length
+          withDisplacement: worker.entries.filter(e => e.displacement === 'Sim').length,
+          newColumns: {
+            horasExtra: worker.horasExtra,
+            horasSabado: worker.horasSabado,
+            horasDomingo: worker.horasDomingo,
+            deslocDia: worker.deslocDia,
+            deslocExtra: worker.deslocExtra,
+            deslocSabado: worker.deslocSabado,
+            deslocDomingo: worker.deslocDomingo,
+            diasTrabalhados: worker.diasTrabalhados,
+            diasFerias: worker.diasFerias,
+            faltasSemRemun: worker.faltasSemRemun,
+            diasBaixa: worker.diasBaixa
+          }
         });
 
         return {
