@@ -1434,13 +1434,23 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
       const f=headers.find(h=>c.includes(norm(h)));
       if(f)m[k]=f; // Retorna o header ORIGINAL (ex: "Deslocação Normal")
 
-      // 🐛 DEBUG: Log especial para displacement
+      // 🐛 DEBUG: Log especial para displacement e projectShifted
       if(k === 'displacementNormal') {
         console.log('🔍 buildAutoMap - displacementNormal:', {
           key: k,
           possibleNames: c,
           foundHeader: f,
           allHeadersNormalized: headers.map(h => `${h} → ${norm(h)}`).slice(0, 15)
+        });
+      }
+      if(k === 'projectShifted') {
+        console.log('🔍 buildAutoMap - projectShifted (coluna AH):', {
+          key: k,
+          possibleNames: c,
+          foundHeader: f,
+          allHeaders: headers.slice(30, 35).map(h => `"${h}" → "${norm(h)}"`),
+          columnAH_index: 33,
+          columnAH_name: headers[33]
         });
       }
     };
@@ -1763,11 +1773,15 @@ const handleCatalog = (file) => {
     if (projects.length > 1) {
       const overtimeValue = val('overtimeCalc') || val('overtimeStart') || '';
       const overtimeProject = val('projectShifted'); // Coluna AH - obra das horas extra
+      const allKeys = Object.keys(r);
+      const relevantColumns = allKeys.slice(30, 40).map(k => `${k}: "${r[k]}"`);
       console.log(`📊 expandRow: Dividindo "${projectColumn}" em ${projects.length} obras:`, {
         projects,
         overtimeValue,
         overtimeProject,
-        note: 'Horas extra vão para a obra especificada em projectShifted (coluna AH)'
+        overtimeProjectColumnName: map['projectShifted'],
+        note: 'Horas extra vão para a obra especificada em projectShifted (coluna AH)',
+        columnsAround30to40: relevantColumns
       });
     }
 
