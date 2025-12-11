@@ -3780,30 +3780,45 @@ const MonthlyReportView = ({ timeEntries, people }) => {
   }
 />
 
-      {/* Tabela Principal */}
+      {/* Tabela Principal - NOVO LAYOUT DETALHADO */}
       <Card className="p-4">
         <div className="overflow-auto rounded-xl border dark:border-slate-800">
-          <table className="min-w-full text-sm">
+          <table className="min-w-full text-xs">
             <thead className="bg-slate-50 dark:bg-slate-900/50">
               <tr>
-                <th className="px-3 py-2 text-left">Colaborador</th>
-                <th className="px-3 py-2 text-center">Dias Úteis</th>
-                <th className="px-3 py-2 text-center">Dias trabalhados</th>
-                <th className="px-3 py-2 text-center">Faltas</th>
-                <th className="px-3 py-2 text-center">Férias</th>
-                <th className="px-3 py-2 text-center">Baixa</th>
-                <th className="px-3 py-2 text-center">Horas Extra (h)</th>
-                <th className="px-3 py-2 text-center">FDS (h)</th>
-                <th className="px-3 py-2 text-center">Feriado (h)</th>
-                <th className="px-3 py-2 text-center">Horas deslocadas (h)</th>
-                <th className="px-3 py-2 text-center">Presença</th>
-                <th className="px-3 py-2"></th>
+                <th rowSpan={2} className="px-2 py-2 text-left border-r dark:border-slate-700 sticky left-0 bg-slate-50 dark:bg-slate-900/50 z-10">NOME</th>
+                <th colSpan={5} className="px-2 py-1 text-center border-r dark:border-slate-700 bg-blue-50 dark:bg-blue-900/20">HORAS</th>
+                <th colSpan={5} className="px-2 py-1 text-center border-r dark:border-slate-700 bg-amber-50 dark:bg-amber-900/20">DESLOCADO</th>
+                <th colSpan={7} className="px-2 py-1 text-center border-r dark:border-slate-700 bg-rose-50 dark:bg-rose-900/20">DEDUÇÕES</th>
+                <th rowSpan={2} className="px-2 py-2"></th>
+              </tr>
+              <tr>
+                {/* HORAS */}
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Dia</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Noite</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Extra</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Sáb.</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Dom.</th>
+                {/* DESLOCADO */}
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Dia</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Noite</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Extra</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Sáb.</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Dom.</th>
+                {/* DEDUÇÕES */}
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Nº DIAS</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">FÉRIAS</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">FALTAS s/REMUN</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">FALTAS c/REMUN</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">FALTAS INJUSTIF</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">BAIXA</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">ALMOÇO</th>
               </tr>
             </thead>
             <tbody>
               {stats.length === 0 && (
                 <tr>
-                  <td colSpan="12" className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={19} className="px-3 py-8 text-center text-slate-500">
                     Sem registos para este mês
                   </td>
                 </tr>
@@ -3814,41 +3829,36 @@ const MonthlyReportView = ({ timeEntries, people }) => {
                   key={worker.name}
                   className="border-t dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50"
                 >
-                  <td className="px-3 py-2 font-medium">{worker.name}</td>
-                  <td className="px-3 py-2 text-center">{worker.workDays}</td>
-                  <td className="px-3 py-2 text-center">{worker.daysWorked}</td>
-                  <td className="px-3 py-2 text-center">
-  {worker.absences > 0 ? (
-    <div>
-      <div>{worker.absences} dia{worker.absences > 1 ? 's' : ''}</div>
-      <div className="text-xs text-slate-500">
-        ({worker.totalAbsenceHours || 0}h)
-      </div>
-    </div>
-  ) : '—'}
-</td>
-                  <td className="px-3 py-2 text-center">{worker.holidays || '—'}</td>
-                  <td className="px-3 py-2 text-center">{worker.sickLeave || '—'}</td>
-                  <td className="px-3 py-2 text-center">{worker.totalOvertime || '—'}</td>
-                  <td className="px-3 py-2 text-center">{worker.totalOvertimeWeekend || '—'}</td>
-                  <td className="px-3 py-2 text-center">{worker.feriadoHours || '—'}</td>
-                  <td className="px-3 py-2 text-center">{worker.deslocHours || '—'}</td>
-                  <td className="px-3 py-2 text-center">
-                    <Badge
-                      tone={
-                        parseInt(worker.presence) >= 95
-                          ? 'emerald'
-                          : parseInt(worker.presence) >= 80
-                          ? 'amber'
-                          : 'rose'
-                      }
-                    >
-                      {worker.presence}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-2 text-right">
+                  {/* NOME */}
+                  <td className="px-2 py-2 font-medium text-xs border-r dark:border-slate-700 sticky left-0 bg-white dark:bg-slate-950">{worker.name}</td>
+
+                  {/* HORAS (Trabalho Normal) */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">—</td> {/* Dia */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">—</td> {/* Noite */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">{worker.horasExtra || '—'}</td> {/* Extra */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">{worker.horasSabado || '—'}</td> {/* Sáb. */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700 bg-blue-50/30 dark:bg-blue-900/10">{worker.horasDomingo || '—'}</td> {/* Dom. */}
+
+                  {/* DESLOCADO */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">{worker.deslocDia || '—'}</td> {/* Dia */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">—</td> {/* Noite */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">{worker.deslocExtra || '—'}</td> {/* Extra */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">{worker.deslocSabado || '—'}</td> {/* Sáb. */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700 bg-amber-50/30 dark:bg-amber-900/10">{worker.deslocDomingo || '—'}</td> {/* Dom. */}
+
+                  {/* DEDUÇÕES */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">{worker.diasTrabalhados || '—'}</td> {/* Nº DIAS */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">{worker.diasFerias || '—'}</td> {/* FÉRIAS */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">{worker.faltasSemRemun || '—'}</td> {/* FALTAS s/REMUN */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">—</td> {/* FALTAS c/REMUN */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">—</td> {/* FALTAS INJUSTIF */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">{worker.diasBaixa || '—'}</td> {/* BAIXA */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700 bg-rose-50/30 dark:bg-rose-900/10">—</td> {/* ALMOÇO */}
+
+                  {/* Ver Detalhes */}
+                  <td className="px-2 py-2 text-right">
                     <Button variant="secondary" size="sm" onClick={() => setSelectedWorker(worker.name)}>
-                      Ver Detalhes
+                      👁️
                     </Button>
                   </td>
                 </tr>
