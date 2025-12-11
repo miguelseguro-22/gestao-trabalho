@@ -1865,20 +1865,21 @@ const handleCatalog = (file) => {
     let template = (val('template') || 'Trabalho Normal').trim();
     
     // ✅ NORMALIZAR TEMPLATES
-    if (template.includes('Trabalho') || template.includes('Normal') || template.includes('normal')) {
-      template = 'Trabalho Normal';
+    // Importante: ordem de prioridade - mais específico primeiro!
+    if (template.includes('Fim') || template.includes('FDS') || template.includes('semana') || template.includes('Feriado')) {
+      template = 'Trabalho - Fim de Semana/Feriado';
     } else if (template.includes('Férias') || template.includes('ferias')) {
       template = 'Férias';
     } else if (template.includes('Baixa') || template.includes('baixa')) {
       template = 'Baixa';
     } else if (template.includes('Falta') || template.includes('falta')) {
       template = 'Falta';
-    } else if (template.includes('Fim') || template.includes('FDS') || template.includes('semana')) {
-      template = 'Trabalho FDS';
     } else if (template.includes('Deslocad') || template.includes('deslocad')) {
       template = 'Trabalho Deslocado';
     } else if (template.includes('Feriad') || template.includes('feriad')) {
-      template = 'Feriado';
+      template = 'Trabalho - Fim de Semana/Feriado';
+    } else if (template.includes('Trabalho') || template.includes('Normal') || template.includes('normal')) {
+      template = 'Trabalho Normal';
     }
     const worker = val('worker');
     const rawDate = val('date') || val('weekendStart') || val('overtimeStart') || val('holidayStart');
@@ -1914,12 +1915,13 @@ const handleCatalog = (file) => {
       return d ? d.getDay() === 0 || d.getDay() === 6 : false;
     })();
 
+    // 🔧 AUTO-DETECÇÃO: Se a data é fim de semana OU feriado, converter para template correcto
     if (isWeekendDate && template === 'Trabalho Normal') {
-      template = 'Trabalho FDS';
+      template = 'Trabalho - Fim de Semana/Feriado';
     }
 
     if (isFeriadoFlag) {
-      template = 'Feriado';
+      template = 'Trabalho - Fim de Semana/Feriado';
     }
 
     const pickNormalProject = () => baseProject || weekendProject || shiftedProject || val('project');
@@ -1934,29 +1936,33 @@ const handleCatalog = (file) => {
       hours = hours || 0;
       overtime = extraHours || toNumber(val('overtimeStart') && val('overtimeEnd') ? calculateHoursDiff(val('overtimeStart'), val('overtimeEnd')) : 0);
 
-    } else if (template.includes('Fim') || template.includes('FDS') || template.includes('semana')) {
-      // FIM DE SEMANA
+    } else if (template.includes('Fim') || template.includes('FDS') || template.includes('semana') || template.includes('Feriado')) {
+      // FIM DE SEMANA / FERIADO
       project = pickWeekendProject();
       supervisor = val('supervisorWeekend') || val('supervisor');
 
-      // 🔧 FIX: Calcular horas de FDS a partir de weekendStart e weekendEnd se weekendCalc não existir
+      // ✅ PRIORIDADE: Coluna AQ (Horas FDS) primeiro, depois calcular se não existir
+      const weekendCalcValue = toNumber(val('weekendCalc'));
       const calculatedWeekendHours = (val('weekendStart') && val('weekendEnd'))
         ? toNumber(calculateHoursDiff(val('weekendStart'), val('weekendEnd')))
         : 0;
-      hours = weekendHours || calculatedWeekendHours || hours || 0;
+
+      // Prioridade: weekendCalc (AQ) → calculado → hours base
+      hours = weekendCalcValue || calculatedWeekendHours || hours || 0;
 
       // 🐛 DEBUG: Log de horas FDS
-      if (hours > 0) {
-        console.log('📅 Weekend hours detected:', {
-          date,
-          project,
-          weekendCalc: val('weekendCalc'),
-          weekendStart: val('weekendStart'),
-          weekendEnd: val('weekendEnd'),
-          calculatedWeekendHours,
-          finalHours: hours
-        });
-      }
+      console.log('📅 FDS/Feriado hours:', {
+        date,
+        template,
+        project,
+        weekendCalc_AQ: val('weekendCalc'),
+        weekendCalcValue,
+        weekendStart: val('weekendStart'),
+        weekendEnd: val('weekendEnd'),
+        calculatedWeekendHours,
+        finalHours: hours,
+        note: 'Horas FDS vêm da coluna AQ (Horas FDS) prioritariamente'
+      });
 
     } else if (template.includes('Deslocad') || template.includes('deslocad')) {
       // TRABALHO DESLOCADO
