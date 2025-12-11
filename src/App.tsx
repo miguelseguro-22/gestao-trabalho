@@ -1430,8 +1430,16 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     const m={};
     const pick=k=>{
       const c=AUTO_KEYS[k]||[];
-      // Encontra o header ORIGINAL que, quando normalizado, faz match
-      const f=headers.find(h=>c.includes(norm(h)));
+      // 🔧 FIX CRÍTICO: Respeitar ordem de prioridade na lista AUTO_KEYS
+      // Percorrer padrões por ordem e encontrar o primeiro header que faz match
+      let f = null;
+      for (const pattern of c) {
+        const match = headers.find(h => norm(h) === pattern);
+        if (match) {
+          f = match;
+          break; // Parar no primeiro match (mais prioritário)
+        }
+      }
       if(f)m[k]=f; // Retorna o header ORIGINAL (ex: "Deslocação Normal")
 
       // 🐛 DEBUG: Log especial para displacement e projectShifted
