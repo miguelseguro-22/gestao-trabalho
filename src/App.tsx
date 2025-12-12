@@ -3359,6 +3359,26 @@ const MonthlyReportView = ({ timeEntries, people }) => {
   const monthInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedWorker, setSelectedWorker] = useState(null);
 
+  // 🆕 Ordem customizada dos colaboradores
+  const [workerOrder, setWorkerOrder] = useState(() => {
+    try {
+      const saved = localStorage.getItem('monthlyReport_workerOrder');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // 🆕 Drag and drop state
+  const [draggedWorker, setDraggedWorker] = useState(null);
+
+  // 🆕 Guardar ordem no localStorage
+  useEffect(() => {
+    if (workerOrder.length > 0) {
+      localStorage.setItem('monthlyReport_workerOrder', JSON.stringify(workerOrder));
+    }
+  }, [workerOrder]);
+
   const monthCycleLabel = useMemo(() => {
     const base = new Date(`${selectedMonth}-01T00:00:00`);
     if (Number.isNaN(base.getTime())) return 'Período';
@@ -3681,6 +3701,90 @@ const MonthlyReportView = ({ timeEntries, people }) => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [timeEntries, selectedMonth]);
 
+  // 🆕 Aplicar ordem customizada
+  const sortedStats = useMemo(() => {
+    if (workerOrder.length === 0) {
+      return stats;
+    }
+
+    // Separar trabalhadores na ordem e trabalhadores novos
+    const ordered = [];
+    const unordered = [];
+
+    stats.forEach(worker => {
+      const index = workerOrder.indexOf(worker.name);
+      if (index !== -1) {
+        ordered[index] = worker;
+      } else {
+        unordered.push(worker);
+      }
+    });
+
+    // Remover buracos do array ordered
+    const filtered = ordered.filter(Boolean);
+
+    // Juntar trabalhadores ordenados + novos trabalhadores (alfabético)
+    return [...filtered, ...unordered.sort((a, b) => a.name.localeCompare(b.name))];
+  }, [stats, workerOrder]);
+
+  // 🆕 Atualizar workerOrder quando aparecem novos trabalhadores
+  useEffect(() => {
+    const currentNames = stats.map(s => s.name);
+    const hasNewWorkers = currentNames.some(name => !workerOrder.includes(name));
+
+    if (hasNewWorkers || workerOrder.length === 0) {
+      // Adicionar novos trabalhadores ao final da ordem
+      const newOrder = [...workerOrder];
+      currentNames.forEach(name => {
+        if (!newOrder.includes(name)) {
+          newOrder.push(name);
+        }
+      });
+      setWorkerOrder(newOrder);
+    }
+  }, [stats]);
+
+  // 🆕 Handlers de drag-and-drop
+  const handleDragStart = (e, workerName) => {
+    setDraggedWorker(workerName);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e, targetWorkerName) => {
+    e.preventDefault();
+
+    if (!draggedWorker || draggedWorker === targetWorkerName) {
+      setDraggedWorker(null);
+      return;
+    }
+
+    // Reordenar
+    const newOrder = [...workerOrder];
+    const draggedIndex = newOrder.indexOf(draggedWorker);
+    const targetIndex = newOrder.indexOf(targetWorkerName);
+
+    if (draggedIndex !== -1 && targetIndex !== -1) {
+      // Remover da posição antiga
+      newOrder.splice(draggedIndex, 1);
+      // Inserir na posição nova
+      const finalTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      newOrder.splice(finalTargetIndex, 0, draggedWorker);
+
+      setWorkerOrder(newOrder);
+    }
+
+    setDraggedWorker(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedWorker(null);
+  };
+
   // Detalhe do colaborador selecionado
   const workerDetail = useMemo(() => {
     if (!selectedWorker) return null;
@@ -3816,7 +3920,7 @@ const MonthlyReportView = ({ timeEntries, people }) => {
               </tr>
             </thead>
             <tbody>
-              {stats.length === 0 && (
+              {sortedStats.length === 0 && (
                 <tr>
                   <td colSpan={19} className="px-3 py-8 text-center text-slate-500">
                     Sem registos para este mês
@@ -3824,13 +3928,25 @@ const MonthlyReportView = ({ timeEntries, people }) => {
                 </tr>
               )}
 
-              {stats.map((worker) => (
+              {sortedStats.map((worker) => (
                 <tr
                   key={worker.name}
-                  className="border-t dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, worker.name)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, worker.name)}
+                  onDragEnd={handleDragEnd}
+                  className={`border-t dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-move transition-opacity ${
+                    draggedWorker === worker.name ? 'opacity-50' : ''
+                  }`}
                 >
                   {/* NOME */}
-                  <td className="px-2 py-2 font-medium text-xs border-r dark:border-slate-700 sticky left-0 bg-white dark:bg-slate-950">{worker.name}</td>
+                  <td className="px-2 py-2 font-medium text-xs border-r dark:border-slate-700 sticky left-0 bg-white dark:bg-slate-950">
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400 cursor-grab active:cursor-grabbing">⋮⋮</span>
+                      <span>{worker.name}</span>
+                    </div>
+                  </td>
 
                   {/* HORAS (Trabalho Normal) */}
                   <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">—</td> {/* Dia */}
