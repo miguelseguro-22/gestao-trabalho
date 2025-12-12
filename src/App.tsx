@@ -4966,6 +4966,7 @@ const MultiWorkTimesheetForm = ({
   projectNames = [],
   supervisorNames = [],
   auth,
+  setModal,
   onCancel
 }) => {
   // 🆕 STEP 1: Escolha de template (se não for edição)
@@ -5154,9 +5155,7 @@ const MultiWorkTimesheetForm = ({
           {/* Férias */}
           <button
             onClick={() => {
-              setSelectedTemplate('Férias');
-              // Para outros templates, usar o formulário simples
-              alert('Por favor use o formulário tradicional para Férias, Baixa e Falta');
+              setModal({ name: 'add-time', initial: { date: initial?.date || todayISO(), template: 'Férias' } });
             }}
             className="rounded-2xl border-2 p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-slate-200 dark:border-slate-700"
           >
@@ -5170,8 +5169,7 @@ const MultiWorkTimesheetForm = ({
           {/* Baixa */}
           <button
             onClick={() => {
-              setSelectedTemplate('Baixa');
-              alert('Por favor use o formulário tradicional para Férias, Baixa e Falta');
+              setModal({ name: 'add-time', initial: { date: initial?.date || todayISO(), template: 'Baixa' } });
             }}
             className="rounded-2xl border-2 p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-slate-200 dark:border-slate-700"
           >
@@ -5185,8 +5183,7 @@ const MultiWorkTimesheetForm = ({
           {/* Falta */}
           <button
             onClick={() => {
-              setSelectedTemplate('Falta');
-              alert('Por favor use o formulário tradicional para Férias, Baixa e Falta');
+              setModal({ name: 'add-time', initial: { date: initial?.date || todayISO(), template: 'Falta' } });
             }}
             className="rounded-2xl border-2 p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-slate-200 dark:border-slate-700"
           >
@@ -8148,7 +8145,7 @@ function TimesheetsView() {
 
           // 🔧 FIX: Se existem registos, mostra detalhes; caso contrário, abre formulário de seleção de template
           setModal({
-            name: hasEntries ? "day-details" : "add-time",
+            name: hasEntries ? "day-details" : "multi-work-time",
             dateISO: iso,
             initial: hasEntries ? undefined : { date: iso }
           });
@@ -8784,6 +8781,7 @@ function TableMaterials() {
     projectNames={projectNames}
     supervisorNames={supervisorNames}
     auth={auth}
+    setModal={setModal}
     onSubmit={(data) => {
       addTimeEntry(data);
     }}
