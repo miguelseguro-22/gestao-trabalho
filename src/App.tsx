@@ -4177,7 +4177,7 @@ const MonthlyReportView = ({ timeEntries, people }) => {
         </div>
       </Card>
 
-      {/* Modal de Detalhe do Colaborador */}
+      {/* Modal de Detalhe do Colaborador - REDESENHADO */}
       <Modal
         open={!!selectedWorker}
         title={`Registos de ${selectedWorker} — ${new Date(selectedMonth + '-01').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' })}`}
@@ -4185,101 +4185,200 @@ const MonthlyReportView = ({ timeEntries, people }) => {
         wide
       >
         {workerDetail && (
-          <div className="space-y-4">
-            {/* Resumo */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="rounded-xl border p-3 dark:border-slate-800">
-                <div className="text-xs text-slate-500">Dias Trabalhados</div>
-                <div className="text-2xl font-semibold mt-1">{workerDetail.daysWorked}</div>
+          <div className="space-y-6">
+            {/* 📊 Métricas Expandidas */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+              <div className="rounded-xl border p-3 dark:border-slate-800 bg-emerald-50 dark:bg-emerald-900/10">
+                <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Dias</div>
+                <div className="text-2xl font-bold mt-1 text-emerald-700 dark:text-emerald-300">{workerDetail.daysWorked}</div>
               </div>
-              <div className="rounded-xl border p-3 dark:border-slate-800">
-                <div className="text-xs text-slate-500">Horas Totais</div>
-                <div className="text-2xl font-semibold mt-1">{workerDetail.totalHours}h</div>
+              <div className="rounded-xl border p-3 dark:border-slate-800 bg-blue-50 dark:bg-blue-900/10">
+                <div className="text-xs text-blue-600 dark:text-blue-400 font-medium">Horas</div>
+                <div className="text-2xl font-bold mt-1 text-blue-700 dark:text-blue-300">{workerDetail.totalHours}h</div>
               </div>
-              <div className="rounded-xl border p-3 dark:border-slate-800">
-                <div className="text-xs text-slate-500">Horas Extra</div>
-                <div className="text-2xl font-semibold mt-1">{workerDetail.totalOvertime}h</div>
+              <div className="rounded-xl border p-3 dark:border-slate-800 bg-purple-50 dark:bg-purple-900/10">
+                <div className="text-xs text-purple-600 dark:text-purple-400 font-medium">Extra</div>
+                <div className="text-2xl font-bold mt-1 text-purple-700 dark:text-purple-300">{workerDetail.horasExtra || 0}h</div>
               </div>
-              <div className="rounded-xl border p-3 dark:border-slate-800">
-                <div className="text-xs text-slate-500">Presença</div>
-                <div className="text-2xl font-semibold mt-1">{workerDetail.presence}</div>
+              <div className="rounded-xl border p-3 dark:border-slate-800 bg-orange-50 dark:bg-orange-900/10">
+                <div className="text-xs text-orange-600 dark:text-orange-400 font-medium">FDS</div>
+                <div className="text-2xl font-bold mt-1 text-orange-700 dark:text-orange-300">{workerDetail.horasFDS || 0}h</div>
+              </div>
+              <div className="rounded-xl border p-3 dark:border-slate-800 bg-red-50 dark:bg-red-900/10">
+                <div className="text-xs text-red-600 dark:text-red-400 font-medium">Feriado</div>
+                <div className="text-2xl font-bold mt-1 text-red-700 dark:text-red-300">{workerDetail.horasFeriado || 0}h</div>
+              </div>
+              <div className="rounded-xl border p-3 dark:border-slate-800 bg-amber-50 dark:bg-amber-900/10">
+                <div className="text-xs text-amber-600 dark:text-amber-400 font-medium">Desloc.</div>
+                <div className="text-2xl font-bold mt-1 text-amber-700 dark:text-amber-300">{workerDetail.deslocDia || 0}h</div>
+              </div>
+              <div className="rounded-xl border p-3 dark:border-slate-800 bg-sky-50 dark:bg-sky-900/10">
+                <div className="text-xs text-sky-600 dark:text-sky-400 font-medium">Férias</div>
+                <div className="text-2xl font-bold mt-1 text-sky-700 dark:text-sky-300">{workerDetail.diasFerias || 0}</div>
+              </div>
+              <div className="rounded-xl border p-3 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/10">
+                <div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Presença</div>
+                <div className="text-2xl font-bold mt-1 text-slate-700 dark:text-slate-300">{workerDetail.presence}</div>
               </div>
             </div>
 
-            {/* Tabela de Registos */}
-            <div className="overflow-auto rounded-xl border dark:border-slate-800">
-              <table className="min-w-full text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-900/50">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Data</th>
-                    <th className="px-3 py-2 text-left">Tipo</th>
-                    <th className="px-3 py-2 text-left">Obra</th>
-                    <th className="px-3 py-2 text-right">Horas</th>
-                    <th className="px-3 py-2 text-right">Extra</th>
-                    <th className="px-3 py-2 text-right">FDS (h)</th>
-                    <th className="px-3 py-2 text-right">Feriado (h)</th>
-                    <th className="px-3 py-2 text-right">Deslocadas (h)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {workerDetail.entries
-                    .sort((a, b) => (b.date || b.periodStart || '').localeCompare(a.date || a.periodStart || ''))
-                    .map((entry) => {
-                      const hours = Number(entry.hours) || 0;
-                      const overtime = Number(entry.overtime) || 0;
-                      const entryDate = new Date(entry.date);
-                      const dayOfWeek = entryDate.getDay(); // 0=Dom, 6=Sáb
-                      const isSaturday = dayOfWeek === 6;
-                      const isSunday = dayOfWeek === 0;
-                      const isDisplaced = entry.displacement === 'Sim' || String(entry.template || '').toLowerCase().includes('desloc');
-                      const isFeriadoTpl = String(entry.template || '').toLowerCase().includes('feriado');
-                      const isFimSemanaTpl = String(entry.template || '').toLowerCase().includes('fim');
+            {/* 🏗️ Top Obras */}
+            {(() => {
+              const projectStats = {};
+              workerDetail.entries.forEach(entry => {
+                const project = entry.project || 'Sem Obra';
+                if (!projectStats[project]) {
+                  projectStats[project] = { hours: 0, days: 0 };
+                }
+                projectStats[project].hours += Number(entry.hours) || 0;
+                projectStats[project].days += 1;
+              });
+              const topProjects = Object.entries(projectStats)
+                .sort((a, b) => b[1].hours - a[1].hours)
+                .slice(0, 5);
 
-                      // 🔧 FIX: Separar FDS (Sábado) de Feriado (Domingo/Feriado)
-                      // Sábado com template FDS/Feriado → FDS (h)
-                      const fdsHours = isSaturday && (isFimSemanaTpl || isFeriadoTpl) ? hours : 0;
-                      // Domingo OU Feriado (mas NÃO Sábado) com template FDS/Feriado → Feriado (h)
-                      const feriadoHours = !isSaturday && (isSunday || isFeriadoTpl) && (isFimSemanaTpl || isFeriadoTpl) ? hours : 0;
-                      // 🔧 FIX: Horas deslocadas = 8h por dia deslocado (não as horas reais)
-                      const deslocHours = isDisplaced ? 8 : 0;
+              return topProjects.length > 0 && (
+                <div className="rounded-xl border p-4 dark:border-slate-800">
+                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                    🏗️ Top 5 Obras
+                  </h3>
+                  <div className="space-y-2">
+                    {topProjects.map(([project, stats], idx) => (
+                      <div key={project} className="flex items-center gap-3">
+                        <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-xs font-bold text-blue-600 dark:text-blue-400">
+                          {idx + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{project}</div>
+                          <div className="text-xs text-slate-500">{stats.days} dias • {stats.hours}h</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-semibold">{stats.hours}h</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
-                      return (
-                      <tr key={entry.id} className="border-t dark:border-slate-800">
-                        <td className="px-3 py-2">
-                          {entry.template === 'Trabalho Normal' || entry.template === 'Falta'
-                            ? fmtDate(entry.date)
-                            : `${fmtDate(entry.periodStart)} → ${fmtDate(entry.periodEnd)}`}
-                        </td>
-                        <td className="px-3 py-2">
-                          <Badge
-                            tone={
-                              entry.template === 'Trabalho Normal'
-                                ? 'emerald'
-                                : entry.template === 'Férias'
-                                ? 'blue'
-                                : entry.template === 'Baixa'
-                                ? 'rose'
-                                : 'amber'
-                            }
-                          >
-                            {entry.template}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-2">{entry.project || '—'}</td>
-                        <td className="px-3 py-2 text-right">
-  {entry.template === 'Falta'
-    ? `${entry.hours || 8}h (falta)`
-    : entry.hours || '—'}
-</td>
-<td className="px-3 py-2 text-right">{entry.overtime || '—'}</td>
-                        <td className="px-3 py-2 text-right">{fdsHours || '—'}</td>
-                        <td className="px-3 py-2 text-right">{feriadoHours || '—'}</td>
-                        <td className="px-3 py-2 text-right">{deslocHours || '—'}</td>
-                      </tr>
-                    );
-                    })}
-                </tbody>
-              </table>
+            {/* 📅 Timeline de Registos com Agrupamento Semanal */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                📅 Timeline de Atividades
+              </h3>
+
+              {(() => {
+                // Agrupar por semana
+                const byWeek = {};
+                workerDetail.entries
+                  .sort((a, b) => (a.date || a.periodStart || '').localeCompare(b.date || b.periodStart || ''))
+                  .forEach(entry => {
+                    const date = new Date(entry.date || entry.periodStart);
+                    if (isNaN(date.getTime())) return;
+
+                    const weekStart = new Date(date);
+                    weekStart.setDate(date.getDate() - date.getDay() + 1); // Segunda-feira
+                    const weekKey = weekStart.toISOString().slice(0, 10);
+
+                    if (!byWeek[weekKey]) {
+                      byWeek[weekKey] = [];
+                    }
+                    byWeek[weekKey].push(entry);
+                  });
+
+                return Object.entries(byWeek).map(([weekStart, entries]) => {
+                  const start = new Date(weekStart);
+                  const end = new Date(start);
+                  end.setDate(start.getDate() + 6);
+
+                  const weekTotals = {
+                    hours: 0,
+                    overtime: 0,
+                    fds: 0,
+                    feriado: 0,
+                    desloc: 0
+                  };
+
+                  entries.forEach(e => {
+                    const hours = Number(e.hours) || 0;
+                    const overtime = Number(e.overtime) || 0;
+                    const entryDate = new Date(e.date);
+                    const dayOfWeek = entryDate.getDay();
+                    const isSaturday = dayOfWeek === 6;
+                    const isSunday = dayOfWeek === 0;
+                    const isDisplaced = e.displacement === 'Sim';
+                    const isFDS = String(e.template || '').toLowerCase().includes('fim');
+                    const isFeriado = String(e.template || '').toLowerCase().includes('feriado');
+
+                    weekTotals.hours += hours;
+                    weekTotals.overtime += overtime;
+                    if (isSaturday && (isFDS || isFeriado)) weekTotals.fds += hours;
+                    if ((isSunday || isFeriado) && !isSaturday) weekTotals.feriado += hours;
+                    if (isDisplaced) weekTotals.desloc += 8;
+                  });
+
+                  return (
+                    <div key={weekStart} className="rounded-xl border dark:border-slate-800 overflow-hidden">
+                      <div className="bg-slate-50 dark:bg-slate-900/50 px-4 py-2 flex items-center justify-between">
+                        <div className="font-medium text-sm">
+                          {start.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })} → {end.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })}
+                        </div>
+                        <div className="flex gap-3 text-xs">
+                          {weekTotals.hours > 0 && <span className="text-blue-600 dark:text-blue-400">{weekTotals.hours}h</span>}
+                          {weekTotals.overtime > 0 && <span className="text-purple-600 dark:text-purple-400">+{weekTotals.overtime}h</span>}
+                          {weekTotals.fds > 0 && <span className="text-orange-600 dark:text-orange-400">FDS {weekTotals.fds}h</span>}
+                          {weekTotals.feriado > 0 && <span className="text-red-600 dark:text-red-400">Fer {weekTotals.feriado}h</span>}
+                        </div>
+                      </div>
+                      <div className="divide-y dark:divide-slate-800">
+                        {entries.map(entry => {
+                          const hours = Number(entry.hours) || 0;
+                          const overtime = Number(entry.overtime) || 0;
+                          const entryDate = new Date(entry.date);
+                          const dayOfWeek = entryDate.getDay();
+                          const isSaturday = dayOfWeek === 6;
+                          const isSunday = dayOfWeek === 0;
+                          const isDisplaced = entry.displacement === 'Sim';
+                          const isFDS = String(entry.template || '').toLowerCase().includes('fim');
+                          const isFeriado = String(entry.template || '').toLowerCase().includes('feriado');
+
+                          return (
+                            <div key={entry.id} className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                              <div className="flex items-start gap-3">
+                                <div className="text-xs text-slate-500 dark:text-slate-400 w-20 flex-shrink-0">
+                                  {fmtDate(entry.date)}
+                                </div>
+                                <Badge
+                                  tone={
+                                    entry.template === 'Trabalho Normal' ? 'emerald'
+                                    : entry.template === 'Férias' ? 'blue'
+                                    : entry.template === 'Baixa' ? 'rose'
+                                    : 'amber'
+                                  }
+                                >
+                                  {entry.template}
+                                </Badge>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-medium truncate">{entry.project || '—'}</div>
+                                  {entry.supervisor && <div className="text-xs text-slate-500">Enc: {entry.supervisor}</div>}
+                                </div>
+                                <div className="flex gap-2 text-xs">
+                                  {hours > 0 && <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">{hours}h</span>}
+                                  {overtime > 0 && <span className="px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">+{overtime}h</span>}
+                                  {isSaturday && (isFDS || isFeriado) && <span className="px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">FDS</span>}
+                                  {((isSunday || isFeriado) && !isSaturday) && <span className="px-2 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">Feriado</span>}
+                                  {isDisplaced && <span className="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">Desloc</span>}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
 
             {/* Botão de Exportar */}
