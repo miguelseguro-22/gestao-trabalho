@@ -3375,13 +3375,16 @@ const MonthlyReportView = ({ timeEntries, people }) => {
   // 🆕 Workers adicionados manualmente (para mostrar mesmo sem registos)
   const [manuallyAddedWorkers, setManuallyAddedWorkers] = useState([]);
   const [showAddWorkerDropdown, setShowAddWorkerDropdown] = useState(false);
+  const [newWorkerName, setNewWorkerName] = useState('');
   const addWorkerDropdownRef = useRef(null);
+  const newWorkerInputRef = useRef(null);
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (addWorkerDropdownRef.current && !addWorkerDropdownRef.current.contains(event.target)) {
         setShowAddWorkerDropdown(false);
+        setNewWorkerName('');
       }
     };
     if (showAddWorkerDropdown) {
@@ -3389,6 +3392,29 @@ const MonthlyReportView = ({ timeEntries, people }) => {
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showAddWorkerDropdown]);
+
+  // Focar input quando abrir
+  useEffect(() => {
+    if (showAddWorkerDropdown && newWorkerInputRef.current) {
+      newWorkerInputRef.current.focus();
+    }
+  }, [showAddWorkerDropdown]);
+
+  // Adicionar novo colaborador
+  const handleAddNewWorker = () => {
+    const name = newWorkerName.trim();
+    if (!name) return;
+
+    // Verificar se já existe
+    if (sortedStats.find(s => s.name === name)) {
+      alert('Este colaborador já existe na tabela');
+      return;
+    }
+
+    setManuallyAddedWorkers([...manuallyAddedWorkers, name]);
+    setNewWorkerName('');
+    setShowAddWorkerDropdown(false);
+  };
 
   // 🆕 Guardar ordem no localStorage
   useEffect(() => {
@@ -3969,27 +3995,45 @@ const MonthlyReportView = ({ timeEntries, people }) => {
         </Button>
 
         {showAddWorkerDropdown && (
-          <div className="absolute right-0 mt-2 w-64 rounded-xl border bg-white dark:bg-slate-900 dark:border-slate-700 shadow-lg z-20 max-h-64 overflow-auto">
-            <div className="p-2">
-              {allWorkerNames
-                .filter(name => !sortedStats.find(s => s.name === name))
-                .map(name => (
-                  <button
-                    key={name}
-                    onClick={() => {
-                      setManuallyAddedWorkers([...manuallyAddedWorkers, name]);
-                      setShowAddWorkerDropdown(false);
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                  >
-                    {name}
-                  </button>
-                ))}
-              {allWorkerNames.filter(name => !sortedStats.find(s => s.name === name)).length === 0 && (
-                <div className="px-3 py-2 text-sm text-slate-500 text-center">
-                  Todos os colaboradores já estão na tabela
-                </div>
-              )}
+          <div className="absolute right-0 mt-2 w-80 rounded-xl border bg-white dark:bg-slate-900 dark:border-slate-700 shadow-lg z-20 p-4">
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Nome do Colaborador
+                </label>
+                <input
+                  ref={newWorkerInputRef}
+                  type="text"
+                  value={newWorkerName}
+                  onChange={(e) => setNewWorkerName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddNewWorker();
+                    }
+                  }}
+                  placeholder="Digite o nome do novo colaborador..."
+                  className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    setShowAddWorkerDropdown(false);
+                    setNewWorkerName('');
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleAddNewWorker}
+                  disabled={!newWorkerName.trim()}
+                  className="px-3 py-1.5 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Adicionar
+                </button>
+              </div>
             </div>
           </div>
         )}
