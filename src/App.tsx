@@ -4968,6 +4968,10 @@ const MultiWorkTimesheetForm = ({
   auth,
   onCancel
 }) => {
+  // 🆕 STEP 1: Escolha de template (se não for edição)
+  const [step, setStep] = useState(initial?.template ? 2 : 1);
+  const [selectedTemplate, setSelectedTemplate] = useState(initial?.template || '');
+
   const [date, setDate] = useState(initial?.date || todayISO());
   const [works, setWorks] = useState([
     {
@@ -5125,8 +5129,106 @@ const MultiWorkTimesheetForm = ({
     onCancel();
   };
 
+  // 🆕 STEP 1: Seleção de Template
+  if (step === 1) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-slate-600 dark:text-slate-400">Escolha um modelo</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {/* Horas */}
+          <button
+            onClick={() => {
+              setSelectedTemplate('Trabalho Normal');
+              setStep(2);
+            }}
+            className="rounded-2xl border-2 p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            style={{ borderColor: '#00A9B8' }}
+          >
+            <div className="text-2xl mb-2">⏰</div>
+            <div className="font-semibold text-slate-900 dark:text-white">Horas</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Obra + Encarregado + Horas
+            </div>
+          </button>
+
+          {/* Férias */}
+          <button
+            onClick={() => {
+              setSelectedTemplate('Férias');
+              // Para outros templates, usar o formulário simples
+              alert('Por favor use o formulário tradicional para Férias, Baixa e Falta');
+            }}
+            className="rounded-2xl border-2 p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-slate-200 dark:border-slate-700"
+          >
+            <div className="text-2xl mb-2">🏖️</div>
+            <div className="font-semibold text-slate-900 dark:text-white">Férias</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Período de férias
+            </div>
+          </button>
+
+          {/* Baixa */}
+          <button
+            onClick={() => {
+              setSelectedTemplate('Baixa');
+              alert('Por favor use o formulário tradicional para Férias, Baixa e Falta');
+            }}
+            className="rounded-2xl border-2 p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-slate-200 dark:border-slate-700"
+          >
+            <div className="text-2xl mb-2">🏥</div>
+            <div className="font-semibold text-slate-900 dark:text-white">Baixa</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Período de baixa médica
+            </div>
+          </button>
+
+          {/* Falta */}
+          <button
+            onClick={() => {
+              setSelectedTemplate('Falta');
+              alert('Por favor use o formulário tradicional para Férias, Baixa e Falta');
+            }}
+            className="rounded-2xl border-2 p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-slate-200 dark:border-slate-700"
+          >
+            <div className="text-2xl mb-2">❌</div>
+            <div className="font-semibold text-slate-900 dark:text-white">Falta</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Data da falta
+            </div>
+          </button>
+        </div>
+
+        {/* Botão Voltar */}
+        <div className="flex gap-3 pt-4">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 rounded-xl border-2 py-3 font-semibold transition-colors"
+            style={{
+              borderColor: '#E5ECEF',
+              color: '#64748b'
+            }}
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 🆕 STEP 2: Formulário de Horas
   return (
     <div className="space-y-4">
+      {/* Botão Voltar para Step 1 */}
+      {!initial?.id && (
+        <button
+          onClick={() => setStep(1)}
+          className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1"
+        >
+          ← Voltar à seleção
+        </button>
+      )}
+
       {/* Data */}
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
