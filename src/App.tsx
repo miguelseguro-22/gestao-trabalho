@@ -3351,7 +3351,7 @@ const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
 // ============================================================
 // 📊 RELATÓRIO MENSAL DE COLABORADORES (ADMIN)
 // ============================================================
-const MonthlyReportView = ({ timeEntries, people }) => {
+const MonthlyReportView = ({ timeEntries, people, setModal }) => {
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -4344,7 +4344,7 @@ const MonthlyReportView = ({ timeEntries, people }) => {
                           const isFeriado = String(entry.template || '').toLowerCase().includes('feriado');
 
                           return (
-                            <div key={entry.id} className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                            <div key={entry.id} className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 group">
                               <div className="flex items-start gap-3">
                                 <div className="text-xs text-slate-500 dark:text-slate-400 w-20 flex-shrink-0">
                                   {fmtDate(entry.date)}
@@ -4370,6 +4370,13 @@ const MonthlyReportView = ({ timeEntries, people }) => {
                                   {((isSunday || isFeriado) && !isSaturday) && <span className="px-2 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">Feriado</span>}
                                   {isDisplaced && <span className="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">Desloc</span>}
                                 </div>
+                                <button
+                                  onClick={() => setModal({ name: 'add-time', initial: entry })}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400"
+                                  title="Editar registo"
+                                >
+                                  ✏️
+                                </button>
                               </div>
                             </div>
                           );
@@ -9022,7 +9029,7 @@ function TableMaterials() {
           )}
 
           {view === "monthly-report" && auth?.role === "admin" && (
-            <MonthlyReportView timeEntries={timeEntries} people={people} />
+            <MonthlyReportView timeEntries={timeEntries} people={people} setModal={setModal} />
           )}
 
           {/* 🆕 VIEW PENDENTES */}
