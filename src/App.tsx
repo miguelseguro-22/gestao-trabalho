@@ -3601,6 +3601,43 @@ const MonthlyReportView = ({ timeEntries, people }) => {
         return;
       }
 
+      // 🔧 FIX: Processar templates FDS/Feriado mesmo com data inválida
+      const isFeriadoTpl = String(entry.template || '').toLowerCase().includes('feriado');
+      const isFimSemanaTpl = String(entry.template || '').toLowerCase().includes('fim');
+
+      // Se for template de fim de semana/feriado, processar horas mesmo sem data válida
+      if (isFimSemanaTpl || isFeriadoTpl) {
+        const dayInfo = addDay(worker, entry.date);
+        const isDesloc = entry.displacement === 'Sim' || String(entry.template || '').toLowerCase().includes('desloc');
+
+        if (!isDesloc) {
+          // Se temos data válida, usar dia da semana
+          if (dayInfo) {
+            const entryDate = new Date(dayInfo.ymd);
+            const dayOfWeek = entryDate.getDay();
+            const isSaturday = dayOfWeek === 6;
+            const isSunday = dayOfWeek === 0;
+            const isHoliday = holidaySet.has(dayInfo.ymd);
+
+            if (isSaturday) {
+              worker.horasFDS += hours;
+            } else if (isSunday || isHoliday) {
+              worker.horasFeriado += hours;
+            } else {
+              // Dia da semana com template FDS/Feriado → FDS por defeito
+              worker.horasFDS += hours;
+            }
+          } else {
+            // Data inválida mas template FDS/Feriado → FDS por defeito
+            worker.horasFDS += hours;
+          }
+        }
+
+        worker.totalHours += hours;
+        worker.totalOvertime += overtime;
+        return;
+      }
+
       const dayInfo = addDay(worker, entry.date);
       if (!dayInfo) return;
       const { rec, ymd } = dayInfo;
@@ -3614,8 +3651,6 @@ const MonthlyReportView = ({ timeEntries, people }) => {
 
       // 🔧 FIX: Verificar o campo displacement em vez do template
       const isDesloc = entry.displacement === 'Sim' || String(entry.template || '').toLowerCase().includes('desloc');
-      const isFeriadoTpl = String(entry.template || '').toLowerCase().includes('feriado');
-      const isFimSemanaTpl = String(entry.template || '').toLowerCase().includes('fim');
 
       // ✅ HORAS (Trabalho Normal)
       if (!isDesloc) {
@@ -3625,11 +3660,11 @@ const MonthlyReportView = ({ timeEntries, people }) => {
 
         // 🔧 FIX: Separar FDS (Sábado) de Feriado (Domingo/Feriado)
         // Se Sábado → FDS (h)
-        if (isSaturday && (isWeekend || isFimSemanaTpl || isFeriadoTpl)) {
+        if (isSaturday && isWeekend) {
           worker.horasFDS += hours;
         }
         // Se Domingo OU Feriado → Feriado (h)
-        if ((isSunday || isHoliday) && (isWeekend || isFimSemanaTpl || isFeriadoTpl)) {
+        if ((isSunday || isHoliday) && isWeekend) {
           worker.horasFeriado += hours;
         }
       }
