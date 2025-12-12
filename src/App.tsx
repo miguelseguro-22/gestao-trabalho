@@ -3721,6 +3721,23 @@ const MonthlyReportView = ({ timeEntries, people }) => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [timeEntries, selectedMonth]);
 
+  // 🆕 Lista de todos os colaboradores únicos do sistema
+  const allWorkerNames = useMemo(() => {
+    const names = new Set();
+    // Adicionar de people se existir
+    if (people && Array.isArray(people)) {
+      people.forEach(p => names.add(p.name));
+    }
+    // Adicionar de timeEntries
+    timeEntries.forEach(entry => {
+      const name = entry.worker || entry.supervisor || entry.colaborador;
+      if (name && name !== 'Desconhecido') {
+        names.add(name);
+      }
+    });
+    return Array.from(names).sort();
+  }, [people, timeEntries]);
+
   // 🆕 Aplicar ordem customizada + workers adicionados manualmente
   const sortedStats = useMemo(() => {
     // Adicionar workers manualmente adicionados (se não existirem já)
@@ -3954,21 +3971,21 @@ const MonthlyReportView = ({ timeEntries, people }) => {
         {showAddWorkerDropdown && (
           <div className="absolute right-0 mt-2 w-64 rounded-xl border bg-white dark:bg-slate-900 dark:border-slate-700 shadow-lg z-20 max-h-64 overflow-auto">
             <div className="p-2">
-              {people
-                .filter(p => !sortedStats.find(s => s.name === p.name))
-                .map(person => (
+              {allWorkerNames
+                .filter(name => !sortedStats.find(s => s.name === name))
+                .map(name => (
                   <button
-                    key={person.name}
+                    key={name}
                     onClick={() => {
-                      setManuallyAddedWorkers([...manuallyAddedWorkers, person.name]);
+                      setManuallyAddedWorkers([...manuallyAddedWorkers, name]);
                       setShowAddWorkerDropdown(false);
                     }}
                     className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                   >
-                    {person.name}
+                    {name}
                   </button>
                 ))}
-              {people.filter(p => !sortedStats.find(s => s.name === p.name)).length === 0 && (
+              {allWorkerNames.filter(name => !sortedStats.find(s => s.name === name)).length === 0 && (
                 <div className="px-3 py-2 text-sm text-slate-500 text-center">
                   Todos os colaboradores já estão na tabela
                 </div>
