@@ -3372,6 +3372,24 @@ const MonthlyReportView = ({ timeEntries, people }) => {
   // 🆕 Drag and drop state
   const [draggedWorker, setDraggedWorker] = useState(null);
 
+  // 🆕 Workers adicionados manualmente (para mostrar mesmo sem registos)
+  const [manuallyAddedWorkers, setManuallyAddedWorkers] = useState([]);
+  const [showAddWorkerDropdown, setShowAddWorkerDropdown] = useState(false);
+  const addWorkerDropdownRef = useRef(null);
+
+  // Fechar dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (addWorkerDropdownRef.current && !addWorkerDropdownRef.current.contains(event.target)) {
+        setShowAddWorkerDropdown(false);
+      }
+    };
+    if (showAddWorkerDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showAddWorkerDropdown]);
+
   // 🆕 Guardar ordem no localStorage
   useEffect(() => {
     if (workerOrder.length > 0) {
@@ -3441,8 +3459,8 @@ const MonthlyReportView = ({ timeEntries, people }) => {
           horasDia: 0,        // Vazio (nunca preenchido)
           horasNoite: 0,      // Vazio (nunca preenchido)
           horasExtra: 0,      // Coluna L - Horas Extra Normal
-          horasSabado: 0,     // Horas FDS se dia = Sábado
-          horasDomingo: 0,    // Horas FDS se dia = Domingo
+          horasFDS: 0,        // FDS (h) - Horas trabalhadas em Sábado
+          horasFeriado: 0,    // Feriado (h) - Horas trabalhadas em Domingo ou Feriado
           // DESLOCADO
           deslocDia: 0,       // 8h por dia deslocado
           deslocNoite: 0,     // Vazio (não usado)
@@ -3579,12 +3597,14 @@ const MonthlyReportView = ({ timeEntries, people }) => {
         // horasExtra = coluna L (Horas Extra Normal)
         worker.horasExtra += overtime;
 
-        // horasSabado/horasDomingo = Horas FDS se dia = Sábado/Domingo
+        // 🔧 FIX: Separar FDS (Sábado) de Feriado (Domingo/Feriado)
+        // Se Sábado → FDS (h)
         if (isSaturday && (isWeekend || isFimSemanaTpl || isFeriadoTpl)) {
-          worker.horasSabado += hours;
+          worker.horasFDS += hours;
         }
-        if (isSunday && (isWeekend || isFimSemanaTpl || isFeriadoTpl)) {
-          worker.horasDomingo += hours;
+        // Se Domingo OU Feriado → Feriado (h)
+        if ((isSunday || isHoliday) && (isWeekend || isFimSemanaTpl || isFeriadoTpl)) {
+          worker.horasFeriado += hours;
         }
       }
 
@@ -3701,17 +3721,58 @@ const MonthlyReportView = ({ timeEntries, people }) => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [timeEntries, selectedMonth]);
 
-  // 🆕 Aplicar ordem customizada
+  // 🆕 Aplicar ordem customizada + workers adicionados manualmente
   const sortedStats = useMemo(() => {
+    // Adicionar workers manualmente adicionados (se não existirem já)
+    const allStats = [...stats];
+    manuallyAddedWorkers.forEach(workerName => {
+      if (!allStats.find(s => s.name === workerName)) {
+        allStats.push({
+          name: workerName,
+          days: new Map(),
+          horasDia: 0,
+          horasNoite: 0,
+          horasExtra: 0,
+          horasFDS: 0,
+          horasFeriado: 0,
+          deslocDia: 0,
+          deslocNoite: 0,
+          deslocExtra: 0,
+          deslocSabado: 0,
+          deslocDomingo: 0,
+          diasTrabalhados: 0,
+          diasFerias: 0,
+          bancoHoras: 0,
+          faltasComRemun: 0,
+          faltasSemRemun: 0,
+          faltasInjustif: 0,
+          diasBaixa: 0,
+          totalHours: 0,
+          totalOvertime: 0,
+          totalOvertimeWeekend: 0,
+          feriadoHours: 0,
+          deslocHours: 0,
+          totalAbsenceHours: 0,
+          holidays: 0,
+          sickLeave: 0,
+          absences: 0,
+          entries: [],
+          workDays: 0,
+          daysWorked: 0,
+          presence: '0%',
+        });
+      }
+    });
+
     if (workerOrder.length === 0) {
-      return stats;
+      return allStats;
     }
 
     // Separar trabalhadores na ordem e trabalhadores novos
     const ordered = [];
     const unordered = [];
 
-    stats.forEach(worker => {
+    allStats.forEach(worker => {
       const index = workerOrder.indexOf(worker.name);
       if (index !== -1) {
         ordered[index] = worker;
@@ -3725,7 +3786,7 @@ const MonthlyReportView = ({ timeEntries, people }) => {
 
     // Juntar trabalhadores ordenados + novos trabalhadores (alfabético)
     return [...filtered, ...unordered.sort((a, b) => a.name.localeCompare(b.name))];
-  }, [stats, workerOrder]);
+  }, [stats, workerOrder, manuallyAddedWorkers]);
 
   // 🆕 Atualizar workerOrder quando aparecem novos trabalhadores
   useEffect(() => {
@@ -3880,6 +3941,42 @@ const MonthlyReportView = ({ timeEntries, people }) => {
       <Button variant="secondary" onClick={exportCSV}>
         <Icon name="download" /> Exportar CSV
       </Button>
+
+      {/* 🆕 Botão para adicionar colaborador */}
+      <div className="relative" ref={addWorkerDropdownRef}>
+        <Button
+          variant="secondary"
+          onClick={() => setShowAddWorkerDropdown(!showAddWorkerDropdown)}
+        >
+          👤 Adicionar Colaborador
+        </Button>
+
+        {showAddWorkerDropdown && (
+          <div className="absolute right-0 mt-2 w-64 rounded-xl border bg-white dark:bg-slate-900 dark:border-slate-700 shadow-lg z-20 max-h-64 overflow-auto">
+            <div className="p-2">
+              {people
+                .filter(p => !sortedStats.find(s => s.name === p.name))
+                .map(person => (
+                  <button
+                    key={person.name}
+                    onClick={() => {
+                      setManuallyAddedWorkers([...manuallyAddedWorkers, person.name]);
+                      setShowAddWorkerDropdown(false);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                  >
+                    {person.name}
+                  </button>
+                ))}
+              {people.filter(p => !sortedStats.find(s => s.name === p.name)).length === 0 && (
+                <div className="px-3 py-2 text-sm text-slate-500 text-center">
+                  Todos os colaboradores já estão na tabela
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   }
 />
@@ -3901,8 +3998,8 @@ const MonthlyReportView = ({ timeEntries, people }) => {
                 <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Dia</th>
                 <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Noite</th>
                 <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Extra</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Sáb.</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Dom.</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">FDS (h)</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Feriado (h)</th>
                 {/* DESLOCADO */}
                 <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Dia</th>
                 <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Noite</th>
@@ -3952,8 +4049,8 @@ const MonthlyReportView = ({ timeEntries, people }) => {
                   <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">—</td> {/* Dia */}
                   <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">—</td> {/* Noite */}
                   <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">{worker.horasExtra || '—'}</td> {/* Extra */}
-                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">{worker.horasSabado || '—'}</td> {/* Sáb. */}
-                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700 bg-blue-50/30 dark:bg-blue-900/10">{worker.horasDomingo || '—'}</td> {/* Dom. */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">{worker.horasFDS || '—'}</td> {/* FDS (h) */}
+                  <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700 bg-blue-50/30 dark:bg-blue-900/10">{worker.horasFeriado || '—'}</td> {/* Feriado (h) */}
 
                   {/* DESLOCADO */}
                   <td className="px-2 py-1 text-center text-xs border-r dark:border-slate-700">{worker.deslocDia || '—'}</td> {/* Dia */}
@@ -4035,13 +4132,18 @@ const MonthlyReportView = ({ timeEntries, people }) => {
                       const hours = Number(entry.hours) || 0;
                       const overtime = Number(entry.overtime) || 0;
                       const entryDate = new Date(entry.date);
-                      const isWeekend = entryDate.getDay() === 0 || entryDate.getDay() === 6;
-                      const isHoliday = String(entry.template || '').toLowerCase().includes('feriado');
+                      const dayOfWeek = entryDate.getDay(); // 0=Dom, 6=Sáb
+                      const isSaturday = dayOfWeek === 6;
+                      const isSunday = dayOfWeek === 0;
                       const isDisplaced = entry.displacement === 'Sim' || String(entry.template || '').toLowerCase().includes('desloc');
-                      const isFimSemana = String(entry.template || '').toLowerCase().includes('fim');
+                      const isFeriadoTpl = String(entry.template || '').toLowerCase().includes('feriado');
+                      const isFimSemanaTpl = String(entry.template || '').toLowerCase().includes('fim');
 
-                      const fdsHours = (isWeekend || isFimSemana) ? hours + overtime : 0;
-                      const feriadoHours = isHoliday ? hours + overtime : 0;
+                      // 🔧 FIX: Separar FDS (Sábado) de Feriado (Domingo/Feriado)
+                      // Sábado com template FDS/Feriado → FDS (h)
+                      const fdsHours = isSaturday && (isFimSemanaTpl || isFeriadoTpl) ? hours : 0;
+                      // Domingo OU Feriado (mas NÃO Sábado) com template FDS/Feriado → Feriado (h)
+                      const feriadoHours = !isSaturday && (isSunday || isFeriadoTpl) && (isFimSemanaTpl || isFeriadoTpl) ? hours : 0;
                       // 🔧 FIX: Horas deslocadas = 8h por dia deslocado (não as horas reais)
                       const deslocHours = isDisplaced ? 8 : 0;
 
