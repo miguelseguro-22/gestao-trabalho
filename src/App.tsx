@@ -5010,7 +5010,83 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
 // ============================================================
 const ProfileView = ({ timeEntries, auth, people }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [detailModal, setDetailModal] = useState(null); // ⬅️ ADICIONA ISTO
+  const [detailModal, setDetailModal] = useState(null);
+
+  // 🔐 Estados para mudança de password
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  // 🔐 Função para mudar password
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess(false);
+
+    // Validações
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError('Preencha todos os campos');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('As passwords não coincidem');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError('A nova password deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    try {
+      // Verificar se supabase está disponível
+      if (!window.supabase) {
+        setPasswordError('Supabase não está disponível. Funcionalidade apenas disponível online.');
+        return;
+      }
+
+      // Primeiro, tentar fazer login com a password atual para verificar
+      const { error: signInError } = await window.supabase.auth.signInWithPassword({
+        email: auth.email,
+        password: currentPassword
+      });
+
+      if (signInError) {
+        setPasswordError('Password atual incorreta');
+        return;
+      }
+
+      // Mudar a password
+      const { error: updateError } = await window.supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (updateError) {
+        setPasswordError(updateError.message);
+        return;
+      }
+
+      // Sucesso!
+      setPasswordSuccess(true);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+
+      // Esconder form após 2 segundos
+      setTimeout(() => {
+        setShowPasswordForm(false);
+        setPasswordSuccess(false);
+      }, 2000);
+
+    } catch (err) {
+      setPasswordError('Erro ao mudar password: ' + err.message);
+    }
+  };
+
   // Filtrar registos do ano do colaborador
   const myEntries = useMemo(() => {
     return timeEntries.filter((t) => {
@@ -5653,6 +5729,118 @@ const ProfileView = ({ timeEntries, auth, people }) => {
             </tbody>
           </table>
         </div>
+      </Card>
+
+      {/* 🔐 Card de Mudança de Password */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-100">
+              Segurança da Conta
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Gerir password e definições de segurança
+            </p>
+          </div>
+          {!showPasswordForm && (
+            <Button
+              variant="secondary"
+              onClick={() => setShowPasswordForm(true)}
+            >
+              🔐 Mudar Password
+            </Button>
+          )}
+        </div>
+
+        {showPasswordForm && (
+          <form onSubmit={handleChangePassword} className="mt-4 space-y-4 max-w-md">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                value={auth?.email || ''}
+                disabled
+                className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Password Atual
+              </label>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Digite a password atual"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Nova Password
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Mínimo 6 caracteres"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Confirmar Nova Password
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Digite novamente"
+                required
+              />
+            </div>
+
+            {passwordError && (
+              <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">
+                ❌ {passwordError}
+              </div>
+            )}
+
+            {passwordSuccess && (
+              <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-sm">
+                ✅ Password alterada com sucesso!
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button type="submit" variant="primary">
+                Confirmar Alteração
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setShowPasswordForm(false);
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setConfirmPassword('');
+                  setPasswordError('');
+                  setPasswordSuccess(false);
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        )}
       </Card>
 
       {/* Modal de Detalhes */}
@@ -9427,13 +9615,9 @@ function TableMaterials() {
           </div>
 
           {/* USER INFO */}
-          <div className="px-2 pb-2 space-y-1">
-            <div className="text-xs text-slate-500 dark:text-slate-400">
-              Utilizador: <b className="text-slate-900 dark:text-slate-100">{auth?.name || "—"}</b>
-            </div>
-            <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
-              {ROLE_LABELS[auth?.role as keyof typeof ROLE_LABELS] || "—"}
-            </div>
+          <div className="px-2 pb-2 text-xs text-slate-500 dark:text-slate-400">
+            Utilizador:{" "}
+            <b className="dark:text-slate-200">{auth?.name || "—"}</b>
           </div>
 
           {/* NAV ITEMS */}
