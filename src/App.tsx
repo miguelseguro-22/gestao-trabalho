@@ -2561,7 +2561,7 @@ const PriceCompareModal = ({ open, onClose, suppliers }) => {
 };
 
 const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport }) => {
-  const empty = { id: null, name: '', manager: '', type: 'Eletricidade', family: '' };
+  const empty = { id: null, name: '', manager: '', type: 'Eletricidade', family: '', budget: 0, estimatedHours: 0 };
   const [form, setForm] = useState(empty);
   const [editing, setEditing] = useState(false);
 
@@ -2631,6 +2631,30 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport }) => {
               {uniqueFamilies.map(f => <option key={f} value={f} />)}
             </datalist>
           </label>
+
+          <label className="text-sm">Orçamento (€)
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.budget || ''}
+              onChange={e => setForm({ ...form, budget: parseFloat(e.target.value) || 0 })}
+              placeholder="0.00"
+            />
+          </label>
+
+          <label className="text-sm">Horas Estimadas
+            <input
+              type="number"
+              min="0"
+              step="1"
+              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.estimatedHours || ''}
+              onChange={e => setForm({ ...form, estimatedHours: parseInt(e.target.value) || 0 })}
+              placeholder="0"
+            />
+          </label>
         </div>
 
         <div className="mt-3 flex gap-2 justify-end">
@@ -2649,13 +2673,15 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport }) => {
                 <th className="px-3 py-2 text-left">Diretor</th>
                 <th className="px-3 py-2 text-left">Tipo</th>
                 <th className="px-3 py-2 text-left">Família</th>
+                <th className="px-3 py-2 text-right">Orçamento</th>
+                <th className="px-3 py-2 text-right">Horas Est.</th>
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
             <tbody>
               {projects.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="px-3 py-10 text-center text-slate-500">Sem obras</td>
+                  <td colSpan="7" className="px-3 py-10 text-center text-slate-500">Sem obras</td>
                 </tr>
               )}
 
@@ -2665,6 +2691,12 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport }) => {
                   <td className="px-3 py-2">{p.manager || '—'}</td>
                   <td className="px-3 py-2">{p.type}</td>
                   <td className="px-3 py-2">{p.family || '—'}</td>
+                  <td className="px-3 py-2 text-right font-medium">
+                    {p.budget > 0 ? currency(p.budget) : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {p.estimatedHours > 0 ? `${p.estimatedHours}h` : '—'}
+                  </td>
                   <td className="px-3 py-2 text-right">
                     <Button variant="secondary" size="sm" onClick={() => openReport(p)}>Relatório</Button>{' '}
                     <Button variant="secondary" size="sm" onClick={() => startEdit(p)}>Editar</Button>{' '}
@@ -8607,10 +8639,96 @@ const generatePersonalTimesheetReport = ({ worker, timeEntries, cycle }) => {
   return html;
 };
 
-// 📊 VIEW: RELATÓRIOS DE CUSTOS POR OBRA
-const CostReportsView = ({ timeEntries, projects, people }) => {
-  console.log('🔍 CostReportsView montado', { timeEntriesCount: timeEntries?.length, peopleCount: Object.keys(people || {}).length });
+// 📊 COMPONENTES AUXILIARES: GRÁFICOS E VISUALIZAÇÕES
+const PieChart = ({ data, size = 120 }) => {
+  const total = data.reduce((sum, d) => sum + d.value, 0);
+  if (total === 0) return null;
 
+  let currentAngle = -90;
+  const paths = data.map((d, i) => {
+    const percentage = d.value / total;
+    const angle = percentage * 360;
+    const endAngle = currentAngle + angle;
+
+    const x1 = 60 + 50 * Math.cos((currentAngle * Math.PI) / 180);
+    const y1 = 60 + 50 * Math.sin((currentAngle * Math.PI) / 180);
+    const x2 = 60 + 50 * Math.cos((endAngle * Math.PI) / 180);
+    const y2 = 60 + 50 * Math.sin((endAngle * Math.PI) / 180);
+
+    const largeArc = angle > 180 ? 1 : 0;
+    const path = `M 60 60 L ${x1} ${y1} A 50 50 0 ${largeArc} 1 ${x2} ${y2} Z`;
+
+    currentAngle = endAngle;
+    return { path, color: d.color, label: d.label, value: d.value, percentage: (percentage * 100).toFixed(1) };
+  });
+
+  return (
+    <div className="flex items-center gap-4">
+      <svg width={size} height={size} viewBox="0 0 120 120">
+        {paths.map((p, i) => (
+          <path key={i} d={p.path} fill={p.color} />
+        ))}
+      </svg>
+      <div className="space-y-1 text-xs">
+        {paths.map((p, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div style={{ width: 12, height: 12, backgroundColor: p.color, borderRadius: 2 }} />
+            <span>{p.label}: {p.percentage}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const BarChart = ({ data, maxValue }) => {
+  return (
+    <div className="space-y-2">
+      {data.map((d, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <div className="w-24 text-xs truncate">{d.label}</div>
+          <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-6 relative">
+            <div
+              className="h-full rounded-full transition-all"
+              style={{
+                width: `${(d.value / maxValue) * 100}%`,
+                background: d.color
+              }}
+            />
+          </div>
+          <div className="w-20 text-right text-xs font-medium">{currency(d.value)}</div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const Sparkline = ({ values, width = 60, height = 20, color = '#00A9B8' }) => {
+  if (!values || values.length < 2) return null;
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = max - min || 1;
+
+  const points = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * width;
+    const y = height - ((v - min) / range) * height;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <svg width={width} height={height} className="inline-block">
+      <polyline
+        points={points}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+      />
+    </svg>
+  );
+};
+
+// 📊 VIEW: RELATÓRIOS DE CUSTOS POR OBRA (ADVANCED)
+const CostReportsView = ({ timeEntries, projects, people }) => {
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [selectedProject, setSelectedProject] = useState('all');
   const [startDate, setStartDate] = useState(() => {
@@ -8630,18 +8748,63 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
     return Array.from(new Set(timeEntries.map(t => t.project).filter(Boolean))).sort();
   }, [timeEntries]);
 
+  // Mapa de orçamentos por projeto
+  const projectBudgets = useMemo(() => {
+    const map = new Map();
+    projects.forEach(p => {
+      if (p.name && p.budget) {
+        map.set(p.name, { budget: p.budget, estimatedHours: p.estimatedHours || 0 });
+      }
+    });
+    return map;
+  }, [projects]);
+
+  // Calcular dados do período anterior para comparação
+  const previousPeriodData = useMemo(() => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diff = end.getTime() - start.getTime();
+
+    const prevStart = new Date(start.getTime() - diff);
+    const prevEnd = new Date(end.getTime() - diff);
+
+    const prevStartStr = prevStart.toISOString().slice(0, 10);
+    const prevEndStr = prevEnd.toISOString().slice(0, 10);
+
+    const filtered = timeEntries.filter(t => {
+      if (!isNormalWork(t.template)) return false;
+      if (t.date < prevStartStr || t.date > prevEndStr) return false;
+      if (selectedProject !== 'all' && t.project !== selectedProject) return false;
+      return true;
+    });
+
+    let totalCost = 0;
+    filtered.forEach(entry => {
+      const worker = entry.worker || entry.supervisor || 'Desconhecido';
+      const rates = personRates(people, worker, null);
+      const hours = Number(entry.hours) || 0;
+      const overtime = Number(entry.overtime) || 0;
+      const isWeekend = new Date(entry.date).getDay() === 0 || new Date(entry.date).getDay() === 6;
+      const isFeriado = (entry.template || '').includes('Feriado');
+
+      if (isFeriado || isWeekend) {
+        totalCost += (hours + overtime) * rates.fimSemana;
+      } else {
+        totalCost += hours * rates.normal + overtime * rates.extra;
+      }
+    });
+
+    return { totalCost, count: filtered.length };
+  }, [timeEntries, people, startDate, endDate, selectedProject]);
+
   const costData = useMemo(() => {
     try {
-      console.log('🔍 Calculando costData', { startDate, endDate, selectedProject });
-
       const filtered = timeEntries.filter(t => {
         if (!isNormalWork(t.template)) return false;
         if (t.date < startDate || t.date > endDate) return false;
         if (selectedProject !== 'all' && t.project !== selectedProject) return false;
         return true;
       });
-
-      console.log('🔍 Registos filtrados:', filtered.length);
 
       const byProject = new Map();
 
@@ -8651,7 +8814,18 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
         const rates = personRates(people, worker, null);
 
       if (!byProject.has(project)) {
-        byProject.set(project, { workers: new Map(), total: 0 });
+        const budgetInfo = projectBudgets.get(project) || { budget: 0, estimatedHours: 0 };
+        byProject.set(project, {
+          workers: new Map(),
+          total: 0,
+          totalHours: 0,
+          budget: budgetInfo.budget,
+          estimatedHours: budgetInfo.estimatedHours,
+          horasNormais: 0,
+          horasExtra: 0,
+          horasFDS: 0,
+          horasFeriado: 0
+        });
       }
 
       const projectData = byProject.get(project);
@@ -8668,6 +8842,7 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
           custoFDS: 0,
           custoFeriado: 0,
           custoTotal: 0,
+          totalHoras: 0
         });
       }
 
@@ -8675,7 +8850,6 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
       const hours = Number(entry.hours) || 0;
       const overtime = Number(entry.overtime) || 0;
 
-      // Determinar que tipo de horas são
       const isWeekend = new Date(entry.date).getDay() === 0 || new Date(entry.date).getDay() === 6;
       const template = entry.template || '';
       const isFeriado = template.includes('Feriado');
@@ -8683,38 +8857,131 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
       if (isFeriado) {
         workerData.horasFeriado += hours + overtime;
         workerData.custoFeriado += (hours + overtime) * rates.fimSemana;
+        projectData.horasFeriado += hours + overtime;
       } else if (isWeekend) {
         workerData.horasFDS += hours + overtime;
         workerData.custoFDS += (hours + overtime) * rates.fimSemana;
+        projectData.horasFDS += hours + overtime;
       } else {
         workerData.horasNormais += hours;
         workerData.custoNormal += hours * rates.normal;
+        projectData.horasNormais += hours;
 
         if (overtime > 0) {
           workerData.horasExtra += overtime;
           workerData.custoExtra += overtime * rates.extra;
+          projectData.horasExtra += overtime;
         }
       }
 
+      workerData.totalHoras = workerData.horasNormais + workerData.horasExtra + workerData.horasFDS + workerData.horasFeriado;
       workerData.custoTotal = workerData.custoNormal + workerData.custoExtra + workerData.custoFDS + workerData.custoFeriado;
       projectData.total += workerData.custoTotal;
+      projectData.totalHours += workerData.totalHoras;
     });
 
-      console.log('🔍 Projetos encontrados:', byProject.size);
+      // Calcular KPIs por projeto
+      byProject.forEach((projectData, projectName) => {
+        // Cost Variance (CV) = Budget - Actual Cost
+        projectData.costVariance = projectData.budget > 0 ? projectData.budget - projectData.total : 0;
+        projectData.costVariancePercent = projectData.budget > 0 ?
+          ((projectData.total - projectData.budget) / projectData.budget) * 100 : 0;
+
+        // Cost Performance Index (CPI) = Budget / Actual Cost
+        projectData.cpi = projectData.budget > 0 && projectData.total > 0 ?
+          projectData.budget / projectData.total : 0;
+
+        // Horas extra %
+        projectData.overtimePercent = projectData.totalHours > 0 ?
+          (projectData.horasExtra / projectData.totalHours) * 100 : 0;
+
+        // Status (semáforo)
+        if (projectData.budget > 0) {
+          if (projectData.cpi >= 1) {
+            projectData.status = 'green'; // Sob orçamento
+          } else if (projectData.cpi >= 0.9) {
+            projectData.status = 'yellow'; // Atenção (até 10% sobre)
+          } else {
+            projectData.status = 'red'; // Sobre orçamento (>10%)
+          }
+        } else {
+          projectData.status = 'gray'; // Sem orçamento definido
+        }
+      });
+
       return byProject;
     } catch (error) {
       console.error('❌ Erro ao calcular custos:', error);
       return new Map();
     }
-  }, [timeEntries, people, startDate, endDate, selectedProject]);
+  }, [timeEntries, people, startDate, endDate, selectedProject, projectBudgets]);
 
-  const totalGeral = useMemo(() => {
-    let total = 0;
-    costData.forEach(project => {
-      total += project.total;
+  // Métricas gerais e insights
+  const analytics = useMemo(() => {
+    let totalCost = 0;
+    let totalBudget = 0;
+    let totalHoras = 0;
+    let totalHorasExtra = 0;
+    let projectsOverBudget = 0;
+    let projectsUnderBudget = 0;
+    const insights = [];
+
+    costData.forEach((projectData, projectName) => {
+      totalCost += projectData.total;
+      if (projectData.budget > 0) totalBudget += projectData.budget;
+      totalHoras += projectData.totalHours;
+      totalHorasExtra += projectData.horasExtra;
+
+      if (projectData.status === 'red') projectsOverBudget++;
+      if (projectData.status === 'green') projectsUnderBudget++;
+
+      // Gerar insights automáticos
+      if (projectData.budget > 0 && projectData.costVariancePercent > 10) {
+        insights.push({
+          type: 'warning',
+          project: projectName,
+          message: `está ${Math.abs(projectData.costVariancePercent).toFixed(1)}% sobre o orçamento (${currency(Math.abs(projectData.costVariance))} acima)`
+        });
+      }
+
+      if (projectData.overtimePercent > 25) {
+        insights.push({
+          type: 'warning',
+          project: projectName,
+          message: `tem ${projectData.overtimePercent.toFixed(1)}% de horas extra (indicador de planeamento)`
+        });
+      }
+
+      if (projectData.budget > 0 && projectData.cpi >= 1.1) {
+        insights.push({
+          type: 'success',
+          project: projectName,
+          message: `está ${((projectData.cpi - 1) * 100).toFixed(1)}% abaixo do orçamento (${currency(projectData.costVariance)} poupado)`
+        });
+      }
     });
-    return total;
-  }, [costData]);
+
+    const avgCpi = totalBudget > 0 ? totalBudget / totalCost : 0;
+    const overtimePercent = totalHoras > 0 ? (totalHorasExtra / totalHoras) * 100 : 0;
+    const costChange = previousPeriodData.totalCost > 0 ?
+      ((totalCost - previousPeriodData.totalCost) / previousPeriodData.totalCost) * 100 : 0;
+
+    return {
+      totalCost,
+      totalBudget,
+      totalVariance: totalBudget - totalCost,
+      totalVariancePercent: totalBudget > 0 ? ((totalCost - totalBudget) / totalBudget) * 100 : 0,
+      avgCpi,
+      totalHoras,
+      totalHorasExtra,
+      overtimePercent,
+      projectsOverBudget,
+      projectsUnderBudget,
+      insights,
+      costChange,
+      previousCost: previousPeriodData.totalCost
+    };
+  }, [costData, previousPeriodData]);
 
   const exportProjectPDF = (projectName, projectData) => {
     const workers = Array.from(projectData.workers.values()).sort((a, b) => b.custoTotal - a.custoTotal);
@@ -8989,86 +9256,255 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
         </div>
       </Card>
 
-      {/* Resumo Geral */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Dashboard Executivo - Semáforos de Status */}
+      {analytics.totalBudget > 0 && (
+        <Card className="p-6 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+          <h3 className="text-lg font-bold mb-4">Status Geral das Obras</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center text-white text-xl font-bold">
+                {analytics.projectsUnderBudget}
+              </div>
+              <div>
+                <div className="text-sm text-slate-600 dark:text-slate-400">Obras Dentro do Orçamento</div>
+                <div className="text-xs text-green-600 dark:text-green-400 font-medium">Performance positiva</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-yellow-500 flex items-center justify-center text-white text-xl font-bold">
+                {costData.size - analytics.projectsOverBudget - analytics.projectsUnderBudget}
+              </div>
+              <div>
+                <div className="text-sm text-slate-600 dark:text-slate-400">Obras em Atenção</div>
+                <div className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">Monitorizar custos</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center text-white text-xl font-bold">
+                {analytics.projectsOverBudget}
+              </div>
+              <div>
+                <div className="text-sm text-slate-600 dark:text-slate-400">Obras Sobre Orçamento</div>
+                <div className="text-xs text-red-600 dark:text-red-400 font-medium">Requer ação imediata</div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* KPIs Principais */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #00677F, #005666)' }}>
-          <div className="text-sm opacity-90">Total de Obras</div>
-          <div className="text-4xl font-bold mt-2">{costData.size}</div>
-          <div className="text-sm opacity-80 mt-1">no período selecionado</div>
+          <div className="text-sm opacity-90">Custo Total</div>
+          <div className="text-3xl font-bold mt-2">{currency(analytics.totalCost)}</div>
+          {analytics.previousCost > 0 && (
+            <div className="flex items-center gap-1 mt-2 text-xs">
+              <span className={analytics.costChange > 0 ? 'text-red-200' : 'text-green-200'}>
+                {analytics.costChange > 0 ? '▲' : '▼'} {Math.abs(analytics.costChange).toFixed(1)}%
+              </span>
+              <span className="opacity-80">vs período anterior</span>
+            </div>
+          )}
         </Card>
 
-        <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #00A9B8, #008A96)' }}>
-          <div className="text-sm opacity-90">Custo Total</div>
-          <div className="text-4xl font-bold mt-2">{currency(totalGeral)}</div>
-          <div className="text-sm opacity-80 mt-1">em mão-de-obra</div>
-        </Card>
+        {analytics.totalBudget > 0 && (
+          <>
+            <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #00A9B8, #008A96)' }}>
+              <div className="text-sm opacity-90">CPI Médio</div>
+              <div className="text-3xl font-bold mt-2">{analytics.avgCpi.toFixed(2)}</div>
+              <div className="text-xs opacity-80 mt-2">
+                {analytics.avgCpi >= 1 ? 'Performance positiva' : 'Performance negativa'}
+              </div>
+            </Card>
+
+            <Card className="p-5 text-white" style={{
+              background: analytics.totalVariance >= 0 ?
+                'linear-gradient(to bottom right, #10b981, #059669)' :
+                'linear-gradient(to bottom right, #ef4444, #dc2626)'
+            }}>
+              <div className="text-sm opacity-90">Variação Orçamental</div>
+              <div className="text-3xl font-bold mt-2">{currency(Math.abs(analytics.totalVariance))}</div>
+              <div className="text-xs opacity-80 mt-2">
+                {analytics.totalVariance >= 0 ? 'Poupado' : 'Acima do orçamento'}
+                {' '}({analytics.totalVariancePercent > 0 ? '+' : ''}{analytics.totalVariancePercent.toFixed(1)}%)
+              </div>
+            </Card>
+          </>
+        )}
 
         <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #BE8A3A, #A07430)' }}>
-          <div className="text-sm opacity-90">Custo Médio/Obra</div>
-          <div className="text-4xl font-bold mt-2">{currency(costData.size > 0 ? totalGeral / costData.size : 0)}</div>
-          <div className="text-sm opacity-80 mt-1">por projeto</div>
+          <div className="text-sm opacity-90">Horas Extra</div>
+          <div className="text-3xl font-bold mt-2">{analytics.overtimePercent.toFixed(1)}%</div>
+          <div className="text-xs opacity-80 mt-2">
+            {analytics.totalHorasExtra.toFixed(0)}h de {analytics.totalHoras.toFixed(0)}h totais
+          </div>
         </Card>
       </div>
 
-      {/* Tabelas por Obra */}
-      {Array.from(costData.entries()).map(([projectName, projectData]) => (
-        <Card key={projectName} className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">{projectName}</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Custo Total: <span className="font-bold text-lg" style={{ color: '#00A9B8' }}>{currency(projectData.total)}</span>
-              </p>
-            </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => exportProjectPDF(projectName, projectData)}
-            >
-              Exportar PDF
-            </Button>
-          </div>
-
-          <div className="overflow-auto rounded-xl border dark:border-slate-800">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-900/50">
-                <tr>
-                  <th className="px-3 py-2 text-left">Colaborador</th>
-                  <th className="px-3 py-2 text-right">H. Normais</th>
-                  <th className="px-3 py-2 text-right">Custo</th>
-                  <th className="px-3 py-2 text-right">H. Extra</th>
-                  <th className="px-3 py-2 text-right">Custo</th>
-                  <th className="px-3 py-2 text-right">H. FDS</th>
-                  <th className="px-3 py-2 text-right">Custo</th>
-                  <th className="px-3 py-2 text-right">H. Feriado</th>
-                  <th className="px-3 py-2 text-right">Custo</th>
-                  <th className="px-3 py-2 text-right font-bold">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from(projectData.workers.values())
-                  .sort((a, b) => b.custoTotal - a.custoTotal)
-                  .map(worker => (
-                    <tr key={worker.name} className="border-t dark:border-slate-800">
-                      <td className="px-3 py-2 font-medium">{worker.name}</td>
-                      <td className="px-3 py-2 text-right">{worker.horasNormais.toFixed(1)}h</td>
-                      <td className="px-3 py-2 text-right">{currency(worker.custoNormal)}</td>
-                      <td className="px-3 py-2 text-right">{worker.horasExtra.toFixed(1)}h</td>
-                      <td className="px-3 py-2 text-right">{currency(worker.custoExtra)}</td>
-                      <td className="px-3 py-2 text-right">{worker.horasFDS.toFixed(1)}h</td>
-                      <td className="px-3 py-2 text-right">{currency(worker.custoFDS)}</td>
-                      <td className="px-3 py-2 text-right">{worker.horasFeriado.toFixed(1)}h</td>
-                      <td className="px-3 py-2 text-right">{currency(worker.custoFeriado)}</td>
-                      <td className="px-3 py-2 text-right font-bold" style={{ color: '#00A9B8' }}>
-                        {currency(worker.custoTotal)}
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+      {/* Insights Automáticos */}
+      {analytics.insights.length > 0 && (
+        <Card className="p-6">
+          <h3 className="text-lg font-bold mb-4">Insights e Recomendações</h3>
+          <div className="space-y-2">
+            {analytics.insights.slice(0, 5).map((insight, i) => (
+              <div
+                key={i}
+                className={`flex items-start gap-3 p-3 rounded-lg ${
+                  insight.type === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/20' : 'bg-green-50 dark:bg-green-900/20'
+                }`}
+              >
+                <div className={`text-xl ${insight.type === 'warning' ? 'text-yellow-600' : 'text-green-600'}`}>
+                  {insight.type === 'warning' ? '⚠️' : '✅'}
+                </div>
+                <div className="flex-1">
+                  <span className="font-semibold">{insight.project}</span>
+                  <span className="text-slate-600 dark:text-slate-400"> {insight.message}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
-      ))}
+      )}
+
+      {/* Tabelas por Obra */}
+      {Array.from(costData.entries()).map(([projectName, projectData]) => {
+        const costDistribution = [
+          { label: 'Normal', value: projectData.horasNormais * (projectData.horasNormais > 0 ? projectData.total / projectData.totalHours : 0), color: '#00677F' },
+          { label: 'Extra', value: projectData.horasExtra * (projectData.horasExtra > 0 ? projectData.total / projectData.totalHours : 0), color: '#00A9B8' },
+          { label: 'FDS', value: projectData.horasFDS * (projectData.horasFDS > 0 ? projectData.total / projectData.totalHours : 0), color: '#BE8A3A' },
+          { label: 'Feriado', value: projectData.horasFeriado * (projectData.horasFeriado > 0 ? projectData.total / projectData.totalHours : 0), color: '#8B5CF6' }
+        ].filter(d => d.value > 0);
+
+        return (
+          <Card key={projectName} className="p-6">
+            {/* Header com Semáforo */}
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`w-3 h-3 rounded-full ${
+                    projectData.status === 'green' ? 'bg-green-500' :
+                    projectData.status === 'yellow' ? 'bg-yellow-500' :
+                    projectData.status === 'red' ? 'bg-red-500' : 'bg-gray-400'
+                  }`} />
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">{projectName}</h3>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3">
+                  <div>
+                    <div className="text-xs text-slate-500">Custo Real</div>
+                    <div className="text-lg font-bold" style={{ color: '#00A9B8' }}>{currency(projectData.total)}</div>
+                  </div>
+                  {projectData.budget > 0 && (
+                    <>
+                      <div>
+                        <div className="text-xs text-slate-500">Orçamento</div>
+                        <div className="text-lg font-bold text-slate-600">{currency(projectData.budget)}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500">CPI</div>
+                        <div className={`text-lg font-bold ${projectData.cpi >= 1 ? 'text-green-600' : 'text-red-600'}`}>
+                          {projectData.cpi.toFixed(2)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500">Variação</div>
+                        <div className={`text-lg font-bold ${projectData.costVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {projectData.costVariancePercent > 0 ? '+' : ''}{projectData.costVariancePercent.toFixed(1)}%
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {projectData.budget === 0 && (
+                    <div className="col-span-3">
+                      <div className="text-xs text-slate-400 italic">Sem orçamento definido - define na página Obras</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => exportProjectPDF(projectName, projectData)}
+              >
+                Exportar PDF
+              </Button>
+            </div>
+
+            {/* Gráfico de Distribuição de Custos */}
+            {costDistribution.length > 0 && (
+              <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
+                <h4 className="text-sm font-semibold mb-3">Distribuição de Custos</h4>
+                <PieChart data={costDistribution} />
+              </div>
+            )}
+
+            {/* Tabela de Colaboradores */}
+            <div className="overflow-auto rounded-xl border dark:border-slate-800">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-900/50">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Colaborador</th>
+                    <th className="px-3 py-2 text-right">H. Normais</th>
+                    <th className="px-3 py-2 text-right">Custo</th>
+                    <th className="px-3 py-2 text-right">H. Extra</th>
+                    <th className="px-3 py-2 text-right">Custo</th>
+                    <th className="px-3 py-2 text-right">H. FDS</th>
+                    <th className="px-3 py-2 text-right">Custo</th>
+                    <th className="px-3 py-2 text-right">H. Feriado</th>
+                    <th className="px-3 py-2 text-right">Custo</th>
+                    <th className="px-3 py-2 text-right font-bold">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from(projectData.workers.values())
+                    .sort((a, b) => b.custoTotal - a.custoTotal)
+                    .map(worker => (
+                      <tr key={worker.name} className="border-t dark:border-slate-800">
+                        <td className="px-3 py-2 font-medium">{worker.name}</td>
+                        <td className="px-3 py-2 text-right">{worker.horasNormais.toFixed(1)}h</td>
+                        <td className="px-3 py-2 text-right">{currency(worker.custoNormal)}</td>
+                        <td className="px-3 py-2 text-right">{worker.horasExtra.toFixed(1)}h</td>
+                        <td className="px-3 py-2 text-right">{currency(worker.custoExtra)}</td>
+                        <td className="px-3 py-2 text-right">{worker.horasFDS.toFixed(1)}h</td>
+                        <td className="px-3 py-2 text-right">{currency(worker.custoFDS)}</td>
+                        <td className="px-3 py-2 text-right">{worker.horasFeriado.toFixed(1)}h</td>
+                        <td className="px-3 py-2 text-right">{currency(worker.custoFeriado)}</td>
+                        <td className="px-3 py-2 text-right font-bold" style={{ color: '#00A9B8' }}>
+                          {currency(worker.custoTotal)}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Métricas Adicionais */}
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              <div className="p-2 bg-slate-50 dark:bg-slate-900/50 rounded">
+                <div className="text-slate-500">Total Horas</div>
+                <div className="font-bold text-slate-800 dark:text-slate-200">{projectData.totalHours.toFixed(1)}h</div>
+              </div>
+              <div className="p-2 bg-slate-50 dark:bg-slate-900/50 rounded">
+                <div className="text-slate-500">% Horas Extra</div>
+                <div className={`font-bold ${projectData.overtimePercent > 20 ? 'text-red-600' : 'text-slate-800 dark:text-slate-200'}`}>
+                  {projectData.overtimePercent.toFixed(1)}%
+                </div>
+              </div>
+              <div className="p-2 bg-slate-50 dark:bg-slate-900/50 rounded">
+                <div className="text-slate-500">Custo Médio/Hora</div>
+                <div className="font-bold text-slate-800 dark:text-slate-200">
+                  {currency(projectData.totalHours > 0 ? projectData.total / projectData.totalHours : 0)}
+                </div>
+              </div>
+              <div className="p-2 bg-slate-50 dark:bg-slate-900/50 rounded">
+                <div className="text-slate-500">Colaboradores</div>
+                <div className="font-bold text-slate-800 dark:text-slate-200">{projectData.workers.size}</div>
+              </div>
+            </div>
+          </Card>
+        );
+      })}
 
       {costData.size === 0 && (
         <Card className="p-12 text-center">
