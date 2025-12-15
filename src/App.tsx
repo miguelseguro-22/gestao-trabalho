@@ -7431,6 +7431,7 @@ const CAN = {
   pendingApprovals: new Set(["diretor", "admin"]),
   teamDashboard: new Set(["diretor", "admin"]),
   cloudDiagnostic: new Set(["admin"]), // 🔧 Diagnóstico Cloud - apenas admin
+  "cost-reports": new Set(["diretor", "admin"]), // 🔧 Relatórios de custos por obra
 };
 
 
