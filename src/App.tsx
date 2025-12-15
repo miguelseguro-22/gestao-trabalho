@@ -9427,12 +9427,13 @@ function TableMaterials() {
           </div>
 
           {/* USER INFO */}
-          <div className="px-2 pb-2 text-xs text-slate-500 dark:text-slate-400">
-            Utilizador:{" "}
-            <b className="dark:text-slate-200">{auth?.name || "—"}</b>{" "}
-            ·{" "}
-            {ROLE_LABELS[auth?.role as keyof typeof ROLE_LABELS] ||
-              "—"}
+          <div className="px-2 pb-2 space-y-1">
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              Utilizador: <b className="text-slate-900 dark:text-slate-100">{auth?.name || "—"}</b>
+            </div>
+            <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
+              {ROLE_LABELS[auth?.role as keyof typeof ROLE_LABELS] || "—"}
+            </div>
           </div>
 
           {/* NAV ITEMS */}
