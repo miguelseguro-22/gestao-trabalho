@@ -8606,6 +8606,280 @@ const generatePersonalTimesheetReport = ({ worker, timeEntries, cycle }) => {
   return html;
 };
 
+// 📊 VIEW: RELATÓRIOS DE CUSTOS POR OBRA
+const CostReportsView = ({ timeEntries, projects, people }) => {
+  const [selectedPeriod, setSelectedPeriod] = useState('week');
+  const [selectedProject, setSelectedProject] = useState('all');
+  const [startDate, setStartDate] = useState(() => {
+    const now = new Date();
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - now.getDay() + 1);
+    return monday.toISOString().slice(0, 10);
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const now = new Date();
+    const sunday = new Date(now);
+    sunday.setDate(now.getDate() - now.getDay() + 7);
+    return sunday.toISOString().slice(0, 10);
+  });
+
+  const projectNames = useMemo(() => {
+    return Array.from(new Set(timeEntries.map(t => t.project).filter(Boolean))).sort();
+  }, [timeEntries]);
+
+  const costData = useMemo(() => {
+    const filtered = timeEntries.filter(t => {
+      if (!isNormalWork(t.template)) return false;
+      if (t.date < startDate || t.date > endDate) return false;
+      if (selectedProject !== 'all' && t.project !== selectedProject) return false;
+      return true;
+    });
+
+    const byProject = new Map();
+
+    filtered.forEach(entry => {
+      const project = entry.project || 'Sem Obra';
+      const worker = entry.worker || entry.supervisor || 'Desconhecido';
+      const rates = personRates(people, worker, null);
+
+      if (!byProject.has(project)) {
+        byProject.set(project, { workers: new Map(), total: 0 });
+      }
+
+      const projectData = byProject.get(project);
+
+      if (!projectData.workers.has(worker)) {
+        projectData.workers.set(worker, {
+          name: worker,
+          horasNormais: 0,
+          horasExtra: 0,
+          horasFDS: 0,
+          horasFeriado: 0,
+          custoNormal: 0,
+          custoExtra: 0,
+          custoFDS: 0,
+          custoFeriado: 0,
+          custoTotal: 0,
+        });
+      }
+
+      const workerData = projectData.workers.get(worker);
+      const hours = Number(entry.hours) || 0;
+      const overtime = Number(entry.overtime) || 0;
+
+      // Determinar que tipo de horas são
+      const isWeekend = new Date(entry.date).getDay() === 0 || new Date(entry.date).getDay() === 6;
+      const template = entry.template || '';
+      const isFeriado = template.includes('Feriado');
+
+      if (isFeriado) {
+        workerData.horasFeriado += hours + overtime;
+        workerData.custoFeriado += (hours + overtime) * rates.fimSemana;
+      } else if (isWeekend) {
+        workerData.horasFDS += hours + overtime;
+        workerData.custoFDS += (hours + overtime) * rates.fimSemana;
+      } else {
+        workerData.horasNormais += hours;
+        workerData.custoNormal += hours * rates.normal;
+
+        if (overtime > 0) {
+          workerData.horasExtra += overtime;
+          workerData.custoExtra += overtime * rates.extra;
+        }
+      }
+
+      workerData.custoTotal = workerData.custoNormal + workerData.custoExtra + workerData.custoFDS + workerData.custoFeriado;
+      projectData.total += workerData.custoTotal;
+    });
+
+    return byProject;
+  }, [timeEntries, people, startDate, endDate, selectedProject]);
+
+  const totalGeral = useMemo(() => {
+    let total = 0;
+    costData.forEach(project => {
+      total += project.total;
+    });
+    return total;
+  }, [costData]);
+
+  return (
+    <section className="space-y-4">
+      <PageHeader
+        icon="activity"
+        title="📊 Relatórios de Custos por Obra"
+        subtitle="Análise de custos salariais por projeto e colaborador"
+      />
+
+      {/* Filtros */}
+      <Card className="p-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Período</label>
+            <select
+              value={selectedPeriod}
+              onChange={(e) => {
+                const period = e.target.value;
+                setSelectedPeriod(period);
+
+                const now = new Date();
+                if (period === 'week') {
+                  const monday = new Date(now);
+                  monday.setDate(now.getDate() - now.getDay() + 1);
+                  const sunday = new Date(now);
+                  sunday.setDate(now.getDate() - now.getDay() + 7);
+                  setStartDate(monday.toISOString().slice(0, 10));
+                  setEndDate(sunday.toISOString().slice(0, 10));
+                } else if (period === 'month') {
+                  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+                  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                  setStartDate(firstDay.toISOString().slice(0, 10));
+                  setEndDate(lastDay.toISOString().slice(0, 10));
+                }
+              }}
+              className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+            >
+              <option value="week">Semana Atual</option>
+              <option value="month">Mês Atual</option>
+              <option value="custom">Personalizado</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Data Início</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Data Fim</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Obra</label>
+            <select
+              value={selectedProject}
+              onChange={(e) => setSelectedProject(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+            >
+              <option value="all">Todas as Obras</option>
+              {projectNames.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </Card>
+
+      {/* Resumo Geral */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #00677F, #005666)' }}>
+          <div className="text-sm opacity-90">Total de Obras</div>
+          <div className="text-4xl font-bold mt-2">{costData.size}</div>
+          <div className="text-sm opacity-80 mt-1">no período selecionado</div>
+        </Card>
+
+        <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #00A9B8, #008A96)' }}>
+          <div className="text-sm opacity-90">Custo Total</div>
+          <div className="text-4xl font-bold mt-2">{currency(totalGeral)}</div>
+          <div className="text-sm opacity-80 mt-1">em mão-de-obra</div>
+        </Card>
+
+        <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #BE8A3A, #A07430)' }}>
+          <div className="text-sm opacity-90">Custo Médio/Obra</div>
+          <div className="text-4xl font-bold mt-2">{currency(costData.size > 0 ? totalGeral / costData.size : 0)}</div>
+          <div className="text-sm opacity-80 mt-1">por projeto</div>
+        </Card>
+      </div>
+
+      {/* Tabelas por Obra */}
+      {Array.from(costData.entries()).map(([projectName, projectData]) => (
+        <Card key={projectName} className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">{projectName}</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Custo Total: <span className="font-bold text-lg" style={{ color: '#00A9B8' }}>{currency(projectData.total)}</span>
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                // TODO: Exportar PDF (Fase 4)
+                alert('Exportação PDF em desenvolvimento (Fase 4)');
+              }}
+            >
+              📄 Exportar PDF
+            </Button>
+          </div>
+
+          <div className="overflow-auto rounded-xl border dark:border-slate-800">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-900/50">
+                <tr>
+                  <th className="px-3 py-2 text-left">Colaborador</th>
+                  <th className="px-3 py-2 text-right">H. Normais</th>
+                  <th className="px-3 py-2 text-right">Custo</th>
+                  <th className="px-3 py-2 text-right">H. Extra</th>
+                  <th className="px-3 py-2 text-right">Custo</th>
+                  <th className="px-3 py-2 text-right">H. FDS</th>
+                  <th className="px-3 py-2 text-right">Custo</th>
+                  <th className="px-3 py-2 text-right">H. Feriado</th>
+                  <th className="px-3 py-2 text-right">Custo</th>
+                  <th className="px-3 py-2 text-right font-bold">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from(projectData.workers.values())
+                  .sort((a, b) => b.custoTotal - a.custoTotal)
+                  .map(worker => (
+                    <tr key={worker.name} className="border-t dark:border-slate-800">
+                      <td className="px-3 py-2 font-medium">{worker.name}</td>
+                      <td className="px-3 py-2 text-right">{worker.horasNormais.toFixed(1)}h</td>
+                      <td className="px-3 py-2 text-right">{currency(worker.custoNormal)}</td>
+                      <td className="px-3 py-2 text-right">{worker.horasExtra.toFixed(1)}h</td>
+                      <td className="px-3 py-2 text-right">{currency(worker.custoExtra)}</td>
+                      <td className="px-3 py-2 text-right">{worker.horasFDS.toFixed(1)}h</td>
+                      <td className="px-3 py-2 text-right">{currency(worker.custoFDS)}</td>
+                      <td className="px-3 py-2 text-right">{worker.horasFeriado.toFixed(1)}h</td>
+                      <td className="px-3 py-2 text-right">{currency(worker.custoFeriado)}</td>
+                      <td className="px-3 py-2 text-right font-bold" style={{ color: '#00A9B8' }}>
+                        {currency(worker.custoTotal)}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      ))}
+
+      {costData.size === 0 && (
+        <Card className="p-12 text-center">
+          <div className="text-6xl mb-4">📊</div>
+          <div className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">
+            Sem dados para o período selecionado
+          </div>
+          <div className="text-slate-500 dark:text-slate-400">
+            Ajusta os filtros para ver os relatórios de custos
+          </div>
+        </Card>
+      )}
+    </section>
+  );
+};
+
 // 🔧 VIEW: DIAGNÓSTICO CLOUD
 const CloudDiagnosticView = ({ supabaseActive, cloudReady, cloudStamp, lastSyncTime, isOnline, isSyncing, timeEntries, forceSyncToCloud, forceSyncFromCloud }) => {
   const [testResult, setTestResult] = React.useState<any>(null)
@@ -9647,7 +9921,12 @@ function TableMaterials() {
   {can("obras") && (
     <NavItem id="obras" icon="wrench" label="Obras" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
-  
+
+  {/* 📊 Relatórios de Custos - Diretor e Admin */}
+  {can("obras") && (
+    <NavItem id="cost-reports" icon="activity" label="📊 Custos por Obra" setView={setView} setSidebarOpen={setSidebarOpen} />
+  )}
+
   {/* Colaboradores - Diretor e Admin */}
   {can("people") && (
     <NavItem id="people" icon="user" label="Colaboradores" setView={setView} setSidebarOpen={setSidebarOpen} />
@@ -9803,6 +10082,14 @@ function TableMaterials() {
               setProjects={setProjects}
               uniqueFamilies={uniqueFamilies}
               openReport={openReport}
+            />
+          )}
+
+          {view === "cost-reports" && (
+            <CostReportsView
+              timeEntries={timeEntries}
+              projects={projects}
+              people={people}
             />
           )}
 
