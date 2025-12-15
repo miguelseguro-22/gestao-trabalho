@@ -5044,13 +5044,13 @@ const ProfileView = ({ timeEntries, auth, people }) => {
 
     try {
       // Verificar se supabase está disponível
-      if (!window.supabase) {
+      if (!supabase) {
         setPasswordError('Supabase não está disponível. Funcionalidade apenas disponível online.');
         return;
       }
 
       // Primeiro, tentar fazer login com a password atual para verificar
-      const { error: signInError } = await window.supabase.auth.signInWithPassword({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email: auth.email,
         password: currentPassword
       });
@@ -5061,7 +5061,7 @@ const ProfileView = ({ timeEntries, auth, people }) => {
       }
 
       // Mudar a password
-      const { error: updateError } = await window.supabase.auth.updateUser({
+      const { error: updateError } = await supabase.auth.updateUser({
         password: newPassword
       });
 
