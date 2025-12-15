@@ -9630,51 +9630,8 @@ function TableMaterials() {
     <NavItem id="monthly-report" icon="calendar" label="Relatório Mensal" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
 
-  {/* 🔧 Admin vê diagnóstico cloud */}
-  {can("cloudDiagnostic") && (
-    <NavItem id="cloud-diagnostic" icon="activity" label="🔧 Diagnóstico Cloud" setView={setView} setSidebarOpen={setSidebarOpen} />
-  )}
-
   {/* Timesheets - TODOS veem */}
   <NavItem id="timesheets" icon="clock" label="Timesheets" setView={setView} setSidebarOpen={setSidebarOpen} />
-
-  {/* 🆕 Equipa - Encarregado, Diretor, Admin */}
-  {can("teamDashboard") && (
-    <NavItem id="team-dashboard" icon="user" label="👥 Minha Equipa" setView={setView} setSidebarOpen={setSidebarOpen} />
-  )}
-
-  {/* 🆕 Pendentes - Encarregado, Diretor, Admin */}
-  {can("pendingApprovals") && (() => {
-    const pendingCount = timeEntries.filter(t =>
-      t.status === 'pending' &&
-      t.template === 'Trabalho Normal' &&
-      (auth?.role === 'admin' || t.supervisor === auth?.name)
-    ).length;
-
-    return (
-      <button
-        onClick={() => {
-          setView('pending-approvals');
-          // Fecha sidebar no mobile após navegação
-          setSidebarOpen(false);
-        }}
-        className="flex items-center justify-between w-full px-3 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition"
-      >
-        <div className="flex items-center gap-3">
-          <Icon name="clock" className="w-5 h-5" />
-          <span className="text-sm">Registos Pendentes</span>
-        </div>
-        {pendingCount > 0 && (
-          <span
-            className="px-2 py-0.5 rounded-full text-xs font-bold"
-            style={{ background: '#f59e0b', color: '#fff' }}
-          >
-            {pendingCount}
-          </span>
-        )}
-      </button>
-    );
-  })()}
 
   {/* Materiais - Encarregado, Diretor, Admin */}
   {can("materials") && (
@@ -9805,40 +9762,6 @@ function TableMaterials() {
 
           {view === "monthly-report" && auth?.role === "admin" && (
             <MonthlyReportView timeEntries={timeEntries} people={people} setPeople={setPeople} setModal={setModal} />
-          )}
-
-          {/* 🆕 VIEW PENDENTES */}
-          {view === "pending-approvals" && (
-            <PendingApprovalsView
-              timeEntries={timeEntries}
-              auth={auth}
-              onApprove={(entry) => handleApproveTimesheet(entry)}
-              onReject={(entry) => setModal({name: 'reject-timesheet', entry})}
-            />
-          )}
-
-          {/* 🆕 VIEW EQUIPA */}
-          {view === "team-dashboard" && (
-            <SupervisorDashboardView
-              timeEntries={timeEntries}
-              people={people}
-              auth={auth}
-            />
-          )}
-
-          {/* 🔧 VIEW DIAGNÓSTICO CLOUD */}
-          {view === "cloud-diagnostic" && (
-            <CloudDiagnosticView
-              supabaseActive={supabaseActive}
-              cloudReady={cloudReady}
-              cloudStamp={cloudStamp}
-              lastSyncTime={lastSyncTime}
-              isOnline={isOnline}
-              isSyncing={isSyncing}
-              timeEntries={timeEntries}
-              forceSyncToCloud={forceSyncToCloud}
-              forceSyncFromCloud={forceSyncFromCloud}
-            />
           )}
 
           {view === "timesheets" && <TimesheetsView />}
