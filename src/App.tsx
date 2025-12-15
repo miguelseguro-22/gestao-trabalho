@@ -3075,60 +3075,207 @@ const LogisticsView = ({ orders, moveOrderStatus, setOrderPatch, setModal, downl
   );
 };
 
-const PeopleView = ({ people, setPeople }) => {
-  const empty = { name:'', rates:{ normal:12.5, extra:18.75, deslocada:15.6, fimSemana:25 }, email:'', phone:'' };
-  const [form,setForm]=useState(empty);
-  const [editing,setEditing]=useState(null);
+const PeopleView = ({ people, setPeople, timeEntries }) => {
+  // Calcular taxas automaticamente baseado na hora normal
+  const calculateRates = (normalRate) => {
+    const normal = Number(normalRate) || 0;
+    const extra = normal * 1.2;
+    const sabado = normal * 1.5;
+    const domingo = normal * 2;
+    const deslocada = normal * 0.5;
+    const extraDesloc = extra * 1.5;
+    const sabDesloc = sabado * 1.5;
+    const domDesloc = domingo * 1.5;
+
+    return {
+      normal,
+      extra,
+      sabado,
+      domingo,
+      deslocada,
+      extraDesloc,
+      sabDesloc,
+      domDesloc,
+      fimSemana: domingo  // Compatibilidade com código legado (usa domingo como default)
+    };
+  };
+
+  const empty = { name:'', normalRate: 12.5, email:'', phone:'' };
+  const [form, setForm] = useState(empty);
+  const [editing, setEditing] = useState(null);
+
+  // Extrair colaboradores dos registos
+  const workersFromEntries = useMemo(() => {
+    const names = new Set();
+    timeEntries.forEach(entry => {
+      if (entry.worker) names.add(entry.worker);
+      if (entry.supervisor) names.add(entry.supervisor);
+    });
+    return Array.from(names).sort();
+  }, [timeEntries]);
+
+  // Auto-adicionar colaboradores que ainda não existem
+  useEffect(() => {
+    let hasChanges = false;
+    const updates = {};
+
+    workersFromEntries.forEach(name => {
+      if (!people[name]) {
+        hasChanges = true;
+        updates[name] = {
+          rates: calculateRates(12.5),  // Taxa padrão
+          email: '',
+          phone: ''
+        };
+      }
+    });
+
+    if (hasChanges) {
+      setPeople(cur => ({ ...cur, ...updates }));
+    }
+  }, [workersFromEntries, people, setPeople]);
+
   const list = Object.keys(people||{}).sort();
 
-  const save=()=>{
+  const save = () => {
     if(!form.name.trim()) return;
-    setPeople(cur=>{
+    const rates = calculateRates(form.normalRate);
+    setPeople(cur => {
       const next = {...cur};
-      next[form.name] = { ...(next[form.name]||{}), ...form, rates:{...form.rates} };
+      next[form.name] = {
+        ...(next[form.name]||{}),
+        rates,
+        email: form.email || '',
+        phone: form.phone || ''
+      };
       return next;
     });
-    setForm(empty); setEditing(null);
+    setForm(empty);
+    setEditing(null);
   };
-  const edit=(name)=>{ setEditing(name); setForm({ name, ...(people[name]||empty) }); };
-  const remove=(name)=>{ setPeople(cur=>{const n={...cur}; delete n[name]; return n;}); if(editing===name){ setForm(empty); setEditing(null); } };
 
-  const rateInput=(k,val)=> setForm(f=>({ ...f, rates:{ ...f.rates, [k]: Number(val)||0 } }));
+  const edit = (name) => {
+    const person = people[name] || empty;
+    setEditing(name);
+    setForm({
+      name,
+      normalRate: person.rates?.normal || 12.5,
+      email: person.email || '',
+      phone: person.phone || ''
+    });
+  };
+
+  const remove = (name) => {
+    setPeople(cur => {
+      const n = {...cur};
+      delete n[name];
+      return n;
+    });
+    if(editing === name) {
+      setForm(empty);
+      setEditing(null);
+    }
+  };
 
   return (
     <section className="space-y-4">
-      <PageHeader icon="user" title="Colaboradores" subtitle={`${list.length} ativos`} />
+      <PageHeader
+        icon="user"
+        title="Colaboradores"
+        subtitle={`${list.length} colaboradores • ${workersFromEntries.length} com registos`}
+      />
+
       <Card className="p-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <label className="text-sm">Nome
-            <input className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                   value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
+            <input
+              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.name}
+              onChange={e => setForm({...form, name: e.target.value})}
+              disabled={editing}
+            />
+          </label>
+          <label className="text-sm">Hora Normal (€/h)
+            <input
+              type="number"
+              step="0.01"
+              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.normalRate}
+              onChange={e => setForm({...form, normalRate: e.target.value})}
+            />
           </label>
           <label className="text-sm">Email
-            <input className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                   value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/>
+            <input
+              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.email||''}
+              onChange={e => setForm({...form, email: e.target.value})}
+            />
           </label>
           <label className="text-sm">Telefone
-            <input className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                   value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/>
+            <input
+              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.phone||''}
+              onChange={e => setForm({...form, phone: e.target.value})}
+            />
           </label>
-          <div className="text-sm">
-            Taxas (€/h)
-            <div className="grid grid-cols-2 gap-2 mt-1">
-              <input type="number" step="0.01" className="rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                     value={form.rates.normal} onChange={e=>rateInput('normal',e.target.value)} placeholder="Normal"/>
-              <input type="number" step="0.01" className="rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                     value={form.rates.extra} onChange={e=>rateInput('extra',e.target.value)} placeholder="Extra"/>
-              <input type="number" step="0.01" className="rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                     value={form.rates.deslocada} onChange={e=>rateInput('deslocada',e.target.value)} placeholder="Deslocada"/>
-              <input type="number" step="0.01" className="rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                     value={form.rates.fimSemana} onChange={e=>rateInput('fimSemana',e.target.value)} placeholder="Fim-de-semana"/>
+        </div>
+
+        {/* Preview das taxas calculadas */}
+        {form.normalRate > 0 && (
+          <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
+            <h4 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">
+              Taxas Calculadas Automaticamente
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              <div>
+                <div className="text-slate-500">Hora Extra</div>
+                <div className="font-bold text-slate-800 dark:text-slate-200">
+                  {currency(form.normalRate * 1.2)} <span className="text-slate-400">(×1.2)</span>
+                </div>
+              </div>
+              <div>
+                <div className="text-slate-500">Hora Sábado</div>
+                <div className="font-bold text-slate-800 dark:text-slate-200">
+                  {currency(form.normalRate * 1.5)} <span className="text-slate-400">(×1.5)</span>
+                </div>
+              </div>
+              <div>
+                <div className="text-slate-500">Hora Domingo</div>
+                <div className="font-bold text-slate-800 dark:text-slate-200">
+                  {currency(form.normalRate * 2)} <span className="text-slate-400">(×2.0)</span>
+                </div>
+              </div>
+              <div>
+                <div className="text-slate-500">Hora Deslocado</div>
+                <div className="font-bold text-slate-800 dark:text-slate-200">
+                  {currency(form.normalRate * 0.5)} <span className="text-slate-400">(×0.5)</span>
+                </div>
+              </div>
+              <div>
+                <div className="text-slate-500">Hora Extra Desloc.</div>
+                <div className="font-bold text-slate-800 dark:text-slate-200">
+                  {currency(form.normalRate * 1.2 * 1.5)} <span className="text-slate-400">(×1.8)</span>
+                </div>
+              </div>
+              <div>
+                <div className="text-slate-500">Hora Sáb Desloc.</div>
+                <div className="font-bold text-slate-800 dark:text-slate-200">
+                  {currency(form.normalRate * 1.5 * 1.5)} <span className="text-slate-400">(×2.25)</span>
+                </div>
+              </div>
+              <div>
+                <div className="text-slate-500">Hora Dom Desloc.</div>
+                <div className="font-bold text-slate-800 dark:text-slate-200">
+                  {currency(form.normalRate * 2 * 1.5)} <span className="text-slate-400">(×3.0)</span>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
         <div className="mt-3 flex gap-2 justify-end">
-          {editing && <Button variant="secondary" onClick={()=>{setForm(empty);setEditing(null);}}>Cancelar</Button>}
-          <Button onClick={save}>{editing?'Guardar':'Adicionar'}</Button>
+          {editing && <Button variant="secondary" onClick={() => {setForm(empty); setEditing(null);}}>Cancelar</Button>}
+          <Button onClick={save}>{editing ? 'Guardar' : 'Adicionar'}</Button>
         </div>
       </Card>
 
@@ -3138,27 +3285,51 @@ const PeopleView = ({ people, setPeople }) => {
             <thead className="bg-slate-50 dark:bg-slate-900/50">
               <tr>
                 <th className="px-3 py-2 text-left">Colaborador</th>
-                <th className="px-3 py-2 text-left">Normal</th>
-                <th className="px-3 py-2 text-left">Extra</th>
-                <th className="px-3 py-2 text-left">Deslocada</th>
-                <th className="px-3 py-2 text-left">Fim-de-semana</th>
+                <th className="px-3 py-2 text-right">Normal</th>
+                <th className="px-3 py-2 text-right">Extra</th>
+                <th className="px-3 py-2 text-right">Sábado</th>
+                <th className="px-3 py-2 text-right">Domingo</th>
+                <th className="px-3 py-2 text-right">Deslocado</th>
+                <th className="px-3 py-2 text-right">Extra Dsl.</th>
+                <th className="px-3 py-2 text-right">Sáb Dsl.</th>
+                <th className="px-3 py-2 text-right">Dom Dsl.</th>
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
             <tbody>
-              {list.length===0 && <tr><td colSpan="6" className="px-3 py-8 text-center text-slate-500">Sem colaboradores</td></tr>}
-              {list.map(name=>{
+              {list.length === 0 && (
+                <tr>
+                  <td colSpan="10" className="px-3 py-8 text-center text-slate-500">
+                    Sem colaboradores
+                  </td>
+                </tr>
+              )}
+              {list.map(name => {
                 const r = personRates(people, name, null);
+                const hasEntries = workersFromEntries.includes(name);
                 return (
                   <tr key={name} className="border-t dark:border-slate-800">
-                    <td className="px-3 py-2">{name}</td>
-                    <td className="px-3 py-2">{currency(r.normal)}</td>
-                    <td className="px-3 py-2">{currency(r.extra)}</td>
-                    <td className="px-3 py-2">{currency(r.deslocada)}</td>
-                    <td className="px-3 py-2">{currency(r.fimSemana)}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        {name}
+                        {hasEntries && (
+                          <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                            ativo
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold">{currency(r.normal)}</td>
+                    <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-400">{currency(r.extra)}</td>
+                    <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-400">{currency(r.sabado || r.fimSemana * 0.75)}</td>
+                    <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-400">{currency(r.domingo || r.fimSemana)}</td>
+                    <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-400">{currency(r.deslocada)}</td>
+                    <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-400">{currency(r.extraDesloc || r.extra * 1.5)}</td>
+                    <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-400">{currency(r.sabDesloc || (r.sabado || r.fimSemana * 0.75) * 1.5)}</td>
+                    <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-400">{currency(r.domDesloc || r.fimSemana * 1.5)}</td>
                     <td className="px-3 py-2 text-right">
-                      <Button variant="secondary" size="sm" onClick={()=>edit(name)}>Editar</Button>{' '}
-                      <Button variant="danger" size="sm" onClick={()=>remove(name)}>Apagar</Button>
+                      <Button variant="secondary" size="sm" onClick={() => edit(name)}>Editar</Button>{' '}
+                      <Button variant="danger" size="sm" onClick={() => remove(name)}>Apagar</Button>
                     </td>
                   </tr>
                 );
@@ -10700,6 +10871,7 @@ function TableMaterials() {
             <PeopleView
               people={people}
               setPeople={setPeople}
+              timeEntries={timeEntries}
             />
           )}
           {view === "vehicles" && (
