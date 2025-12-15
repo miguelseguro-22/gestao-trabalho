@@ -3359,6 +3359,10 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
   const monthInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedWorker, setSelectedWorker] = useState(null);
 
+  // 🆕 Comparação entre colaboradores
+  const [showCompareModal, setShowCompareModal] = useState(false);
+  const [selectedForCompare, setSelectedForCompare] = useState([]);
+
   // 🆕 Filtros da timeline
   const [filterType, setFilterType] = useState('all');
   const [filterProject, setFilterProject] = useState('all');
@@ -4069,6 +4073,14 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
         <Icon name="download" /> Exportar CSV
       </Button>
 
+      <Button
+        variant="secondary"
+        onClick={() => setShowCompareModal(true)}
+        disabled={sortedStats.length < 2}
+      >
+        🔄 Comparar
+      </Button>
+
       {/* 🆕 Botão para adicionar colaborador */}
       <div className="relative" ref={addWorkerDropdownRef}>
         <Button
@@ -4703,6 +4715,137 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Modal de Comparação entre Colaboradores */}
+      <Modal
+        open={showCompareModal}
+        title={`Comparar Colaboradores — ${new Date(selectedMonth + '-01').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' })}`}
+        onClose={() => {
+          setShowCompareModal(false);
+          setSelectedForCompare([]);
+        }}
+        wide
+      >
+        <div className="space-y-4">
+          {/* Seleção de Colaboradores */}
+          <div className="rounded-xl border p-4 dark:border-slate-800">
+            <h3 className="text-sm font-semibold mb-3">Selecione os colaboradores para comparar (mín. 2):</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-60 overflow-auto">
+              {sortedStats.map(worker => (
+                <label
+                  key={worker.name}
+                  className="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedForCompare.includes(worker.name)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedForCompare([...selectedForCompare, worker.name]);
+                      } else {
+                        setSelectedForCompare(selectedForCompare.filter(n => n !== worker.name));
+                      }
+                    }}
+                    className="rounded"
+                  />
+                  <span className="text-sm">{worker.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Comparação */}
+          {selectedForCompare.length >= 2 && (
+            <div className="space-y-4">
+              {/* Tabela de Comparação */}
+              <div className="overflow-auto rounded-xl border dark:border-slate-800">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-900/50">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Métrica</th>
+                      {selectedForCompare.map(name => (
+                        <th key={name} className="px-3 py-2 text-center">{name}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {['Dias Trabalhados', 'Horas Totais', 'Horas Extra', 'FDS', 'Feriado', 'Deslocadas', 'Presença'].map(metric => {
+                      const getMetricValue = (workerName, metric) => {
+                        const worker = sortedStats.find(w => w.name === workerName);
+                        if (!worker) return '—';
+                        switch (metric) {
+                          case 'Dias Trabalhados': return worker.diasTrabalhados || 0;
+                          case 'Horas Totais': return `${worker.totalHours || 0}h`;
+                          case 'Horas Extra': return `${worker.horasExtra || 0}h`;
+                          case 'FDS': return `${worker.horasFDS || 0}h`;
+                          case 'Feriado': return `${worker.horasFeriado || 0}h`;
+                          case 'Deslocadas': return `${worker.deslocDia || 0}h`;
+                          case 'Presença': return worker.presence;
+                          default: return '—';
+                        }
+                      };
+
+                      return (
+                        <tr key={metric} className="border-t dark:border-slate-800">
+                          <td className="px-3 py-2 font-medium">{metric}</td>
+                          {selectedForCompare.map(name => (
+                            <td key={name} className="px-3 py-2 text-center">{getMetricValue(name, metric)}</td>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Gráficos de Comparação */}
+              <div className="rounded-xl border p-4 dark:border-slate-800">
+                <h3 className="text-sm font-semibold mb-3">Comparação Visual</h3>
+                {['Horas Totais', 'Horas Extra', 'Presença'].map(metric => {
+                  const values = selectedForCompare.map(name => {
+                    const worker = sortedStats.find(w => w.name === name);
+                    if (!worker) return 0;
+                    switch (metric) {
+                      case 'Horas Totais': return worker.totalHours || 0;
+                      case 'Horas Extra': return worker.horasExtra || 0;
+                      case 'Presença': return parseInt(worker.presence) || 0;
+                      default: return 0;
+                    }
+                  });
+                  const maxValue = Math.max(...values, 1);
+
+                  return (
+                    <div key={metric} className="mb-4">
+                      <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">{metric}</div>
+                      <div className="space-y-2">
+                        {selectedForCompare.map((name, idx) => (
+                          <div key={name} className="flex items-center gap-2">
+                            <div className="w-32 text-xs truncate">{name}</div>
+                            <div className="flex-1 h-6 bg-slate-100 dark:bg-slate-800 rounded overflow-hidden">
+                              <div
+                                className="h-full bg-blue-500 dark:bg-blue-600 flex items-center justify-end pr-2 text-xs text-white font-semibold transition-all"
+                                style={{ width: `${(values[idx] / maxValue) * 100}%` }}
+                              >
+                                {values[idx]}{metric === 'Presença' ? '%' : 'h'}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {selectedForCompare.length < 2 && (
+            <div className="text-center text-slate-500 dark:text-slate-400 py-8">
+              Selecione pelo menos 2 colaboradores para comparar
+            </div>
+          )}
+        </div>
       </Modal>
     </section>
   );
