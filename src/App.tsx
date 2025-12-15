@@ -8810,7 +8810,7 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
 </head>
 <body>
   <div class="header">
-    <h1>📊 Relatório de Custos Salariais</h1>
+    <h1>Relatório de Custos Salariais</h1>
     <div class="subtitle">Análise Detalhada por Colaborador</div>
   </div>
 
@@ -8902,7 +8902,7 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
     <section className="space-y-4">
       <PageHeader
         icon="activity"
-        title="📊 Relatórios de Custos por Obra"
+        title="Relatórios de Custos por Obra"
         subtitle="Análise de custos salariais por projeto e colaborador"
       />
 
@@ -9059,7 +9059,6 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
 
       {costData.size === 0 && (
         <Card className="p-12 text-center">
-          <div className="text-6xl mb-4">📊</div>
           <div className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">
             Sem dados para o período selecionado
           </div>
@@ -10114,9 +10113,9 @@ function TableMaterials() {
     <NavItem id="obras" icon="wrench" label="Obras" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
 
-  {/* 📊 Relatórios de Custos - Diretor e Admin */}
+  {/* Relatórios de Custos - Diretor e Admin */}
   {can("obras") && (
-    <NavItem id="cost-reports" icon="activity" label="📊 Custos por Obra" setView={setView} setSidebarOpen={setSidebarOpen} />
+    <NavItem id="cost-reports" icon="activity" label="Custos por Obra" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
 
   {/* Colaboradores - Diretor e Admin */}
