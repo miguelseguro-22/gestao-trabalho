@@ -4247,6 +4247,84 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
       >
         {workerDetail && (
           <div className="space-y-6">
+            {/* ⚠️ Notificações de Anomalias */}
+            {(() => {
+              const anomalies = [];
+
+              // 1. Horas extra excessivas (> 20h no mês)
+              if (workerDetail.horasExtra > 20) {
+                anomalies.push({
+                  type: 'warning',
+                  icon: '⚠️',
+                  message: `Horas extra elevadas: ${workerDetail.horasExtra}h`,
+                  detail: 'Considerar distribuir carga de trabalho'
+                });
+              }
+
+              // 2. Muitas horas FDS/Feriado (> 16h no mês)
+              const totalWeekend = (workerDetail.horasFDS || 0) + (workerDetail.horasFeriado || 0);
+              if (totalWeekend > 16) {
+                anomalies.push({
+                  type: 'info',
+                  icon: '📅',
+                  message: `Trabalho em FDS/Feriados: ${totalWeekend}h`,
+                  detail: 'Verificar se compensação está registada'
+                });
+              }
+
+              // 3. Muitas deslocações (> 5 dias)
+              if (workerDetail.deslocDia > 40) { // 40h = 5 dias
+                anomalies.push({
+                  type: 'info',
+                  icon: '🚗',
+                  message: `Deslocações frequentes: ${workerDetail.deslocDia/8} dias`,
+                  detail: 'Verificar subsídios de deslocação'
+                });
+              }
+
+              // 4. Baixa presença (< 80%)
+              const presenceNum = parseInt(workerDetail.presence);
+              if (presenceNum < 80 && presenceNum > 0) {
+                anomalies.push({
+                  type: 'alert',
+                  icon: '📉',
+                  message: `Presença baixa: ${workerDetail.presence}`,
+                  detail: 'Verificar ausências e justificações'
+                });
+              }
+
+              // 5. Muitas faltas (> 3 dias)
+              if (workerDetail.faltasSemRemun > 3) {
+                anomalies.push({
+                  type: 'alert',
+                  icon: '❌',
+                  message: `Faltas não remuneradas: ${workerDetail.faltasSemRemun} dias`,
+                  detail: 'Atenção ao impacto salarial'
+                });
+              }
+
+              return anomalies.length > 0 && (
+                <div className="space-y-2">
+                  {anomalies.map((anomaly, idx) => (
+                    <div
+                      key={idx}
+                      className={`rounded-xl border p-3 flex items-start gap-3 ${
+                        anomaly.type === 'alert' ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800' :
+                        anomaly.type === 'warning' ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800' :
+                        'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800'
+                      }`}
+                    >
+                      <div className="text-xl">{anomaly.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-slate-900 dark:text-white">{anomaly.message}</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{anomaly.detail}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
             {/* 📊 Métricas Expandidas */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
               <div className="rounded-xl border p-3 dark:border-slate-800 bg-emerald-50 dark:bg-emerald-900/10">
