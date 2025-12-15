@@ -3940,6 +3940,20 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
     });
   }, [stats]); // Apenas stats como dependência para evitar loops
 
+  // 🆕 Adicionar workers manuais ao workerOrder
+  useEffect(() => {
+    setWorkerOrder(prevOrder => {
+      // Verificar se há workers manuais que não estão na ordem
+      const newManualWorkers = manuallyAddedWorkers.filter(name => !prevOrder.includes(name));
+
+      if (newManualWorkers.length > 0) {
+        return [...prevOrder, ...newManualWorkers];
+      }
+
+      return prevOrder;
+    });
+  }, [manuallyAddedWorkers]);
+
   // 🆕 Handlers de drag-and-drop
   const handleDragStart = (e, workerName) => {
     setDraggedWorker(workerName);
