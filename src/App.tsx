@@ -3104,13 +3104,60 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
   const [form, setForm] = useState(empty);
   const [editing, setEditing] = useState(null);
 
-  // Extrair colaboradores dos registos
+  // Extrair colaboradores dos registos (limpar nomes inválidos)
   const workersFromEntries = useMemo(() => {
     const names = new Set();
+
+    const cleanName = (name) => {
+      if (!name || typeof name !== 'string') return null;
+
+      // Remover espaços extra e vírgulas no final
+      const cleaned = name.trim().replace(/,\s*$/, '').trim();
+
+      // Filtrar nomes inválidos
+      if (!cleaned ||
+          cleaned === '#N/A' ||
+          cleaned.startsWith('#') ||
+          cleaned.length < 2) {
+        return null;
+      }
+
+      return cleaned;
+    };
+
     timeEntries.forEach(entry => {
-      if (entry.worker) names.add(entry.worker);
-      if (entry.supervisor) names.add(entry.supervisor);
+      // Limpar worker
+      if (entry.worker) {
+        const cleaned = cleanName(entry.worker);
+        if (cleaned) {
+          // Se tiver vírgulas no meio, dividir (ex: "António Sousa, Paulo Carujo")
+          if (cleaned.includes(',')) {
+            cleaned.split(',').forEach(n => {
+              const subName = cleanName(n);
+              if (subName) names.add(subName);
+            });
+          } else {
+            names.add(cleaned);
+          }
+        }
+      }
+
+      // Limpar supervisor
+      if (entry.supervisor) {
+        const cleaned = cleanName(entry.supervisor);
+        if (cleaned) {
+          if (cleaned.includes(',')) {
+            cleaned.split(',').forEach(n => {
+              const subName = cleanName(n);
+              if (subName) names.add(subName);
+            });
+          } else {
+            names.add(cleaned);
+          }
+        }
+      }
     });
+
     return Array.from(names).sort();
   }, [timeEntries]);
 
