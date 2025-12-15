@@ -3351,7 +3351,7 @@ const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
 // ============================================================
 // 📊 RELATÓRIO MENSAL DE COLABORADORES (ADMIN)
 // ============================================================
-const MonthlyReportView = ({ timeEntries, people, setModal }) => {
+const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -3373,11 +3373,25 @@ const MonthlyReportView = ({ timeEntries, people, setModal }) => {
   const [draggedWorker, setDraggedWorker] = useState(null);
 
   // 🆕 Workers adicionados manualmente (para mostrar mesmo sem registos)
-  const [manuallyAddedWorkers, setManuallyAddedWorkers] = useState([]);
+  const [manuallyAddedWorkers, setManuallyAddedWorkers] = useState(() => {
+    try {
+      const saved = localStorage.getItem('monthlyReport_manualWorkers');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [showAddWorkerDropdown, setShowAddWorkerDropdown] = useState(false);
   const [newWorkerName, setNewWorkerName] = useState('');
   const addWorkerDropdownRef = useRef(null);
   const newWorkerInputRef = useRef(null);
+
+  // 🆕 Guardar workers manuais no localStorage
+  useEffect(() => {
+    if (manuallyAddedWorkers.length > 0) {
+      localStorage.setItem('monthlyReport_manualWorkers', JSON.stringify(manuallyAddedWorkers));
+    }
+  }, [manuallyAddedWorkers]);
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -3405,15 +3419,40 @@ const MonthlyReportView = ({ timeEntries, people, setModal }) => {
     const name = newWorkerName.trim();
     if (!name) return;
 
-    // Verificar se já existe
+    // Verificar se já existe na tabela
     if (sortedStats.find(s => s.name === name)) {
       alert('Este colaborador já existe na tabela');
       return;
     }
 
+    // Adicionar à lista manual (para aparecer na tabela)
     setManuallyAddedWorkers([...manuallyAddedWorkers, name]);
+
+    // Adicionar permanentemente ao sistema se ainda não existir
+    if (!people[name]) {
+      setPeople({
+        ...people,
+        [name]: {
+          rates: {
+            normal: DEFAULT_HOURLY_RATE,
+            extra: DEFAULT_HOURLY_RATE * 1.5,
+            deslocada: DEFAULT_HOURLY_RATE * 1.25,
+            fimSemana: DEFAULT_HOURLY_RATE * 2
+          }
+        }
+      });
+    }
+
     setNewWorkerName('');
     setShowAddWorkerDropdown(false);
+  };
+
+  // Remover colaborador manual
+  const handleRemoveWorker = (name) => {
+    if (confirm(`Remover "${name}" da tabela?`)) {
+      setManuallyAddedWorkers(manuallyAddedWorkers.filter(w => w !== name));
+      // Nota: não removemos de "people" para preservar histórico
+    }
   };
 
   // 🆕 Guardar ordem no localStorage
@@ -4135,9 +4174,21 @@ const MonthlyReportView = ({ timeEntries, people, setModal }) => {
                 >
                   {/* NOME */}
                   <td className="px-2 py-2 font-medium text-xs border-r dark:border-slate-700 sticky left-0 bg-white dark:bg-slate-950">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 group">
                       <span className="text-slate-400 cursor-grab active:cursor-grabbing">⋮⋮</span>
-                      <span>{worker.name}</span>
+                      <span className="flex-1">{worker.name}</span>
+                      {manuallyAddedWorkers.includes(worker.name) && worker.entries.length === 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveWorker(worker.name);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700 dark:hover:text-red-400 text-xs"
+                          title="Remover colaborador"
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
                   </td>
 
@@ -9029,7 +9080,7 @@ function TableMaterials() {
           )}
 
           {view === "monthly-report" && auth?.role === "admin" && (
-            <MonthlyReportView timeEntries={timeEntries} people={people} setModal={setModal} />
+            <MonthlyReportView timeEntries={timeEntries} people={people} setPeople={setPeople} setModal={setModal} />
           )}
 
           {/* 🆕 VIEW PENDENTES */}
