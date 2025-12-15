@@ -4361,6 +4361,101 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
               </div>
             </div>
 
+            {/* 📈 Gráfico de Evolução Mensal */}
+            {(() => {
+              // Calcular horas dos últimos 6 meses
+              const monthsData = [];
+              const [currentYear, currentMonthNum] = selectedMonth.split('-').map(Number);
+
+              for (let i = 5; i >= 0; i--) {
+                const date = new Date(currentYear, currentMonthNum - 1 - i, 1);
+                const year = date.getFullYear();
+                const month = date.getMonth() + 1;
+                const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+
+                // Filtrar entradas deste mês
+                const startDate = new Date(year, month - 2, 21);
+                const endDate = new Date(year, month - 1, 20);
+                startDate.setHours(0, 0, 0, 0);
+                endDate.setHours(23, 59, 59, 999);
+
+                const monthEntries = dedupTimeEntries(timeEntries).filter((t) => {
+                  if (!t.worker || t.worker !== workerDetail.name) return false;
+                  if (t.template === 'Férias' || t.template === 'Baixa') {
+                    const start = new Date(t.periodStart || t.date);
+                    const end = new Date(t.periodEnd || t.date);
+                    return !(end < startDate || start > endDate);
+                  }
+                  const d = new Date(t.date);
+                  return d >= startDate && d <= endDate;
+                });
+
+                const totalHours = monthEntries.reduce((sum, e) => sum + (Number(e.hours) || 0), 0);
+                const totalOvertime = monthEntries.reduce((sum, e) => sum + (Number(e.overtime) || 0), 0);
+
+                monthsData.push({
+                  label: date.toLocaleDateString('pt-PT', { month: 'short' }),
+                  hours: totalHours,
+                  overtime: totalOvertime,
+                  total: totalHours + totalOvertime
+                });
+              }
+
+              const maxTotal = Math.max(...monthsData.map(m => m.total), 1);
+
+              return (
+                <div className="rounded-xl border p-4 dark:border-slate-800">
+                  <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                    📈 Evolução dos Últimos 6 Meses
+                  </h3>
+                  <div className="space-y-3">
+                    {monthsData.map((month, idx) => (
+                      <div key={idx} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium capitalize text-slate-600 dark:text-slate-400 w-12">{month.label}</span>
+                          <span className="text-slate-900 dark:text-white font-semibold">{month.total}h</span>
+                        </div>
+                        <div className="flex gap-1 h-6">
+                          {month.hours > 0 && (
+                            <div
+                              className="bg-blue-500 dark:bg-blue-600 rounded transition-all hover:bg-blue-600 dark:hover:bg-blue-700 relative group"
+                              style={{ width: `${(month.hours / maxTotal) * 100}%` }}
+                              title={`${month.hours}h normais`}
+                            >
+                              <span className="absolute inset-0 flex items-center justify-center text-[10px] text-white font-bold opacity-0 group-hover:opacity-100">
+                                {month.hours}h
+                              </span>
+                            </div>
+                          )}
+                          {month.overtime > 0 && (
+                            <div
+                              className="bg-purple-500 dark:bg-purple-600 rounded transition-all hover:bg-purple-600 dark:hover:bg-purple-700 relative group"
+                              style={{ width: `${(month.overtime / maxTotal) * 100}%` }}
+                              title={`${month.overtime}h extra`}
+                            >
+                              <span className="absolute inset-0 flex items-center justify-center text-[10px] text-white font-bold opacity-0 group-hover:opacity-100">
+                                +{month.overtime}h
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-4 mt-4 text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded bg-blue-500"></div>
+                      <span className="text-slate-600 dark:text-slate-400">Horas normais</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded bg-purple-500"></div>
+                      <span className="text-slate-600 dark:text-slate-400">Horas extra</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* 🏗️ Top Obras */}
             {(() => {
               const projectStats = {};
