@@ -8703,6 +8703,201 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
     return total;
   }, [costData]);
 
+  const exportProjectPDF = (projectName, projectData) => {
+    const workers = Array.from(projectData.workers.values()).sort((a, b) => b.custoTotal - a.custoTotal);
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Relatório de Custos - ${projectName}</title>
+  <style>
+    @page { size: A4; margin: 20mm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.4;
+      color: #1e293b;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 3px solid #00A9B8;
+      padding-bottom: 15px;
+    }
+    .header h1 {
+      font-size: 24pt;
+      color: #00677F;
+      margin-bottom: 5px;
+    }
+    .header .subtitle {
+      font-size: 12pt;
+      color: #64748b;
+    }
+    .info-box {
+      background: #f1f5f9;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .info-label {
+      font-weight: 600;
+      color: #475569;
+    }
+    .info-value {
+      color: #0f172a;
+    }
+    .summary {
+      background: linear-gradient(135deg, #00677F 0%, #00A9B8 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 25px;
+      text-align: center;
+    }
+    .summary h2 {
+      font-size: 16pt;
+      margin-bottom: 10px;
+    }
+    .summary .total {
+      font-size: 32pt;
+      font-weight: bold;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th {
+      background: #00677F;
+      color: white;
+      padding: 12px 8px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 10pt;
+    }
+    th.right { text-align: right; }
+    td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 10pt;
+    }
+    td.right { text-align: right; }
+    td.bold { font-weight: 700; }
+    tr:nth-child(even) {
+      background: #f8fafc;
+    }
+    .total-row {
+      background: #e0f2fe !important;
+      font-weight: 700;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 15px;
+      border-top: 1px solid #cbd5e1;
+      text-align: center;
+      font-size: 9pt;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📊 Relatório de Custos Salariais</h1>
+    <div class="subtitle">Análise Detalhada por Colaborador</div>
+  </div>
+
+  <div class="info-box">
+    <div class="info-row">
+      <span class="info-label">Obra:</span>
+      <span class="info-value">${projectName}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Período:</span>
+      <span class="info-value">${new Date(startDate).toLocaleDateString('pt-PT')} até ${new Date(endDate).toLocaleDateString('pt-PT')}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Data de Emissão:</span>
+      <span class="info-value">${new Date().toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+    </div>
+  </div>
+
+  <div class="summary">
+    <h2>Custo Total da Obra</h2>
+    <div class="total">${currency(projectData.total)}</div>
+  </div>
+
+  <h2 style="margin-bottom: 10px; color: #00677F; font-size: 14pt;">Breakdown por Colaborador</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Colaborador</th>
+        <th class="right">H. Normais</th>
+        <th class="right">Custo</th>
+        <th class="right">H. Extra</th>
+        <th class="right">Custo</th>
+        <th class="right">H. FDS</th>
+        <th class="right">Custo</th>
+        <th class="right">H. Feriado</th>
+        <th class="right">Custo</th>
+        <th class="right">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${workers.map(worker => `
+        <tr>
+          <td>${worker.name}</td>
+          <td class="right">${worker.horasNormais.toFixed(1)}h</td>
+          <td class="right">${currency(worker.custoNormal)}</td>
+          <td class="right">${worker.horasExtra.toFixed(1)}h</td>
+          <td class="right">${currency(worker.custoExtra)}</td>
+          <td class="right">${worker.horasFDS.toFixed(1)}h</td>
+          <td class="right">${currency(worker.custoFDS)}</td>
+          <td class="right">${worker.horasFeriado.toFixed(1)}h</td>
+          <td class="right">${currency(worker.custoFeriado)}</td>
+          <td class="right bold" style="color: #00A9B8;">${currency(worker.custoTotal)}</td>
+        </tr>
+      `).join('')}
+      <tr class="total-row">
+        <td><strong>TOTAL GERAL</strong></td>
+        <td class="right">${workers.reduce((s, w) => s + w.horasNormais, 0).toFixed(1)}h</td>
+        <td class="right">${currency(workers.reduce((s, w) => s + w.custoNormal, 0))}</td>
+        <td class="right">${workers.reduce((s, w) => s + w.horasExtra, 0).toFixed(1)}h</td>
+        <td class="right">${currency(workers.reduce((s, w) => s + w.custoExtra, 0))}</td>
+        <td class="right">${workers.reduce((s, w) => s + w.horasFDS, 0).toFixed(1)}h</td>
+        <td class="right">${currency(workers.reduce((s, w) => s + w.custoFDS, 0))}</td>
+        <td class="right">${workers.reduce((s, w) => s + w.horasFeriado, 0).toFixed(1)}h</td>
+        <td class="right">${currency(workers.reduce((s, w) => s + w.custoFeriado, 0))}</td>
+        <td class="right bold" style="color: #00677F; font-size: 12pt;">${currency(projectData.total)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <p>Relatório gerado automaticamente pela Plataforma de Gestão de Trabalho</p>
+    <p style="margin-top: 5px;">Este documento é confidencial e destina-se apenas para uso interno</p>
+  </div>
+</body>
+</html>`;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    }
+  };
+
   return (
     <section className="space-y-4">
       <PageHeader
@@ -8815,10 +9010,7 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => {
-                // TODO: Exportar PDF (Fase 4)
-                alert('Exportação PDF em desenvolvimento (Fase 4)');
-              }}
+              onClick={() => exportProjectPDF(projectName, projectData)}
             >
               📄 Exportar PDF
             </Button>
