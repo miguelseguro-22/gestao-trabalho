@@ -4190,20 +4190,24 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
               {sortedStats.map((worker) => (
                 <tr
                   key={worker.name}
-                  draggable="true"
-                  onDragStart={(e) => handleDragStart(e, worker.name)}
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, worker.name)}
-                  onDragEnd={handleDragEnd}
                   className={`border-t dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-opacity ${
                     draggedWorker === worker.name ? 'opacity-50' : 'opacity-100'
                   }`}
-                  style={{ cursor: 'move' }}
                 >
                   {/* NOME */}
                   <td className="px-2 py-2 font-medium text-xs border-r dark:border-slate-700 sticky left-0 bg-white dark:bg-slate-950">
                     <div className="flex items-center gap-2 group">
-                      <span className="text-slate-400 select-none" style={{ cursor: 'grab' }}>⋮⋮</span>
+                      <span
+                        className="text-slate-400 select-none hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                        style={{ cursor: 'grab' }}
+                        draggable="true"
+                        onDragStart={(e) => handleDragStart(e, worker.name)}
+                        onDragEnd={handleDragEnd}
+                      >
+                        ⋮⋮
+                      </span>
                       <span className="flex-1">{worker.name}</span>
                       {manuallyAddedWorkers.includes(worker.name) && worker.entries.length === 0 && (
                         <button
