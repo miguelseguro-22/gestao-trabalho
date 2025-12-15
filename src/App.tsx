@@ -8608,6 +8608,8 @@ const generatePersonalTimesheetReport = ({ worker, timeEntries, cycle }) => {
 
 // 📊 VIEW: RELATÓRIOS DE CUSTOS POR OBRA
 const CostReportsView = ({ timeEntries, projects, people }) => {
+  console.log('🔍 CostReportsView montado', { timeEntriesCount: timeEntries?.length, peopleCount: Object.keys(people || {}).length });
+
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [selectedProject, setSelectedProject] = useState('all');
   const [startDate, setStartDate] = useState(() => {
@@ -8628,19 +8630,24 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
   }, [timeEntries]);
 
   const costData = useMemo(() => {
-    const filtered = timeEntries.filter(t => {
-      if (!isNormalWork(t.template)) return false;
-      if (t.date < startDate || t.date > endDate) return false;
-      if (selectedProject !== 'all' && t.project !== selectedProject) return false;
-      return true;
-    });
+    try {
+      console.log('🔍 Calculando costData', { startDate, endDate, selectedProject });
 
-    const byProject = new Map();
+      const filtered = timeEntries.filter(t => {
+        if (!isNormalWork(t.template)) return false;
+        if (t.date < startDate || t.date > endDate) return false;
+        if (selectedProject !== 'all' && t.project !== selectedProject) return false;
+        return true;
+      });
 
-    filtered.forEach(entry => {
-      const project = entry.project || 'Sem Obra';
-      const worker = entry.worker || entry.supervisor || 'Desconhecido';
-      const rates = personRates(people, worker, null);
+      console.log('🔍 Registos filtrados:', filtered.length);
+
+      const byProject = new Map();
+
+      filtered.forEach(entry => {
+        const project = entry.project || 'Sem Obra';
+        const worker = entry.worker || entry.supervisor || 'Desconhecido';
+        const rates = personRates(people, worker, null);
 
       if (!byProject.has(project)) {
         byProject.set(project, { workers: new Map(), total: 0 });
@@ -8692,7 +8699,12 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
       projectData.total += workerData.custoTotal;
     });
 
-    return byProject;
+      console.log('🔍 Projetos encontrados:', byProject.size);
+      return byProject;
+    } catch (error) {
+      console.error('❌ Erro ao calcular custos:', error);
+      return new Map();
+    }
   }, [timeEntries, people, startDate, endDate, selectedProject]);
 
   const totalGeral = useMemo(() => {
@@ -9012,7 +9024,7 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
               size="sm"
               onClick={() => exportProjectPDF(projectName, projectData)}
             >
-              📄 Exportar PDF
+              Exportar PDF
             </Button>
           </div>
 
