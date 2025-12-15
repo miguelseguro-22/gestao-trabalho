@@ -4693,7 +4693,7 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
               })()}
             </div>
 
-            {/* Botão de Exportar */}
+            {/* Botões de Exportar */}
             <div className="flex justify-end gap-2">
               <Button
                 variant="secondary"
@@ -4710,7 +4710,137 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
                   openPrintWindow(html);
                 }}
               >
-                <Icon name="download" /> Exportar Relatório PDF
+                📄 Relatório PDF Simples
+              </Button>
+
+              <Button
+                onClick={() => {
+                  // Relatório completo com análises
+                  const [year, month] = selectedMonth.split('-').map(Number);
+
+                  // Calcular anomalias
+                  const anomalies = [];
+                  if (workerDetail.horasExtra > 20) {
+                    anomalies.push(`⚠️ Horas extra elevadas: ${workerDetail.horasExtra}h`);
+                  }
+                  const totalWeekend = (workerDetail.horasFDS || 0) + (workerDetail.horasFeriado || 0);
+                  if (totalWeekend > 16) {
+                    anomalies.push(`📅 Trabalho em FDS/Feriados: ${totalWeekend}h`);
+                  }
+                  if (workerDetail.deslocDia > 40) {
+                    anomalies.push(`🚗 Deslocações frequentes: ${workerDetail.deslocDia/8} dias`);
+                  }
+
+                  // Gerar HTML expandido
+                  const html = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                      <meta charset="UTF-8">
+                      <title>Relatório Completo - ${selectedWorker}</title>
+                      <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; }
+                        h1 { color: #1e40af; border-bottom: 3px solid #1e40af; padding-bottom: 10px; }
+                        h2 { color: #059669; margin-top: 30px; }
+                        .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 20px 0; }
+                        .metric-card { border: 2px solid #e5e7eb; border-radius: 8px; padding: 15px; text-align: center; }
+                        .metric-label { font-size: 12px; color: #6b7280; text-transform: uppercase; }
+                        .metric-value { font-size: 28px; font-weight: bold; color: #111827; margin-top: 5px; }
+                        .anomalies { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; }
+                        .anomaly-item { margin: 5px 0; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                        th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
+                        th { background: #f3f4f6; font-weight: bold; }
+                        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+                        .badge-normal { background: #d1fae5; color: #065f46; }
+                        .badge-fds { background: #fed7aa; color: #9a3412; }
+                        @media print { .no-print { display: none; } }
+                      </style>
+                    </head>
+                    <body>
+                      <h1>📊 Relatório Completo de ${selectedWorker}</h1>
+                      <p><strong>Período:</strong> ${new Date(selectedMonth + '-01').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' })}</p>
+                      <p><strong>Gerado em:</strong> ${new Date().toLocaleString('pt-PT')}</p>
+
+                      <h2>📈 Métricas Principais</h2>
+                      <div class="metrics">
+                        <div class="metric-card">
+                          <div class="metric-label">Dias</div>
+                          <div class="metric-value">${workerDetail.daysWorked}</div>
+                        </div>
+                        <div class="metric-card">
+                          <div class="metric-label">Horas</div>
+                          <div class="metric-value">${workerDetail.totalHours}h</div>
+                        </div>
+                        <div class="metric-card">
+                          <div class="metric-label">Extra</div>
+                          <div class="metric-value">${workerDetail.horasExtra || 0}h</div>
+                        </div>
+                        <div class="metric-card">
+                          <div class="metric-label">Presença</div>
+                          <div class="metric-value">${workerDetail.presence}</div>
+                        </div>
+                        <div class="metric-card">
+                          <div class="metric-label">FDS</div>
+                          <div class="metric-value">${workerDetail.horasFDS || 0}h</div>
+                        </div>
+                        <div class="metric-card">
+                          <div class="metric-label">Feriado</div>
+                          <div class="metric-value">${workerDetail.horasFeriado || 0}h</div>
+                        </div>
+                        <div class="metric-card">
+                          <div class="metric-label">Deslocadas</div>
+                          <div class="metric-value">${workerDetail.deslocDia || 0}h</div>
+                        </div>
+                        <div class="metric-card">
+                          <div class="metric-label">Férias</div>
+                          <div class="metric-value">${workerDetail.diasFerias || 0}</div>
+                        </div>
+                      </div>
+
+                      ${anomalies.length > 0 ? `
+                        <h2>⚠️ Alertas e Anomalias</h2>
+                        <div class="anomalies">
+                          ${anomalies.map(a => `<div class="anomaly-item">${a}</div>`).join('')}
+                        </div>
+                      ` : ''}
+
+                      <h2>📅 Registos Detalhados</h2>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Data</th>
+                            <th>Tipo</th>
+                            <th>Obra</th>
+                            <th>Horas</th>
+                            <th>Extra</th>
+                            <th>Obs.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${workerDetail.entries.sort((a, b) => (a.date || a.periodStart || '').localeCompare(b.date || b.periodStart || '')).map(entry => `
+                            <tr>
+                              <td>${new Date(entry.date).toLocaleDateString('pt-PT')}</td>
+                              <td><span class="badge badge-${entry.template === 'Trabalho Normal' ? 'normal' : 'fds'}">${entry.template}</span></td>
+                              <td>${entry.project || '—'}</td>
+                              <td>${entry.hours || '—'}h</td>
+                              <td>${entry.overtime || '—'}h</td>
+                              <td>${entry.displacement === 'Sim' ? '🚗 Deslocado' : ''}</td>
+                            </tr>
+                          `).join('')}
+                        </tbody>
+                      </table>
+
+                      <p style="margin-top: 40px; font-size: 12px; color: #6b7280; text-align: center;">
+                        Este relatório foi gerado automaticamente pelo Sistema de Gestão de Trabalho
+                      </p>
+                    </body>
+                    </html>
+                  `;
+                  openPrintWindow(html);
+                }}
+              >
+                📊 Relatório PDF Completo (com análises)
               </Button>
             </div>
           </div>
