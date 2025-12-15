@@ -3359,6 +3359,16 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
   const monthInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedWorker, setSelectedWorker] = useState(null);
 
+  // 🆕 Filtros da timeline
+  const [filterType, setFilterType] = useState('all');
+  const [filterProject, setFilterProject] = useState('all');
+
+  // Reset filtros quando muda de colaborador
+  useEffect(() => {
+    setFilterType('all');
+    setFilterProject('all');
+  }, [selectedWorker]);
+
   // 🆕 Ordem customizada dos colaboradores
   const [workerOrder, setWorkerOrder] = useState(() => {
     try {
@@ -4315,14 +4325,64 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
 
             {/* 📅 Timeline de Registos com Agrupamento Semanal */}
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                📅 Timeline de Atividades
-              </h3>
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  📅 Timeline de Atividades
+                </h3>
+
+                {/* Filtros */}
+                <div className="flex gap-2">
+                  <select
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value)}
+                    className="text-xs px-2 py-1 rounded-lg border dark:border-slate-700 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">Todos os Tipos</option>
+                    <option value="Trabalho Normal">Trabalho Normal</option>
+                    <option value="Trabalho - Fim de Semana/Feriado">FDS/Feriado</option>
+                    <option value="Férias">Férias</option>
+                    <option value="Baixa">Baixa</option>
+                    <option value="Falta">Falta</option>
+                  </select>
+
+                  <select
+                    value={filterProject}
+                    onChange={(e) => setFilterProject(e.target.value)}
+                    className="text-xs px-2 py-1 rounded-lg border dark:border-slate-700 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">Todas as Obras</option>
+                    {Array.from(new Set(workerDetail.entries.map(e => e.project).filter(Boolean))).sort().map(proj => (
+                      <option key={proj} value={proj}>{proj}</option>
+                    ))}
+                  </select>
+
+                  {(filterType !== 'all' || filterProject !== 'all') && (
+                    <button
+                      onClick={() => {
+                        setFilterType('all');
+                        setFilterProject('all');
+                      }}
+                      className="text-xs px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
+              </div>
 
               {(() => {
+                // Aplicar filtros
+                let filteredEntries = workerDetail.entries;
+                if (filterType !== 'all') {
+                  filteredEntries = filteredEntries.filter(e => e.template === filterType);
+                }
+                if (filterProject !== 'all') {
+                  filteredEntries = filteredEntries.filter(e => e.project === filterProject);
+                }
+
                 // Agrupar por semana
                 const byWeek = {};
-                workerDetail.entries
+                filteredEntries
                   .sort((a, b) => (a.date || a.periodStart || '').localeCompare(b.date || b.periodStart || ''))
                   .forEach(entry => {
                     const date = new Date(entry.date || entry.periodStart);
@@ -4337,6 +4397,15 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
                     }
                     byWeek[weekKey].push(entry);
                   });
+
+                if (filteredEntries.length === 0) {
+                  return (
+                    <div className="rounded-xl border dark:border-slate-800 p-8 text-center text-slate-500 dark:text-slate-400">
+                      <div className="text-4xl mb-2">🔍</div>
+                      <div className="text-sm">Sem registos com estes filtros</div>
+                    </div>
+                  );
+                }
 
                 return Object.entries(byWeek).map(([weekStart, entries]) => {
                   const start = new Date(weekStart);
