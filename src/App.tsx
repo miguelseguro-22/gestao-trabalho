@@ -3922,19 +3922,23 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
   // 🆕 Atualizar workerOrder quando aparecem novos trabalhadores
   useEffect(() => {
     const currentNames = stats.map(s => s.name);
-    const hasNewWorkers = currentNames.some(name => !workerOrder.includes(name));
 
-    if (hasNewWorkers || workerOrder.length === 0) {
-      // Adicionar novos trabalhadores ao final da ordem
-      const newOrder = [...workerOrder];
-      currentNames.forEach(name => {
-        if (!newOrder.includes(name)) {
-          newOrder.push(name);
-        }
-      });
-      setWorkerOrder(newOrder);
-    }
-  }, [stats]);
+    // Usar forma funcional para obter o valor atual do workerOrder
+    setWorkerOrder(prevOrder => {
+      // Só atualizar se houver novos trabalhadores
+      const newWorkers = currentNames.filter(name => !prevOrder.includes(name));
+
+      if (newWorkers.length > 0) {
+        return [...prevOrder, ...newWorkers];
+      } else if (prevOrder.length === 0 && currentNames.length > 0) {
+        // Inicializar ordem com todos os trabalhadores
+        return currentNames;
+      }
+
+      // Não fazer alterações se não há novos trabalhadores
+      return prevOrder;
+    });
+  }, [stats]); // Apenas stats como dependência para evitar loops
 
   // 🆕 Handlers de drag-and-drop
   const handleDragStart = (e, workerName) => {
@@ -3949,6 +3953,7 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
 
   const handleDrop = (e, targetWorkerName) => {
     e.preventDefault();
+    e.stopPropagation();
 
     if (!draggedWorker || draggedWorker === targetWorkerName) {
       setDraggedWorker(null);
@@ -4185,19 +4190,20 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
               {sortedStats.map((worker) => (
                 <tr
                   key={worker.name}
-                  draggable
+                  draggable="true"
                   onDragStart={(e) => handleDragStart(e, worker.name)}
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, worker.name)}
                   onDragEnd={handleDragEnd}
-                  className={`border-t dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-move transition-opacity ${
-                    draggedWorker === worker.name ? 'opacity-50' : ''
+                  className={`border-t dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-opacity ${
+                    draggedWorker === worker.name ? 'opacity-50' : 'opacity-100'
                   }`}
+                  style={{ cursor: 'move' }}
                 >
                   {/* NOME */}
                   <td className="px-2 py-2 font-medium text-xs border-r dark:border-slate-700 sticky left-0 bg-white dark:bg-slate-950">
                     <div className="flex items-center gap-2 group">
-                      <span className="text-slate-400 cursor-grab active:cursor-grabbing">⋮⋮</span>
+                      <span className="text-slate-400 select-none" style={{ cursor: 'grab' }}>⋮⋮</span>
                       <span className="flex-1">{worker.name}</span>
                       {manuallyAddedWorkers.includes(worker.name) && worker.entries.length === 0 && (
                         <button
