@@ -3077,25 +3077,31 @@ const LogisticsView = ({ orders, moveOrderStatus, setOrderPatch, setModal, downl
 
 const PeopleView = ({ people, setPeople, timeEntries }) => {
   // Calcular taxas automaticamente baseado na hora normal
-  const calculateRates = (normalRate) => {
-    const normal = Number(normalRate) || 0;
-    const extra = normal * 1.2;
-    const sabado = normal * 1.5;
-    const domingo = normal * 2;
-    const deslocada = normal * 0.5;
+  const calculateRates = (normalRateInput) => {
+    // Valor BASE sem encargos (o que o utilizador insere)
+    const baseRate = Number(normalRateInput) || 0;
+
+    // Hora Normal COM encargos (fator 1.55 para subsídios, seg. social, etc.)
+    const normal = baseRate * 1.55;
+
+    // Todas as outras taxas multiplicam o valor BASE (SEM encargos)
+    const extra = baseRate * 1.2;
+    const sabado = baseRate * 1.5;
+    const domingo = baseRate * 2;
+    const deslocada = baseRate * 0.5;
     const extraDesloc = extra * 1.5;
     const sabDesloc = sabado * 1.5;
     const domDesloc = domingo * 1.5;
 
     return {
-      normal,
-      extra,
-      sabado,
-      domingo,
-      deslocada,
-      extraDesloc,
-      sabDesloc,
-      domDesloc,
+      normal,           // COM encargos (× 1.55)
+      extra,            // SEM encargos (× 1.2)
+      sabado,           // SEM encargos (× 1.5)
+      domingo,          // SEM encargos (× 2.0)
+      deslocada,        // SEM encargos (× 0.5)
+      extraDesloc,      // Extra × 1.5
+      sabDesloc,        // Sábado × 1.5
+      domDesloc,        // Domingo × 1.5
       fimSemana: domingo  // Compatibilidade com código legado (usa domingo como default)
     };
   };
