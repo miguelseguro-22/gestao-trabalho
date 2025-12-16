@@ -3746,6 +3746,12 @@ const CostForecastTool = ({ workers, people, vehicles }) => {
                   <div className="text-lg font-bold text-purple-600">{currency(forecast.totalOvertimeDisplacementCost)}</div>
                 </div>
               )}
+              {forecast.totalFuelCost > 0 && (
+                <div>
+                  <div className="text-xs text-slate-600 dark:text-slate-400">Combustível 🚗</div>
+                  <div className="text-lg font-bold text-amber-600">{currency(forecast.totalFuelCost)}</div>
+                </div>
+              )}
             </div>
 
             <div className="border-t pt-4 dark:border-slate-700">
@@ -3790,6 +3796,14 @@ const CostForecastTool = ({ workers, people, vehicles }) => {
                         <th className="px-3 py-2 text-right">Custo</th>
                       </>
                     )}
+                    {distanceKm > 0 && (
+                      <>
+                        <th className="px-3 py-2 text-left">Veículo</th>
+                        <th className="px-3 py-2 text-right">Km</th>
+                        <th className="px-3 py-2 text-right">Litros</th>
+                        <th className="px-3 py-2 text-right">Combustível</th>
+                      </>
+                    )}
                     <th className="px-3 py-2 text-right font-bold">Total</th>
                   </tr>
                 </thead>
@@ -3821,6 +3835,26 @@ const CostForecastTool = ({ workers, people, vehicles }) => {
                         <>
                           <td className="px-3 py-2 text-right">{worker.displacementHours}h</td>
                           <td className="px-3 py-2 text-right">{currency(worker.displacementCost)}</td>
+                        </>
+                      )}
+                      {distanceKm > 0 && (
+                        <>
+                          <td className="px-3 py-2 text-left">
+                            {worker.hasVehicle ? (
+                              <span className="text-xs bg-blue-100 dark:bg-blue-900 px-2 py-1 rounded">{worker.vehiclePlate}</span>
+                            ) : (
+                              <span className="text-xs text-slate-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {worker.totalKm > 0 ? `${worker.totalKm.toFixed(0)} km` : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {worker.fuelConsumption > 0 ? `${worker.fuelConsumption.toFixed(1)} L` : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-right text-amber-600">
+                            {worker.fuelCost > 0 ? currency(worker.fuelCost) : '—'}
+                          </td>
                         </>
                       )}
                       <td className="px-3 py-2 text-right font-bold text-green-600">{currency(worker.total)}</td>
