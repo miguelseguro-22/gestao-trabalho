@@ -3360,15 +3360,6 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
           </table>
         </div>
       </Card>
-
-      {/* Previsão de Custos */}
-      <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
-        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-          <span className="text-2xl">💰</span>
-          Previsão de Custos
-        </h3>
-        <CostForecastTool workers={list} people={people} />
-      </Card>
     </section>
   );
 };
@@ -9338,6 +9329,11 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
     return Array.from(new Set(timeEntries.map(t => t.project).filter(Boolean))).sort();
   }, [timeEntries]);
 
+  // Lista de colaboradores para Previsão de Custos
+  const workersList = useMemo(() => {
+    return Object.keys(people || {}).sort();
+  }, [people]);
+
   // Mapa de orçamentos por projeto
   const projectBudgets = useMemo(() => {
     const map = new Map();
@@ -9844,6 +9840,15 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
             </select>
           </div>
         </div>
+      </Card>
+
+      {/* Previsão de Custos */}
+      <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
+        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+          <span className="text-2xl">💰</span>
+          Previsão de Custos
+        </h3>
+        <CostForecastTool workers={workersList} people={people} />
       </Card>
 
       {/* Dashboard Executivo - Semáforos de Status */}
