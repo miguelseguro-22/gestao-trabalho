@@ -3371,13 +3371,16 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
 };
 
 // 💰 FERRAMENTA DE PREVISÃO DE CUSTOS
-const CostForecastTool = ({ workers, people }) => {
+const CostForecastTool = ({ workers, people, vehicles }) => {
   const [selectedWorkers, setSelectedWorkers] = useState([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isDisplacement, setIsDisplacement] = useState(false);
   const [overtimeHours, setOvertimeHours] = useState(0);
   const [overtimeDisplacementHours, setOvertimeDisplacementHours] = useState(0);
+  const [workLocation, setWorkLocation] = useState('');
+  const [distanceKm, setDistanceKm] = useState(0);
+  const [extraKmPerWeek, setExtraKmPerWeek] = useState(100);
 
   const toggleWorker = (workerName) => {
     setSelectedWorkers(prev =>
@@ -3426,9 +3429,13 @@ const CostForecastTool = ({ workers, people }) => {
     let totalSundayCost = 0;
     let totalDisplacementCost = 0;
     let totalOvertimeDisplacementCost = 0;
+    let totalFuelCost = 0;
 
     const workerDetails = selectedWorkers.map(workerName => {
       const rates = personRates(people, workerName, null);
+
+      // Buscar veículo associado ao colaborador
+      const assignedVehicle = (vehicles || []).find(v => v.assignedTo === workerName);
 
       // Horas normais (8h/dia útil)
       const normalHours = workDays * 8;
@@ -3451,7 +3458,28 @@ const CostForecastTool = ({ workers, people }) => {
       // Horas extra deslocado (se ativo)
       const overtimeDisplacementCost = isDisplacement ? (overtimeDisplacementHours * (rates.extraDesloc || rates.extra * 1.5)) : 0;
 
-      const workerTotal = normalCost + extraCost + saturdayCost + sundayCost + displacementCost + overtimeDisplacementCost;
+      // Calcular custos de combustível (se tiver veículo e distância definida)
+      let fuelCost = 0;
+      let totalKm = 0;
+      let fuelConsumption = 0;
+      if (assignedVehicle && distanceKm > 0) {
+        // Número de semanas no período
+        const weeks = Math.ceil(totalDays / 7);
+
+        // Km total = (distância ida+volta × dias de trabalho) + km extra por semana
+        const dailyRoundTripKm = distanceKm * 2; // ida e volta
+        totalKm = (dailyRoundTripKm * totalDays) + (extraKmPerWeek * weeks);
+
+        // Consumo em litros
+        const avgConsumption = assignedVehicle.avgConsumption || 7.5;
+        fuelConsumption = (totalKm * avgConsumption) / 100;
+
+        // Custo de combustível
+        const fuelPrice = assignedVehicle.fuelPrice || 1.65;
+        fuelCost = fuelConsumption * fuelPrice;
+      }
+
+      const workerTotal = normalCost + extraCost + saturdayCost + sundayCost + displacementCost + overtimeDisplacementCost + fuelCost;
 
       totalNormalCost += normalCost;
       totalOvertimeCost += extraCost;
@@ -3459,6 +3487,7 @@ const CostForecastTool = ({ workers, people }) => {
       totalSundayCost += sundayCost;
       totalDisplacementCost += displacementCost;
       totalOvertimeDisplacementCost += overtimeDisplacementCost;
+      totalFuelCost += fuelCost;
 
       return {
         name: workerName,
@@ -3474,11 +3503,16 @@ const CostForecastTool = ({ workers, people }) => {
         displacementCost,
         overtimeDisplacementHours: isDisplacement ? overtimeDisplacementHours : 0,
         overtimeDisplacementCost,
+        hasVehicle: !!assignedVehicle,
+        vehiclePlate: assignedVehicle?.plate || '—',
+        totalKm,
+        fuelConsumption,
+        fuelCost,
         total: workerTotal
       };
     });
 
-    const grandTotal = totalNormalCost + totalOvertimeCost + totalSaturdayCost + totalSundayCost + totalDisplacementCost + totalOvertimeDisplacementCost;
+    const grandTotal = totalNormalCost + totalOvertimeCost + totalSaturdayCost + totalSundayCost + totalDisplacementCost + totalOvertimeDisplacementCost + totalFuelCost;
 
     return {
       workDays,
@@ -3491,10 +3525,11 @@ const CostForecastTool = ({ workers, people }) => {
       totalSundayCost,
       totalDisplacementCost,
       totalOvertimeDisplacementCost,
+      totalFuelCost,
       grandTotal,
       workerDetails
     };
-  }, [selectedWorkers, startDate, endDate, isDisplacement, overtimeHours, overtimeDisplacementHours, people, workers]);
+  }, [selectedWorkers, startDate, endDate, isDisplacement, overtimeHours, overtimeDisplacementHours, distanceKm, extraKmPerWeek, people, workers, vehicles]);
 
   return (
     <div className="space-y-6">
@@ -3562,6 +3597,57 @@ const CostForecastTool = ({ workers, people }) => {
           </div>
         </div>
       )}
+
+      {/* Custos de Deslocação (Combustível) */}
+      <Card className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20">
+        <h4 className="font-bold mb-3 flex items-center gap-2">
+          <span className="text-xl">🚗</span>
+          Custos de Deslocação (Combustível)
+        </h4>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+          Calcule automaticamente os custos de combustível para colaboradores com veículo atribuído
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-1">
+            <label className="block text-sm font-medium mb-2">Localização da Obra</label>
+            <input
+              type="text"
+              value={workLocation}
+              onChange={(e) => setWorkLocation(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+              placeholder="Ex: Av. da Liberdade, Lisboa"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Distância até Obra (km)</label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={distanceKm}
+              onChange={(e) => setDistanceKm(parseFloat(e.target.value) || 0)}
+              className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+              placeholder="0"
+            />
+            <p className="text-xs text-slate-500 mt-1">Distância de ida (volta será calculada automaticamente)</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Km Extra por Semana</label>
+            <input
+              type="number"
+              min="0"
+              step="10"
+              value={extraKmPerWeek}
+              onChange={(e) => setExtraKmPerWeek(parseFloat(e.target.value) || 0)}
+              className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+              placeholder="100"
+            />
+            <p className="text-xs text-slate-500 mt-1">Deslocações adicionais na zona da obra</p>
+          </div>
+        </div>
+      </Card>
 
       {/* Seleção de Colaboradores */}
       <div>
@@ -3761,97 +3847,393 @@ const CostForecastTool = ({ workers, people }) => {
 // === PeopleView (a tua versão completa) ===
 // ... (o teu código PeopleView que já tens)
 
-const VehiclesView = ({ vehicles, setVehicles }) => {
-  const [form,setForm]=useState({ id:null, plate:'', model:'', inspAt:'', serviceAt:'', notes:'' });
-  const [editing,setEditing]=useState(false);
+// 🚗 GESTÃO COMPLETA DE FROTA
+const VehiclesView = ({ vehicles, setVehicles, peopleNames }) => {
+  const emptyForm = {
+    id: null,
+    plate: '',
+    model: '',
+    assignedTo: '',
+    fuelType: 'Diesel',
+    avgConsumption: 7.5,
+    fuelPrice: 1.65,
+    currentKm: 0,
+    lastKmUpdate: todayISO(),
+    lastInspection: '',
+    nextInspection: '',
+    lastService: '',
+    nextService: '',
+    serviceIntervalKm: 15000,
+    insuranceCost: 0,
+    taxCost: 0,
+    maintenanceHistory: [],
+    notes: ''
+  };
 
-  const save=()=>{
-    if(!form.plate.trim()) return;
-    if(editing){
-      setVehicles(list=>list.map(v=>v.id===form.id?{...form}:v));
-    }else{
-      setVehicles(list=>[{...form, id:uid()}, ...list]);
+  const [form, setForm] = useState(emptyForm);
+  const [editing, setEditing] = useState(false);
+  const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [maintenanceForm, setMaintenanceForm] = useState({
+    date: todayISO(),
+    type: 'Revisão',
+    description: '',
+    cost: 0,
+    km: 0
+  });
+
+  const save = () => {
+    if (!form.plate.trim()) return;
+    if (editing) {
+      setVehicles(list => list.map(v => v.id === form.id ? { ...form } : v));
+    } else {
+      setVehicles(list => [{ ...form, id: uid() }, ...list]);
     }
-    setForm({ id:null, plate:'', model:'', inspAt:'', serviceAt:'', notes:'' });
+    setForm(emptyForm);
     setEditing(false);
   };
-  const edit=(v)=>{ setForm(v); setEditing(true); };
-  const remove=(id)=> setVehicles(list=>list.filter(v=>v.id!==id));
 
-  const daysTo = (iso)=> {
-    if(!iso) return null;
-    const a=new Date(); a.setHours(0,0,0,0);
-    const b=new Date(iso); b.setHours(0,0,0,0);
-    return Math.round((b-a)/(1000*60*60*24));
+  const edit = (v) => {
+    setForm({ ...emptyForm, ...v });
+    setEditing(true);
   };
 
-  const tone=(d)=> d==null? 'neutral' : d<0? 'rose' : d<=30? 'amber' : 'emerald';
+  const remove = (id) => setVehicles(list => list.filter(v => v.id !== id));
+
+  const addMaintenance = (vehicleId) => {
+    if (!maintenanceForm.description.trim()) return;
+    setVehicles(list => list.map(v => {
+      if (v.id === vehicleId) {
+        return {
+          ...v,
+          maintenanceHistory: [
+            { id: uid(), ...maintenanceForm },
+            ...(v.maintenanceHistory || [])
+          ]
+        };
+      }
+      return v;
+    }));
+    setMaintenanceForm({
+      date: todayISO(),
+      type: 'Revisão',
+      description: '',
+      cost: 0,
+      km: 0
+    });
+  };
+
+  const removeMaintenance = (vehicleId, maintenanceId) => {
+    setVehicles(list => list.map(v => {
+      if (v.id === vehicleId) {
+        return {
+          ...v,
+          maintenanceHistory: (v.maintenanceHistory || []).filter(m => m.id !== maintenanceId)
+        };
+      }
+      return v;
+    }));
+  };
+
+  const daysTo = (iso) => {
+    if (!iso) return null;
+    const a = new Date(); a.setHours(0, 0, 0, 0);
+    const b = new Date(iso); b.setHours(0, 0, 0, 0);
+    return Math.round((b - a) / (1000 * 60 * 60 * 24));
+  };
+
+  const tone = (d) => d == null ? 'neutral' : d < 0 ? 'rose' : d <= 30 ? 'amber' : 'emerald';
+
+  // Calcular KPIs da frota
+  const fleetKPIs = useMemo(() => {
+    let totalVehicles = vehicles.length;
+    let assignedVehicles = vehicles.filter(v => v.assignedTo).length;
+    let inspectionsExpiringSoon = vehicles.filter(v => {
+      const days = daysTo(v.nextInspection);
+      return days !== null && days >= 0 && days <= 30;
+    }).length;
+    let servicesExpiringSoon = vehicles.filter(v => {
+      const days = daysTo(v.nextService);
+      return days !== null && days >= 0 && days <= 30;
+    }).length;
+    let totalAnnualCost = vehicles.reduce((sum, v) => sum + (v.insuranceCost || 0) + (v.taxCost || 0), 0);
+    let totalMaintenanceCost = vehicles.reduce((sum, v) => {
+      const hist = v.maintenanceHistory || [];
+      return sum + hist.reduce((s, m) => s + (m.cost || 0), 0);
+    }, 0);
+
+    return {
+      totalVehicles,
+      assignedVehicles,
+      inspectionsExpiringSoon,
+      servicesExpiringSoon,
+      totalAnnualCost,
+      totalMaintenanceCost
+    };
+  }, [vehicles]);
 
   return (
     <section className="space-y-4">
-      <PageHeader icon="building" title="Veículos" subtitle={`${vehicles.length} registados`} />
-      <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          <label className="text-sm">Matrícula
-            <input className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                   value={form.plate} onChange={e=>setForm({...form,plate:e.target.value})}/>
+      <PageHeader icon="🚗" title="Gestão de Frota" subtitle={`${vehicles.length} veículos registados`} />
+
+      {/* Dashboard KPIs */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="p-5 bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+          <div className="text-sm opacity-90">Total de Veículos</div>
+          <div className="text-3xl font-bold mt-2">{fleetKPIs.totalVehicles}</div>
+          <div className="text-xs opacity-80 mt-2">{fleetKPIs.assignedVehicles} atribuídos a colaboradores</div>
+        </Card>
+
+        <Card className="p-5 bg-gradient-to-br from-amber-500 to-amber-600 text-white">
+          <div className="text-sm opacity-90">Inspeções (próximos 30 dias)</div>
+          <div className="text-3xl font-bold mt-2">{fleetKPIs.inspectionsExpiringSoon}</div>
+          <div className="text-xs opacity-80 mt-2">Requerem atenção</div>
+        </Card>
+
+        <Card className="p-5 bg-gradient-to-br from-orange-500 to-orange-600 text-white">
+          <div className="text-sm opacity-90">Revisões (próximos 30 dias)</div>
+          <div className="text-3xl font-bold mt-2">{fleetKPIs.servicesExpiringSoon}</div>
+          <div className="text-xs opacity-80 mt-2">Agendar manutenção</div>
+        </Card>
+
+        <Card className="p-5 bg-gradient-to-br from-green-500 to-green-600 text-white">
+          <div className="text-sm opacity-90">Custos Anuais Fixos</div>
+          <div className="text-3xl font-bold mt-2">{currency(fleetKPIs.totalAnnualCost)}</div>
+          <div className="text-xs opacity-80 mt-2">Seguros + Impostos</div>
+        </Card>
+      </div>
+
+      {/* Formulário */}
+      <Card className="p-6">
+        <h3 className="text-lg font-bold mb-4">{editing ? 'Editar Veículo' : 'Adicionar Veículo'}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <label className="text-sm font-medium">
+            Matrícula *
+            <input
+              className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.plate}
+              onChange={e => setForm({ ...form, plate: e.target.value })}
+              placeholder="AA-00-BB"
+            />
           </label>
-          <label className="text-sm">Modelo
-            <input className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                   value={form.model} onChange={e=>setForm({...form,model:e.target.value})}/>
+
+          <label className="text-sm font-medium">
+            Modelo *
+            <input
+              className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.model}
+              onChange={e => setForm({ ...form, model: e.target.value })}
+              placeholder="Renault Kangoo"
+            />
           </label>
-          <label className="text-sm">Inspeção (até)
-            <input type="date" className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                   value={form.inspAt} onChange={e=>setForm({...form,inspAt:e.target.value})}/>
+
+          <label className="text-sm font-medium">
+            Atribuído a (Colaborador)
+            <input
+              list="people-vehicles"
+              className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.assignedTo}
+              onChange={e => setForm({ ...form, assignedTo: e.target.value })}
+              placeholder="Nome do colaborador"
+            />
+            <datalist id="people-vehicles">
+              {peopleNames?.map(name => <option key={name} value={name} />)}
+            </datalist>
           </label>
-          <label className="text-sm">Revisão (até)
-            <input type="date" className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                   value={form.serviceAt} onChange={e=>setForm({...form,serviceAt:e.target.value})}/>
+
+          <label className="text-sm font-medium">
+            Tipo de Combustível
+            <select
+              className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.fuelType}
+              onChange={e => setForm({ ...form, fuelType: e.target.value })}
+            >
+              <option value="Diesel">Diesel</option>
+              <option value="Gasolina">Gasolina</option>
+              <option value="Elétrico">Elétrico</option>
+              <option value="Híbrido">Híbrido</option>
+            </select>
           </label>
-          <label className="text-sm md:col-span-5">Notas
-            <input className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                   value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})}/>
+
+          <label className="text-sm font-medium">
+            Consumo Médio (l/100km)
+            <input
+              type="number"
+              step="0.1"
+              className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.avgConsumption}
+              onChange={e => setForm({ ...form, avgConsumption: Number(e.target.value) })}
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Preço Combustível (€/litro)
+            <input
+              type="number"
+              step="0.01"
+              className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.fuelPrice}
+              onChange={e => setForm({ ...form, fuelPrice: Number(e.target.value) })}
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Quilometragem Atual
+            <input
+              type="number"
+              className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.currentKm}
+              onChange={e => setForm({ ...form, currentKm: Number(e.target.value), lastKmUpdate: todayISO() })}
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Intervalo Revisão (km)
+            <input
+              type="number"
+              className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.serviceIntervalKm}
+              onChange={e => setForm({ ...form, serviceIntervalKm: Number(e.target.value) })}
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Última Inspeção
+            <input
+              type="date"
+              className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.lastInspection}
+              onChange={e => setForm({ ...form, lastInspection: e.target.value })}
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Próxima Inspeção
+            <input
+              type="date"
+              className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.nextInspection}
+              onChange={e => setForm({ ...form, nextInspection: e.target.value })}
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Última Revisão
+            <input
+              type="date"
+              className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.lastService}
+              onChange={e => setForm({ ...form, lastService: e.target.value })}
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Próxima Revisão
+            <input
+              type="date"
+              className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.nextService}
+              onChange={e => setForm({ ...form, nextService: e.target.value })}
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Seguro Anual (€)
+            <input
+              type="number"
+              className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.insuranceCost}
+              onChange={e => setForm({ ...form, insuranceCost: Number(e.target.value) })}
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Imposto Anual (€)
+            <input
+              type="number"
+              className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.taxCost}
+              onChange={e => setForm({ ...form, taxCost: Number(e.target.value) })}
+            />
+          </label>
+
+          <label className="text-sm font-medium md:col-span-3">
+            Notas
+            <input
+              className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.notes}
+              onChange={e => setForm({ ...form, notes: e.target.value })}
+              placeholder="Informações adicionais sobre o veículo..."
+            />
           </label>
         </div>
-        <div className="mt-3 flex gap-2 justify-end">
-          {editing && <Button variant="secondary" onClick={()=>{setEditing(false);setForm({ id:null, plate:'', model:'', inspAt:'', serviceAt:'', notes:'' });}}>Cancelar</Button>}
-          <Button onClick={save}>{editing?'Guardar':'Adicionar'}</Button>
+
+        <div className="mt-4 flex gap-2 justify-end">
+          {editing && (
+            <Button variant="secondary" onClick={() => { setEditing(false); setForm(emptyForm); }}>
+              Cancelar
+            </Button>
+          )}
+          <Button onClick={save}>{editing ? 'Guardar Alterações' : 'Adicionar Veículo'}</Button>
         </div>
       </Card>
 
-      <Card className="p-4">
+      {/* Lista de Veículos */}
+      <Card className="p-6">
+        <h3 className="text-lg font-bold mb-4">Frota Registada</h3>
         <div className="overflow-auto rounded-xl border dark:border-slate-800">
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-900/50">
               <tr>
                 <th className="px-3 py-2 text-left">Matrícula</th>
                 <th className="px-3 py-2 text-left">Modelo</th>
-                <th className="px-3 py-2 text-left">Inspeção</th>
-                <th className="px-3 py-2 text-left">Revisão</th>
+                <th className="px-3 py-2 text-left">Colaborador</th>
+                <th className="px-3 py-2 text-left">Combustível</th>
+                <th className="px-3 py-2 text-left">Consumo</th>
+                <th className="px-3 py-2 text-left">Km</th>
+                <th className="px-3 py-2 text-left">Próx. Inspeção</th>
+                <th className="px-3 py-2 text-left">Próx. Revisão</th>
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
             <tbody>
-              {vehicles.length===0 && <tr><td colSpan="5" className="px-3 py-8 text-center text-slate-500">Sem veículos</td></tr>}
-              {vehicles.map(v=>{
-                const dI=daysTo(v.inspAt), dS=daysTo(v.serviceAt);
+              {vehicles.length === 0 && (
+                <tr>
+                  <td colSpan="9" className="px-3 py-8 text-center text-slate-500">
+                    Nenhum veículo registado. Adicione o primeiro veículo acima.
+                  </td>
+                </tr>
+              )}
+              {vehicles.map(v => {
+                const dI = daysTo(v.nextInspection);
+                const dS = daysTo(v.nextService);
                 return (
-                  <tr key={v.id} className="border-t dark:border-slate-800">
-                    <td className="px-3 py-2">{v.plate}</td>
+                  <tr key={v.id} className="border-t dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="px-3 py-2 font-medium">{v.plate}</td>
                     <td className="px-3 py-2">{v.model}</td>
+                    <td className="px-3 py-2">{v.assignedTo || <span className="text-slate-400">—</span>}</td>
+                    <td className="px-3 py-2">{v.fuelType || 'Diesel'}</td>
+                    <td className="px-3 py-2">{(v.avgConsumption || 0).toFixed(1)} l/100km</td>
+                    <td className="px-3 py-2">{(v.currentKm || 0).toLocaleString()} km</td>
                     <td className="px-3 py-2">
                       <Badge tone={tone(dI)}>
-                        {v.inspAt? `${fmtDate(v.inspAt)} · ${dI<0?`${-dI} dias em atraso`: `${dI} dias`}` : '—'}
+                        {v.nextInspection ? `${fmtDate(v.nextInspection)} ${dI < 0 ? `(${-dI}d atraso)` : `(${dI}d)`}` : '—'}
                       </Badge>
                     </td>
                     <td className="px-3 py-2">
                       <Badge tone={tone(dS)}>
-                        {v.serviceAt? `${fmtDate(v.serviceAt)} · ${dS<0?`${-dS} dias em atraso`: `${dS} dias`}` : '—'}
+                        {v.nextService ? `${fmtDate(v.nextService)} ${dS < 0 ? `(${-dS}d atraso)` : `(${dS}d)`}` : '—'}
                       </Badge>
                     </td>
-                    <td className="px-3 py-2 text-right">
-                      <Button variant="secondary" size="sm" onClick={()=>edit(v)}>Editar</Button>{' '}
-                      <Button variant="danger" size="sm" onClick={()=>remove(v.id)}>Apagar</Button>
+                    <td className="px-3 py-2 text-right space-x-2">
+                      <Button variant="secondary" size="sm" onClick={() => setSelectedVehicle(v)}>
+                        Histórico
+                      </Button>
+                      <Button variant="secondary" size="sm" onClick={() => edit(v)}>
+                        Editar
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => remove(v.id)}>
+                        Apagar
+                      </Button>
                     </td>
                   </tr>
                 );
@@ -3860,6 +4242,145 @@ const VehiclesView = ({ vehicles, setVehicles }) => {
           </table>
         </div>
       </Card>
+
+      {/* Modal de Histórico de Manutenção */}
+      {selectedVehicle && (
+        <Modal
+          open={!!selectedVehicle}
+          title={`Histórico de Manutenção - ${selectedVehicle.plate} (${selectedVehicle.model})`}
+          onClose={() => setSelectedVehicle(null)}
+          wide
+        >
+          <div className="space-y-4">
+            {/* Informação do Veículo */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
+              <div>
+                <div className="text-xs text-slate-500">Colaborador</div>
+                <div className="font-medium">{selectedVehicle.assignedTo || '—'}</div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-500">Quilometragem</div>
+                <div className="font-medium">{(selectedVehicle.currentKm || 0).toLocaleString()} km</div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-500">Consumo Médio</div>
+                <div className="font-medium">{(selectedVehicle.avgConsumption || 0).toFixed(1)} l/100km</div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-500">Custo Total Manutenção</div>
+                <div className="font-medium text-green-600">
+                  {currency((selectedVehicle.maintenanceHistory || []).reduce((sum, m) => sum + (m.cost || 0), 0))}
+                </div>
+              </div>
+            </div>
+
+            {/* Adicionar Manutenção */}
+            <Card className="p-4">
+              <h4 className="font-bold mb-3">Adicionar Registo de Manutenção</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="text-sm font-medium">
+                  Data
+                  <input
+                    type="date"
+                    className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+                    value={maintenanceForm.date}
+                    onChange={e => setMaintenanceForm({ ...maintenanceForm, date: e.target.value })}
+                  />
+                </label>
+
+                <label className="text-sm font-medium">
+                  Tipo
+                  <select
+                    className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+                    value={maintenanceForm.type}
+                    onChange={e => setMaintenanceForm({ ...maintenanceForm, type: e.target.value })}
+                  >
+                    <option value="Revisão">Revisão</option>
+                    <option value="Inspeção">Inspeção</option>
+                    <option value="Pneus">Mudança de Pneus</option>
+                    <option value="Reparação">Reparação</option>
+                    <option value="Limpeza">Limpeza/Lavagem</option>
+                    <option value="Outro">Outro</option>
+                  </select>
+                </label>
+
+                <label className="text-sm font-medium md:col-span-2">
+                  Descrição
+                  <input
+                    className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+                    value={maintenanceForm.description}
+                    onChange={e => setMaintenanceForm({ ...maintenanceForm, description: e.target.value })}
+                    placeholder="Ex: Mudança de óleo e filtros"
+                  />
+                </label>
+
+                <label className="text-sm font-medium">
+                  Custo (€)
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+                    value={maintenanceForm.cost}
+                    onChange={e => setMaintenanceForm({ ...maintenanceForm, cost: Number(e.target.value) })}
+                  />
+                </label>
+
+                <label className="text-sm font-medium">
+                  Quilometragem (km)
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded-lg border p-2 dark:bg-slate-900 dark:border-slate-700"
+                    value={maintenanceForm.km}
+                    onChange={e => setMaintenanceForm({ ...maintenanceForm, km: Number(e.target.value) })}
+                  />
+                </label>
+              </div>
+
+              <div className="mt-3 flex justify-end">
+                <Button onClick={() => addMaintenance(selectedVehicle.id)}>
+                  Adicionar Registo
+                </Button>
+              </div>
+            </Card>
+
+            {/* Lista de Manutenções */}
+            <div className="space-y-2">
+              <h4 className="font-bold">Histórico</h4>
+              {(!selectedVehicle.maintenanceHistory || selectedVehicle.maintenanceHistory.length === 0) && (
+                <p className="text-sm text-slate-500 py-4 text-center">
+                  Nenhum registo de manutenção. Adicione o primeiro registo acima.
+                </p>
+              )}
+              {(selectedVehicle.maintenanceHistory || []).map(m => (
+                <Card key={m.id} className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge tone="sky">{m.type}</Badge>
+                        <span className="text-sm font-medium">{fmtDate(m.date)}</span>
+                        <span className="text-xs text-slate-500">{(m.km || 0).toLocaleString()} km</span>
+                      </div>
+                      <p className="text-sm text-slate-700 dark:text-slate-300">{m.description}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-green-600">{currency(m.cost || 0)}</div>
+                      </div>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => removeMaintenance(selectedVehicle.id, m.id)}
+                      >
+                        Apagar
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </Modal>
+      )}
     </section>
   );
 };
@@ -9315,7 +9836,7 @@ const Sparkline = ({ values, width = 60, height = 20, color = '#00A9B8' }) => {
 };
 
 // 📊 VIEW: RELATÓRIOS DE CUSTOS POR OBRA (ADVANCED)
-const CostReportsView = ({ timeEntries, projects, people }) => {
+const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [selectedProject, setSelectedProject] = useState('all');
   const [startDate, setStartDate] = useState(() => {
@@ -9854,7 +10375,7 @@ const CostReportsView = ({ timeEntries, projects, people }) => {
           <span className="text-2xl">💰</span>
           Previsão de Custos
         </h3>
-        <CostForecastTool workers={workersList} people={people} />
+        <CostForecastTool workers={workersList} people={people} vehicles={vehicles} />
       </Card>
 
       {/* Dashboard Executivo - Semáforos de Status */}
@@ -11308,6 +11829,7 @@ function TableMaterials() {
             <VehiclesView
               vehicles={vehicles}
               setVehicles={setVehicles}
+              peopleNames={Object.keys(people||{}).sort()}
             />
           )}
           {view === "agenda" && (
@@ -11332,6 +11854,7 @@ function TableMaterials() {
               timeEntries={timeEntries}
               projects={projects}
               people={people}
+              vehicles={vehicles}
             />
           )}
 
