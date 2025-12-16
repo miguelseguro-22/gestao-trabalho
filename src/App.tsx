@@ -3104,16 +3104,50 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
   const [form, setForm] = useState(empty);
   const [editing, setEditing] = useState(null);
 
-  // Extrair colaboradores usando a MESMA lógica do Relatório Mensal
+  // Extrair APENAS colaboradores válidos (nomes de pessoas reais)
   const workersFromEntries = useMemo(() => {
     const names = new Set();
     const allEntries = dedupTimeEntries(timeEntries);
 
+    // Função para validar se é um nome de pessoa válido
+    const isValidWorkerName = (name) => {
+      if (!name || typeof name !== 'string') return false;
+
+      // Limpar espaços e vírgulas finais
+      const cleaned = name.trim().replace(/,\s*$/g, '');
+
+      // Rejeitar se:
+      // - Começar com # (ex: #N/A)
+      if (cleaned.startsWith('#')) return false;
+
+      // - Tiver vírgula (indica múltiplos nomes não processados ou nome de empresa)
+      if (cleaned.includes(',')) return false;
+
+      // - Menos de 3 caracteres (muito curto para ser nome)
+      if (cleaned.length < 3) return false;
+
+      // - Palavras-chave de empresas/serviços (case insensitive)
+      const lowerName = cleaned.toLowerCase();
+      const forbiddenWords = [
+        'timeless', 'advantage', 'lda', 'televisão', 'televisao',
+        'preventiva', 'curativa', 'vortal', 'sp ', 'ltd', 'unipessoal',
+        'empresa', 'serviços', 'servicos', 'limitada', 'sociedade'
+      ];
+      if (forbiddenWords.some(word => lowerName.includes(word))) return false;
+
+      // - Mais de 4 palavras (provavelmente descrição ou empresa)
+      if (cleaned.split(/\s+/).length > 4) return false;
+
+      // - Tiver " e " no meio (ex: "Bruno e Madaleno")
+      if (/ e /i.test(cleaned)) return false;
+
+      return true;
+    };
+
     allEntries.forEach(entry => {
-      // Mesma lógica que MonthlyReportView linha 3844
       const workerName = entry.worker || entry.supervisor || entry.colaborador;
-      if (workerName && workerName !== 'Desconhecido') {
-        names.add(workerName);
+      if (workerName && workerName !== 'Desconhecido' && isValidWorkerName(workerName)) {
+        names.add(workerName.trim().replace(/,\s*$/g, ''));
       }
     });
 
