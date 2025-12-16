@@ -3360,7 +3360,404 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
           </table>
         </div>
       </Card>
+
+      {/* Previsão de Custos */}
+      <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
+        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+          <span className="text-2xl">💰</span>
+          Previsão de Custos
+        </h3>
+        <CostForecastTool workers={list} people={people} />
+      </Card>
     </section>
+  );
+};
+
+// 💰 FERRAMENTA DE PREVISÃO DE CUSTOS
+const CostForecastTool = ({ workers, people }) => {
+  const [selectedWorkers, setSelectedWorkers] = useState([]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [isDisplacement, setIsDisplacement] = useState(false);
+  const [overtimeHours, setOvertimeHours] = useState(0);
+  const [overtimeDisplacementHours, setOvertimeDisplacementHours] = useState(0);
+
+  const toggleWorker = (workerName) => {
+    setSelectedWorkers(prev =>
+      prev.includes(workerName)
+        ? prev.filter(w => w !== workerName)
+        : [...prev, workerName]
+    );
+  };
+
+  const selectAll = () => setSelectedWorkers([...workers]);
+  const clearAll = () => setSelectedWorkers([]);
+
+  // Calcular previsão
+  const forecast = useMemo(() => {
+    if (!startDate || !endDate || selectedWorkers.length === 0) {
+      return null;
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (start > end) return null;
+
+    // Contar dias úteis e fins de semana
+    let workDays = 0;
+    let saturdays = 0;
+    let sundays = 0;
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dayOfWeek = d.getDay();
+      if (dayOfWeek === 0) {
+        sundays++;
+      } else if (dayOfWeek === 6) {
+        saturdays++;
+      } else {
+        workDays++;
+      }
+    }
+
+    const totalDays = workDays + saturdays + sundays;
+
+    // Calcular custos por colaborador
+    let totalNormalCost = 0;
+    let totalOvertimeCost = 0;
+    let totalSaturdayCost = 0;
+    let totalSundayCost = 0;
+    let totalDisplacementCost = 0;
+    let totalOvertimeDisplacementCost = 0;
+
+    const workerDetails = selectedWorkers.map(workerName => {
+      const rates = personRates(people, workerName, null);
+
+      // Horas normais (8h/dia útil)
+      const normalHours = workDays * 8;
+      const normalCost = normalHours * rates.normal;
+
+      // Horas extra normais
+      const extraCost = overtimeHours * rates.extra;
+
+      // Sábados (8h/sábado)
+      const saturdayHours = saturdays * 8;
+      const saturdayCost = saturdayHours * (rates.sabado || rates.fimSemana * 0.75);
+
+      // Domingos (8h/domingo)
+      const sundayHours = sundays * 8;
+      const sundayCost = sundayHours * (rates.domingo || rates.fimSemana);
+
+      // Deslocação (se ativo)
+      const displacementCost = isDisplacement ? (totalDays * 8 * rates.deslocada) : 0;
+
+      // Horas extra deslocado (se ativo)
+      const overtimeDisplacementCost = isDisplacement ? (overtimeDisplacementHours * (rates.extraDesloc || rates.extra * 1.5)) : 0;
+
+      const workerTotal = normalCost + extraCost + saturdayCost + sundayCost + displacementCost + overtimeDisplacementCost;
+
+      totalNormalCost += normalCost;
+      totalOvertimeCost += extraCost;
+      totalSaturdayCost += saturdayCost;
+      totalSundayCost += sundayCost;
+      totalDisplacementCost += displacementCost;
+      totalOvertimeDisplacementCost += overtimeDisplacementCost;
+
+      return {
+        name: workerName,
+        normalHours,
+        normalCost,
+        overtimeHours: overtimeHours,
+        overtimeCost: extraCost,
+        saturdayHours,
+        saturdayCost,
+        sundayHours,
+        sundayCost,
+        displacementHours: isDisplacement ? totalDays * 8 : 0,
+        displacementCost,
+        overtimeDisplacementHours: isDisplacement ? overtimeDisplacementHours : 0,
+        overtimeDisplacementCost,
+        total: workerTotal
+      };
+    });
+
+    const grandTotal = totalNormalCost + totalOvertimeCost + totalSaturdayCost + totalSundayCost + totalDisplacementCost + totalOvertimeDisplacementCost;
+
+    return {
+      workDays,
+      saturdays,
+      sundays,
+      totalDays,
+      totalNormalCost,
+      totalOvertimeCost,
+      totalSaturdayCost,
+      totalSundayCost,
+      totalDisplacementCost,
+      totalOvertimeDisplacementCost,
+      grandTotal,
+      workerDetails
+    };
+  }, [selectedWorkers, startDate, endDate, isDisplacement, overtimeHours, overtimeDisplacementHours, people, workers]);
+
+  return (
+    <div className="space-y-6">
+      {/* Filtros */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-2">Data Início</label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Data Fim</label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Horas Extra Previstas</label>
+          <input
+            type="number"
+            min="0"
+            step="0.5"
+            value={overtimeHours}
+            onChange={(e) => setOvertimeHours(parseFloat(e.target.value) || 0)}
+            className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+            placeholder="0"
+          />
+        </div>
+
+        <div>
+          <label className="flex items-center gap-2 pt-8">
+            <input
+              type="checkbox"
+              checked={isDisplacement}
+              onChange={(e) => setIsDisplacement(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <span className="text-sm font-medium">Deslocação</span>
+          </label>
+        </div>
+      </div>
+
+      {isDisplacement && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Horas Extra Deslocado</label>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={overtimeDisplacementHours}
+              onChange={(e) => setOvertimeDisplacementHours(parseFloat(e.target.value) || 0)}
+              className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+              placeholder="0"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Seleção de Colaboradores */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-sm font-medium">Selecionar Colaboradores</label>
+          <div className="flex gap-2">
+            <Button variant="secondary" size="sm" onClick={selectAll}>
+              Selecionar Todos
+            </Button>
+            <Button variant="secondary" size="sm" onClick={clearAll}>
+              Limpar
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 p-4 bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-700 max-h-48 overflow-y-auto">
+          {workers.map(workerName => (
+            <label key={workerName} className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 p-2 rounded">
+              <input
+                type="checkbox"
+                checked={selectedWorkers.includes(workerName)}
+                onChange={() => toggleWorker(workerName)}
+                className="w-4 h-4"
+              />
+              <span className="text-sm">{workerName}</span>
+            </label>
+          ))}
+        </div>
+
+        {selectedWorkers.length > 0 && (
+          <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+            {selectedWorkers.length} colaborador{selectedWorkers.length !== 1 ? 'es' : ''} selecionado{selectedWorkers.length !== 1 ? 's' : ''}
+          </div>
+        )}
+      </div>
+
+      {/* Resultados */}
+      {forecast && (
+        <div className="space-y-4">
+          {/* Resumo do Período */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="p-4 bg-blue-50 dark:bg-blue-900/20">
+              <div className="text-xs text-slate-600 dark:text-slate-400">Dias Úteis</div>
+              <div className="text-2xl font-bold text-blue-600">{forecast.workDays}</div>
+            </Card>
+            <Card className="p-4 bg-orange-50 dark:bg-orange-900/20">
+              <div className="text-xs text-slate-600 dark:text-slate-400">Sábados</div>
+              <div className="text-2xl font-bold text-orange-600">{forecast.saturdays}</div>
+            </Card>
+            <Card className="p-4 bg-red-50 dark:bg-red-900/20">
+              <div className="text-xs text-slate-600 dark:text-slate-400">Domingos</div>
+              <div className="text-2xl font-bold text-red-600">{forecast.sundays}</div>
+            </Card>
+            <Card className="p-4 bg-purple-50 dark:bg-purple-900/20">
+              <div className="text-xs text-slate-600 dark:text-slate-400">Total Dias</div>
+              <div className="text-2xl font-bold text-purple-600">{forecast.totalDays}</div>
+            </Card>
+          </div>
+
+          {/* Breakdown de Custos */}
+          <Card className="p-6 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
+            <h4 className="text-lg font-bold mb-4">Previsão de Custos Total</h4>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+              <div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Horas Normais</div>
+                <div className="text-lg font-bold text-green-600">{currency(forecast.totalNormalCost)}</div>
+              </div>
+              {forecast.totalOvertimeCost > 0 && (
+                <div>
+                  <div className="text-xs text-slate-600 dark:text-slate-400">Horas Extra</div>
+                  <div className="text-lg font-bold text-orange-600">{currency(forecast.totalOvertimeCost)}</div>
+                </div>
+              )}
+              {forecast.totalSaturdayCost > 0 && (
+                <div>
+                  <div className="text-xs text-slate-600 dark:text-slate-400">Sábados</div>
+                  <div className="text-lg font-bold text-orange-600">{currency(forecast.totalSaturdayCost)}</div>
+                </div>
+              )}
+              {forecast.totalSundayCost > 0 && (
+                <div>
+                  <div className="text-xs text-slate-600 dark:text-slate-400">Domingos</div>
+                  <div className="text-lg font-bold text-red-600">{currency(forecast.totalSundayCost)}</div>
+                </div>
+              )}
+              {forecast.totalDisplacementCost > 0 && (
+                <div>
+                  <div className="text-xs text-slate-600 dark:text-slate-400">Deslocação</div>
+                  <div className="text-lg font-bold text-blue-600">{currency(forecast.totalDisplacementCost)}</div>
+                </div>
+              )}
+              {forecast.totalOvertimeDisplacementCost > 0 && (
+                <div>
+                  <div className="text-xs text-slate-600 dark:text-slate-400">Extra Deslocado</div>
+                  <div className="text-lg font-bold text-purple-600">{currency(forecast.totalOvertimeDisplacementCost)}</div>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t pt-4 dark:border-slate-700">
+              <div className="flex items-center justify-between">
+                <span className="text-xl font-bold">TOTAL PREVISTO</span>
+                <span className="text-3xl font-bold text-green-600">{currency(forecast.grandTotal)}</span>
+              </div>
+            </div>
+          </Card>
+
+          {/* Detalhes por Colaborador */}
+          <Card className="p-6">
+            <h4 className="text-lg font-bold mb-4">Detalhes por Colaborador</h4>
+            <div className="overflow-auto rounded-xl border dark:border-slate-800">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-900/50">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Colaborador</th>
+                    <th className="px-3 py-2 text-right">H. Normais</th>
+                    <th className="px-3 py-2 text-right">Custo</th>
+                    {overtimeHours > 0 && (
+                      <>
+                        <th className="px-3 py-2 text-right">H. Extra</th>
+                        <th className="px-3 py-2 text-right">Custo</th>
+                      </>
+                    )}
+                    {forecast.saturdays > 0 && (
+                      <>
+                        <th className="px-3 py-2 text-right">H. Sáb</th>
+                        <th className="px-3 py-2 text-right">Custo</th>
+                      </>
+                    )}
+                    {forecast.sundays > 0 && (
+                      <>
+                        <th className="px-3 py-2 text-right">H. Dom</th>
+                        <th className="px-3 py-2 text-right">Custo</th>
+                      </>
+                    )}
+                    {isDisplacement && (
+                      <>
+                        <th className="px-3 py-2 text-right">H. Desloc</th>
+                        <th className="px-3 py-2 text-right">Custo</th>
+                      </>
+                    )}
+                    <th className="px-3 py-2 text-right font-bold">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {forecast.workerDetails.map(worker => (
+                    <tr key={worker.name} className="border-t dark:border-slate-800">
+                      <td className="px-3 py-2 font-medium">{worker.name}</td>
+                      <td className="px-3 py-2 text-right">{worker.normalHours}h</td>
+                      <td className="px-3 py-2 text-right">{currency(worker.normalCost)}</td>
+                      {overtimeHours > 0 && (
+                        <>
+                          <td className="px-3 py-2 text-right">{worker.overtimeHours}h</td>
+                          <td className="px-3 py-2 text-right">{currency(worker.overtimeCost)}</td>
+                        </>
+                      )}
+                      {forecast.saturdays > 0 && (
+                        <>
+                          <td className="px-3 py-2 text-right">{worker.saturdayHours}h</td>
+                          <td className="px-3 py-2 text-right">{currency(worker.saturdayCost)}</td>
+                        </>
+                      )}
+                      {forecast.sundays > 0 && (
+                        <>
+                          <td className="px-3 py-2 text-right">{worker.sundayHours}h</td>
+                          <td className="px-3 py-2 text-right">{currency(worker.sundayCost)}</td>
+                        </>
+                      )}
+                      {isDisplacement && (
+                        <>
+                          <td className="px-3 py-2 text-right">{worker.displacementHours}h</td>
+                          <td className="px-3 py-2 text-right">{currency(worker.displacementCost)}</td>
+                        </>
+                      )}
+                      <td className="px-3 py-2 text-right font-bold text-green-600">{currency(worker.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {!forecast && (
+        <Card className="p-8 text-center">
+          <div className="text-slate-400 text-sm">
+            Selecione as datas e colaboradores para ver a previsão de custos
+          </div>
+        </Card>
+      )}
+    </div>
   );
 };
 
