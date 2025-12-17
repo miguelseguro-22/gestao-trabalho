@@ -3106,7 +3106,7 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
     };
   };
 
-  const empty = { name:'', normalRate: 12.5, email:'', phone:'' };
+  const empty = { name:'', normalRate: 12.5, employeeNumber: '', email:'', phone:'' };
   const [form, setForm] = useState(empty);
   const [editing, setEditing] = useState(null);
 
@@ -3173,6 +3173,7 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
       next[form.name] = {
         ...(next[form.name]||{}),
         rates,
+        employeeNumber: form.employeeNumber || '',
         email: form.email || '',
         phone: form.phone || ''
       };
@@ -3188,6 +3189,7 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
     setForm({
       name,
       normalRate: person.rates?.normal || 12.5,
+      employeeNumber: person.employeeNumber || '',
       email: person.email || '',
       phone: person.phone || ''
     });
@@ -3214,13 +3216,21 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
       />
 
       <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
           <label className="text-sm">Nome
             <input
               className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
               value={form.name}
               onChange={e => setForm({...form, name: e.target.value})}
               disabled={editing}
+            />
+          </label>
+          <label className="text-sm">Nº Colaborador
+            <input
+              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+              value={form.employeeNumber||''}
+              onChange={e => setForm({...form, employeeNumber: e.target.value})}
+              placeholder="001"
             />
           </label>
           <label className="text-sm">Hora Normal (€/h)
@@ -3312,6 +3322,7 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-900/50">
               <tr>
+                <th className="px-3 py-2 text-left">Nº</th>
                 <th className="px-3 py-2 text-left">Colaborador</th>
                 <th className="px-3 py-2 text-right">Normal</th>
                 <th className="px-3 py-2 text-right">Extra</th>
@@ -3327,16 +3338,20 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
             <tbody>
               {list.length === 0 && (
                 <tr>
-                  <td colSpan="10" className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan="11" className="px-3 py-8 text-center text-slate-500">
                     Sem colaboradores
                   </td>
                 </tr>
               )}
               {list.map(name => {
                 const r = personRates(people, name, null);
+                const person = people[name] || {};
                 const hasEntries = workersFromEntries.includes(name);
                 return (
                   <tr key={name} className="border-t dark:border-slate-800">
+                    <td className="px-3 py-2 font-mono text-xs text-slate-500">
+                      {person.employeeNumber || '—'}
+                    </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         {name}
@@ -5028,9 +5043,11 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
 
   // 🆕 Aplicar ordem customizada + workers adicionados manualmente
   const sortedStats = useMemo(() => {
-    // Adicionar workers manualmente adicionados (se não existirem já)
+    // 🆕 MOSTRAR TODOS OS COLABORADORES criados na página Colaboradores
     const allStats = [...stats];
-    manuallyAddedWorkers.forEach(workerName => {
+
+    // Adicionar TODOS os colaboradores de "people" que ainda não existem em stats
+    Object.keys(people || {}).forEach(workerName => {
       if (!allStats.find(s => s.name === workerName)) {
         allStats.push({
           name: workerName,
@@ -5069,29 +5086,25 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
       }
     });
 
-    if (workerOrder.length === 0) {
-      return allStats;
-    }
+    // 🆕 ORDENAR POR NÚMERO DE COLABORADOR
+    // Colaboradores com número primeiro, depois sem número (alfabético)
+    return allStats.sort((a, b) => {
+      const aNum = people[a.name]?.employeeNumber || '';
+      const bNum = people[b.name]?.employeeNumber || '';
 
-    // Separar trabalhadores na ordem e trabalhadores novos
-    const ordered = [];
-    const unordered = [];
-
-    allStats.forEach(worker => {
-      const index = workerOrder.indexOf(worker.name);
-      if (index !== -1) {
-        ordered[index] = worker;
-      } else {
-        unordered.push(worker);
+      // Se ambos têm número, ordenar por número
+      if (aNum && bNum) {
+        return aNum.localeCompare(bNum, undefined, { numeric: true });
       }
+
+      // Colaboradores com número vêm primeiro
+      if (aNum && !bNum) return -1;
+      if (!aNum && bNum) return 1;
+
+      // Se nenhum tem número, ordenar alfabeticamente por nome
+      return a.name.localeCompare(b.name);
     });
-
-    // Remover buracos do array ordered
-    const filtered = ordered.filter(Boolean);
-
-    // Juntar trabalhadores ordenados + novos trabalhadores (alfabético)
-    return [...filtered, ...unordered.sort((a, b) => a.name.localeCompare(b.name))];
-  }, [stats, workerOrder, manuallyAddedWorkers]);
+  }, [stats, people]);
 
   // 🆕 Atualizar workerOrder quando aparecem novos trabalhadores
   useEffect(() => {
@@ -5337,6 +5350,7 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
           <table className="min-w-full text-xs">
             <thead className="bg-slate-50 dark:bg-slate-900/50">
               <tr>
+                <th rowSpan={2} className="px-2 py-2 text-center border-r dark:border-slate-700">Nº</th>
                 <th rowSpan={2} className="px-2 py-2 text-left border-r dark:border-slate-700 sticky left-0 bg-slate-50 dark:bg-slate-900/50 z-10">NOME</th>
                 <th colSpan={5} className="px-2 py-1 text-center border-r dark:border-slate-700 bg-blue-50 dark:bg-blue-900/20">HORAS</th>
                 <th colSpan={5} className="px-2 py-1 text-center border-r dark:border-slate-700 bg-amber-50 dark:bg-amber-900/20">DESLOCADO</th>
@@ -5369,7 +5383,7 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
             <tbody>
               {sortedStats.length === 0 && (
                 <tr>
-                  <td colSpan={19} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={20} className="px-3 py-8 text-center text-slate-500">
                     Sem registos para este mês
                   </td>
                 </tr>
@@ -5384,6 +5398,11 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
                     draggedWorker === worker.name ? 'opacity-50' : 'opacity-100'
                   }`}
                 >
+                  {/* NÚMERO DO COLABORADOR */}
+                  <td className="px-2 py-2 text-center text-[10px] text-slate-500 border-r dark:border-slate-700 font-mono">
+                    {people[worker.name]?.employeeNumber || '—'}
+                  </td>
+
                   {/* NOME */}
                   <td className="px-2 py-2 font-medium text-xs border-r dark:border-slate-700 sticky left-0 bg-white dark:bg-slate-950">
                     <div className="flex items-center gap-2 group">
