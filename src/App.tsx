@@ -177,6 +177,178 @@ const saveCloudState=async(payload,rowId:string=CLOUD_ROW_ID)=>{
     return {success:false,error:String(err)}
   }
 }
+// =====================================================
+// 🔥 SUPABASE TIME ENTRIES SERVICE - Backend Real
+// =====================================================
+// Sync incremental para múltiplos utilizadores concorrentes
+
+const TimeEntriesService = {
+  // 📥 Carregar registos do utilizador atual
+  async fetchUserEntries(userId: string, role: string) {
+    if (!supabaseReady || !supabase) return { success: false, error: 'Supabase não disponível', data: [] }
+
+    try {
+      let query = supabase
+        .from('time_entries')
+        .select('*')
+        .order('date', { ascending: false })
+
+      // Admin vê tudo, técnicos veem apenas seus dados
+      if (role === 'tecnico') {
+        query = query.eq('user_id', userId)
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error('❌ Erro ao carregar time_entries:', error)
+        return { success: false, error: error.message, data: [] }
+      }
+
+      // Converter campos snake_case para camelCase
+      const entries = (data || []).map(entry => ({
+        id: entry.id,
+        date: entry.date,
+        template: entry.template,
+        hours: entry.hours,
+        overtime: entry.overtime,
+        project: entry.project,
+        supervisor: entry.supervisor,
+        worker: entry.worker,
+        colaborador: entry.colaborador,
+        displacement: entry.displacement,
+        periodStart: entry.period_start,
+        periodEnd: entry.period_end,
+        sickDays: entry.sick_days,
+        status: entry.status,
+        createdAt: entry.created_at,
+        updatedAt: entry.updated_at
+      }))
+
+      return { success: true, data: entries }
+    } catch (err) {
+      console.error('❌ Erro inesperado ao carregar entries:', err)
+      return { success: false, error: String(err), data: [] }
+    }
+  },
+
+  // 💾 Salvar/Atualizar um registo
+  async saveEntry(entry: any, userId: string, userName: string) {
+    if (!supabaseReady || !supabase) return { success: false, error: 'Supabase não disponível' }
+
+    try {
+      // Converter camelCase para snake_case
+      const dbEntry = {
+        id: entry.id,
+        user_id: userId,
+        date: entry.date,
+        template: entry.template,
+        hours: entry.hours || 0,
+        overtime: entry.overtime || 0,
+        project: entry.project,
+        supervisor: entry.supervisor,
+        worker: entry.worker || userName,
+        colaborador: entry.colaborador,
+        displacement: entry.displacement,
+        period_start: entry.periodStart,
+        period_end: entry.periodEnd,
+        sick_days: entry.sickDays,
+        status: entry.status || 'approved',
+        updated_by: userId
+      }
+
+      const { error } = await supabase
+        .from('time_entries')
+        .upsert(dbEntry, { onConflict: 'id' })
+
+      if (error) {
+        console.error('❌ Erro ao salvar entry:', error)
+        return { success: false, error: error.message }
+      }
+
+      return { success: true }
+    } catch (err) {
+      console.error('❌ Erro inesperado ao salvar entry:', err)
+      return { success: false, error: String(err) }
+    }
+  },
+
+  // 🗑️ Apagar um registo
+  async deleteEntry(entryId: string) {
+    if (!supabaseReady || !supabase) return { success: false, error: 'Supabase não disponível' }
+
+    try {
+      const { error } = await supabase
+        .from('time_entries')
+        .delete()
+        .eq('id', entryId)
+
+      if (error) {
+        console.error('❌ Erro ao apagar entry:', error)
+        return { success: false, error: error.message }
+      }
+
+      return { success: true }
+    } catch (err) {
+      console.error('❌ Erro inesperado ao apagar entry:', err)
+      return { success: false, error: String(err) }
+    }
+  },
+
+  // 📊 Sync incremental - apenas registos novos/alterados
+  async syncBatch(entries: any[], userId: string, userName: string, lastSyncTime: string | null) {
+    if (!supabaseReady || !supabase) return { success: false, error: 'Supabase não disponível' }
+
+    try {
+      // Filtrar apenas registos criados/alterados desde último sync
+      const entriesToSync = lastSyncTime
+        ? entries.filter(e => {
+            const entryTime = e.updatedAt || e.createdAt || new Date().toISOString()
+            return entryTime > lastSyncTime
+          })
+        : entries
+
+      if (entriesToSync.length === 0) {
+        return { success: true, synced: 0 }
+      }
+
+      // Batch upsert
+      const dbEntries = entriesToSync.map(entry => ({
+        id: entry.id,
+        user_id: userId,
+        date: entry.date,
+        template: entry.template,
+        hours: entry.hours || 0,
+        overtime: entry.overtime || 0,
+        project: entry.project,
+        supervisor: entry.supervisor,
+        worker: entry.worker || userName,
+        colaborador: entry.colaborador,
+        displacement: entry.displacement,
+        period_start: entry.periodStart,
+        period_end: entry.periodEnd,
+        sick_days: entry.sickDays,
+        status: entry.status || 'approved',
+        updated_by: userId
+      }))
+
+      const { error } = await supabase
+        .from('time_entries')
+        .upsert(dbEntries, { onConflict: 'id' })
+
+      if (error) {
+        console.error('❌ Erro ao sync batch:', error)
+        return { success: false, error: error.message }
+      }
+
+      return { success: true, synced: dbEntries.length }
+    } catch (err) {
+      console.error('❌ Erro inesperado ao sync batch:', err)
+      return { success: false, error: String(err) }
+    }
+  }
+}
+
 const toCSV=(headers,rows)=>{const esc=v=>`"${String(v??'').replace(/"/g,'""')}"`;return[headers.join(','),...rows.map(r=>r.map(esc).join(','))].join('\r\n')};
 const download=(filename,content,mime='text/csv')=>{const blob=new Blob([content],{type:mime});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url)};
 const guessDelimiter=line=>{const sc=(line.match(/;/g)||[]).length,cc=(line.match(/,/g)||[]).length;return sc>cc?';':','};
@@ -9023,6 +9195,102 @@ function App() {
   },[cloudKey, supabaseActive])
 
   // -------------------------------------------------------------
+  // 🔥 CARREGAR TIME_ENTRIES DO SUPABASE (Backend Real)
+  // -------------------------------------------------------------
+  useEffect(() => {
+    let cancelled = false
+
+    ;(async () => {
+      if (!supabaseActive || !auth?.id || !auth?.role) {
+        console.log('ℹ️ Aguardando auth para carregar time_entries...')
+        return
+      }
+
+      try {
+        console.log('📥 Carregando time_entries do Supabase...')
+        setIsSyncing(true)
+
+        const result = await TimeEntriesService.fetchUserEntries(auth.id, auth.role)
+
+        if (cancelled) return
+
+        if (result.success) {
+          console.log(`✅ ${result.data.length} time_entries carregados do Supabase`)
+
+          // Merge com dados locais (manter registos locais não sincronizados)
+          setTimeEntries(prevEntries => {
+            const cloudIds = new Set(result.data.map(e => e.id))
+            const localOnlyEntries = prevEntries.filter(e => !cloudIds.has(e.id))
+
+            return dedupTimeEntries([...result.data, ...localOnlyEntries])
+          })
+
+          setLastSyncTime(new Date().toISOString())
+          setSyncError(null)
+        } else {
+          console.error('❌ Erro ao carregar time_entries:', result.error)
+          setSyncError(result.error)
+        }
+
+        setIsSyncing(false)
+      } catch (error) {
+        console.error('❌ Erro inesperado ao carregar time_entries:', error)
+        setIsSyncing(false)
+        setSyncError(String(error))
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [auth?.id, auth?.role, supabaseActive])
+
+  // -------------------------------------------------------------
+  // 🔥 SYNC AUTOMÁTICO PARA SUPABASE (Incremental)
+  // -------------------------------------------------------------
+  useEffect(() => {
+    if (!supabaseActive || !auth?.id || !auth?.name) return
+
+    const syncTimer = setTimeout(async () => {
+      try {
+        console.log('☁️ Sincronizando time_entries para Supabase...')
+        setIsSyncing(true)
+
+        const result = await TimeEntriesService.syncBatch(
+          timeEntries,
+          auth.id,
+          auth.name,
+          lastSyncTime
+        )
+
+        if (result.success) {
+          if (result.synced > 0) {
+            console.log(`✅ ${result.synced} registos sincronizados para Supabase`)
+          }
+          setLastSyncTime(new Date().toISOString())
+          setSyncError(null)
+        } else {
+          console.error('❌ Erro ao sincronizar:', result.error)
+          setSyncError(result.error)
+
+          setNotifications(prev => [...prev, {
+            id: uid(),
+            type: 'error',
+            message: '⚠️ Erro ao sincronizar time_entries! Não feche o navegador.',
+            timestamp: new Date().toISOString()
+          }])
+        }
+
+        setIsSyncing(false)
+      } catch (error) {
+        console.error('❌ Erro inesperado ao sincronizar:', error)
+        setIsSyncing(false)
+        setSyncError(String(error))
+      }
+    }, 1000) // 1 segundo de debounce
+
+    return () => clearTimeout(syncTimer)
+  }, [timeEntries, auth?.id, auth?.name, supabaseActive])
+
+  // -------------------------------------------------------------
   // 🔄 REFRESH SUPABASE AO INICIAR
   // -------------------------------------------------------------
 // -------------------------------------------------------------
@@ -11938,7 +12206,7 @@ function TableMaterials() {
           {/* ROUTER INTERNO */}
           {view === "dashboard" && <DashboardView />}
           {view === "profile" && (
-            <ProfileView timeEntries={timeEntries} auth={auth} people={people} />
+            <ProfileView timeEntries={filteredTimeEntries} auth={auth} people={people} />
           )}
 
           {view === "monthly-report" && auth?.role === "admin" && (
