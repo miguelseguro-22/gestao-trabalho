@@ -9064,10 +9064,9 @@ function App() {
         return entry.user_id === auth.id;
       }
 
-      // Fallback: se user_id não existir, filtrar por nome (dados antigos)
-      return entry.worker === auth.name ||
-             entry.supervisor === auth.name ||
-             entry.colaborador === auth.name;
+      // Fallback: se user_id não existir, filtrar APENAS por worker (dados antigos)
+      // ⚠️ NÃO filtrar por supervisor/colaborador - isso incluiria registos de outras pessoas!
+      return entry.worker === auth.name;
     });
 
     console.log(`🔒 [${auth.role}] Acesso FILTRADO: ${filtered.length}/${timeEntries.length} registos`);
