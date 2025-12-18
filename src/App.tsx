@@ -163,12 +163,18 @@ const fetchCloudState=async(rowId:string=CLOUD_ROW_ID)=>{
   }
 }
 const saveCloudState=async(payload,rowId:string=CLOUD_ROW_ID)=>{
-  if(!supabaseReady||!supabase)return
+  if(!supabaseReady||!supabase)return {success:false,error:'Supabase não disponível'}
   try{
     const updatedAt=payload?.updatedAt||new Date().toISOString()
-    await supabase.from(CLOUD_STATE_TABLE).upsert({id:rowId,payload,updated_at:updatedAt})
+    const {error}=await supabase.from(CLOUD_STATE_TABLE).upsert({id:rowId,payload,updated_at:updatedAt})
+    if(error){
+      console.error('❌ Erro ao gravar estado na cloud',error)
+      return {success:false,error:error.message}
+    }
+    return {success:true}
   }catch(err){
-    console.warn('Falha ao gravar estado na cloud',err)
+    console.error('❌ Erro inesperado ao gravar estado na cloud',err)
+    return {success:false,error:String(err)}
   }
 }
 const toCSV=(headers,rows)=>{const esc=v=>`"${String(v??'').replace(/"/g,'""')}"`;return[headers.join(','),...rows.map(r=>r.map(esc).join(','))].join('\r\n')};
@@ -8765,8 +8771,11 @@ function App() {
   const [notifications, setNotifications] = useState<any[]>(persisted?.notifications || []);
   const cloudSaveTimer = useRef<any>(null)
   const [supabaseActive] = useState(() => supabaseReady)
-  const cloudKey = useMemo(() => CLOUD_ROW_ID, [])
+  // 🔐 Isolamento por utilizador - cada user tem seu próprio estado na cloud
+  const cloudKey = useMemo(() => auth?.id ? `user_${auth.id}` : CLOUD_ROW_ID, [auth?.id])
   const latestStampRef = useRef<string | null>(cloudStamp)
+  // 🆕 Estado de sincronização
+  const [syncError, setSyncError] = useState<string | null>(null)
 
   // 👉 Função can() — PERMISSÕES
   const can = (section: keyof typeof CAN) => {
@@ -8857,6 +8866,25 @@ function App() {
     ]
   );
   const [catalog, setCatalog] = useState(persisted?.catalog || []);
+
+  // 🔐 FILTRO DE DADOS POR ROLE
+  // Técnicos veem apenas seus próprios registos
+  // Admin e outros roles veem tudo
+  const filteredTimeEntries = useMemo(() => {
+    if (!auth) return timeEntries;
+
+    // Admin, encarregado, diretor, logistica - veem TODOS os registos
+    if (auth.role !== 'tecnico') {
+      return timeEntries;
+    }
+
+    // Técnicos - veem apenas seus próprios registos
+    return timeEntries.filter(entry =>
+      entry.worker === auth.name ||
+      entry.supervisor === auth.name ||
+      entry.colaborador === auth.name
+    );
+  }, [timeEntries, auth]);
 
   const applySnapshot = (snap: any) => {
     if (!snap) return
@@ -9115,13 +9143,38 @@ useEffect(() => {
       try {
         console.log('☁️ Sincronizando para cloud...')
         setIsSyncing(true)
-        await saveCloudState(snapshot, cloudKey)
-        setLastSyncTime(new Date().toISOString())
-        console.log('✅ Sincronização para cloud completa')
+        const result = await saveCloudState(snapshot, cloudKey)
+
+        if (result?.success) {
+          setLastSyncTime(new Date().toISOString())
+          setSyncError(null)
+          console.log('✅ Sincronização para cloud completa')
+        } else {
+          const errorMsg = result?.error || 'Erro desconhecido'
+          console.error('❌ Erro ao sincronizar:', errorMsg)
+          setSyncError(errorMsg)
+
+          // Notificar utilizador sobre erro de sincronização
+          setNotifications(prev => [...prev, {
+            id: uid(),
+            type: 'error',
+            message: '⚠️ Erro ao sincronizar dados! Não feche o navegador.',
+            timestamp: new Date().toISOString()
+          }])
+        }
         setIsSyncing(false)
       } catch (error) {
         console.error('❌ Erro ao sincronizar para cloud:', error)
+        setSyncError(String(error))
         setIsSyncing(false)
+
+        // Notificar utilizador sobre erro crítico
+        setNotifications(prev => [...prev, {
+          id: uid(),
+          type: 'error',
+          message: '🔴 ERRO CRÍTICO: Dados não sincronizados! Faça backup manual!',
+          timestamp: new Date().toISOString()
+        }])
       }
     }, 400)
   }, [
@@ -11708,6 +11761,40 @@ function TableMaterials() {
             Utilizador:{" "}
             <b className="dark:text-slate-200">{auth?.name || "—"}</b>
           </div>
+
+          {/* 🆕 INDICADOR DE SINCRONIZAÇÃO */}
+          {supabaseActive && (
+            <div className="px-2 pb-2 mb-2 border-b dark:border-slate-700">
+              <div className="flex items-center gap-2 text-xs">
+                {isSyncing ? (
+                  <>
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                    <span className="text-blue-600 dark:text-blue-400">Sincronizando...</span>
+                  </>
+                ) : syncError ? (
+                  <>
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                    <span className="text-red-600 dark:text-red-400 font-semibold">Erro ao sincronizar</span>
+                  </>
+                ) : lastSyncTime ? (
+                  <>
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-green-600 dark:text-green-400">Sincronizado</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-2 h-2 bg-slate-400 rounded-full"></div>
+                    <span className="text-slate-500 dark:text-slate-400">Aguardando...</span>
+                  </>
+                )}
+              </div>
+              {syncError && (
+                <div className="mt-1 text-[10px] text-red-500 dark:text-red-400">
+                  ⚠️ Não feche o navegador!
+                </div>
+              )}
+            </div>
+          )}
 
           {/* NAV ITEMS */}
 <div className="mt-2 space-y-1">
