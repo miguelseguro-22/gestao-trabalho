@@ -9045,18 +9045,19 @@ function App() {
   const [catalog, setCatalog] = useState(persisted?.catalog || []);
 
   // 🔐 FILTRO DE DADOS POR ROLE
-  // Técnicos veem apenas seus próprios registos
-  // Admin e outros roles veem tudo
+  // Técnicos E Encarregados veem apenas seus próprios registos
+  // Admin, Diretor, Logística veem tudo
   const filteredTimeEntries = useMemo(() => {
     if (!auth) return timeEntries;
 
-    // ✅ Admin, encarregado, diretor, logistica - veem TODOS os registos
-    if (auth.role !== 'tecnico') {
+    // ✅ Admin, diretor, logistica - veem TODOS os registos
+    if (auth.role === 'admin' || auth.role === 'diretor' || auth.role === 'logistica') {
       console.log(`🔓 [${auth.role}] Acesso TOTAL: ${timeEntries.length} registos`);
       return timeEntries;
     }
 
-    // ✅ Técnicos - veem apenas seus próprios registos (filtrado por user_id)
+    // ✅ Técnicos E Encarregados - veem apenas seus próprios registos (filtrado por user_id)
+    // Encarregado = Técnico + permissão para pedir material
     const filtered = timeEntries.filter(entry => {
       // Filtro PRINCIPAL: user_id (mais seguro)
       if (entry.user_id && auth.id) {
@@ -9069,7 +9070,7 @@ function App() {
              entry.colaborador === auth.name;
     });
 
-    console.log(`🔒 [tecnico] Acesso FILTRADO: ${filtered.length}/${timeEntries.length} registos`);
+    console.log(`🔒 [${auth.role}] Acesso FILTRADO: ${filtered.length}/${timeEntries.length} registos`);
     return filtered;
   }, [timeEntries, auth]);
 
