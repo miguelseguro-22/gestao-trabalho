@@ -6458,13 +6458,18 @@ const ProfileView = ({ timeEntries, auth, people }) => {
     }
   };
 
-  // Filtrar registos do ano do colaborador
+  // Filtrar registos por ano
+  // Para técnicos: apenas seus registos (já vem filtrado de filteredTimeEntries)
+  // Para admin/encarregado/diretor: TODOS os registos do ano
   const myEntries = useMemo(() => {
     return timeEntries.filter((t) => {
       const year = new Date(t.date || t.periodStart).getFullYear();
-      return year === selectedYear && (t.worker === auth?.name || t.supervisor === auth?.name);
+
+      // Apenas filtrar por ano (não por nome)
+      // O filtro por role já foi aplicado em filteredTimeEntries
+      return year === selectedYear;
     });
-  }, [timeEntries, selectedYear, auth?.name]);
+  }, [timeEntries, selectedYear]);
 
   // Calcular estatísticas
 // Calcular estatísticas
@@ -9045,17 +9050,27 @@ function App() {
   const filteredTimeEntries = useMemo(() => {
     if (!auth) return timeEntries;
 
-    // Admin, encarregado, diretor, logistica - veem TODOS os registos
+    // ✅ Admin, encarregado, diretor, logistica - veem TODOS os registos
     if (auth.role !== 'tecnico') {
+      console.log(`🔓 [${auth.role}] Acesso TOTAL: ${timeEntries.length} registos`);
       return timeEntries;
     }
 
-    // Técnicos - veem apenas seus próprios registos
-    return timeEntries.filter(entry =>
-      entry.worker === auth.name ||
-      entry.supervisor === auth.name ||
-      entry.colaborador === auth.name
-    );
+    // ✅ Técnicos - veem apenas seus próprios registos (filtrado por user_id)
+    const filtered = timeEntries.filter(entry => {
+      // Filtro PRINCIPAL: user_id (mais seguro)
+      if (entry.user_id && auth.id) {
+        return entry.user_id === auth.id;
+      }
+
+      // Fallback: se user_id não existir, filtrar por nome (dados antigos)
+      return entry.worker === auth.name ||
+             entry.supervisor === auth.name ||
+             entry.colaborador === auth.name;
+    });
+
+    console.log(`🔒 [tecnico] Acesso FILTRADO: ${filtered.length}/${timeEntries.length} registos`);
+    return filtered;
   }, [timeEntries, auth]);
 
   const applySnapshot = (snap: any) => {
