@@ -193,9 +193,16 @@ const TimeEntriesService = {
         .select('*')
         .order('date', { ascending: false })
 
-      // Admin vê tudo, técnicos veem apenas seus dados
-      if (role === 'tecnico') {
+      // 🔐 FILTRO POR ROLE:
+      // Admin, diretor, logistica → veem TODOS os registos (sem filtro)
+      // Técnico, encarregado → veem APENAS os seus registos (filtro por user_id)
+      if (role === 'admin' || role === 'diretor' || role === 'logistica') {
+        // Não aplica filtro - carrega TUDO
+        console.log(`🔓 [Backend] ${role} a carregar TODOS os registos`)
+      } else {
+        // Técnico E encarregado - filtra por user_id
         query = query.eq('user_id', userId)
+        console.log(`🔒 [Backend] ${role} a carregar APENAS seus registos (user_id=${userId})`)
       }
 
       const { data, error } = await query
@@ -9028,9 +9035,27 @@ function App() {
     { id: uid(), name: "JTI", manager: "", type: "Eletricidade", family: "Modus 55" },
   ];
 
-  const [timeEntries, setTimeEntries] = useState(
-    dedupTimeEntries(persisted?.timeEntries || defaultTime)
-  );
+  // 🔒 Filtrar timeEntries na inicialização para incluir APENAS dados do user atual
+  // Isto previne carregar dados de outros utilizadores do localStorage
+  const [timeEntries, setTimeEntries] = useState(() => {
+    const currentUser = (window as any).Auth?.user?.()
+    const entries = persisted?.timeEntries || defaultTime
+
+    // Se não houver user autenticado, carregar tudo (será filtrado depois)
+    if (!currentUser?.id && !currentUser?.name) {
+      return dedupTimeEntries(entries)
+    }
+
+    // Filtrar para incluir APENAS registos do user atual
+    const filtered = entries.filter((e: any) => {
+      if (e.user_id && currentUser.id) {
+        return e.user_id === currentUser.id
+      }
+      return e.worker === currentUser.name
+    })
+
+    return dedupTimeEntries(filtered)
+  });
   const [orders, setOrders] = useState(
     persisted?.orders || defaultOrders
   );
@@ -9235,7 +9260,18 @@ function App() {
           // Merge com dados locais (manter registos locais não sincronizados)
           setTimeEntries(prevEntries => {
             const cloudIds = new Set(result.data.map(e => e.id))
-            const localOnlyEntries = prevEntries.filter(e => !cloudIds.has(e.id))
+
+            // 🔒 FILTRAR registos locais para incluir APENAS os que pertencem ao user atual
+            // Isto previne que registos de outros utilizadores (de sessões antigas) sejam mantidos
+            const localOnlyEntries = prevEntries.filter(e => {
+              if (cloudIds.has(e.id)) return false // Já vem do cloud
+
+              // Filtrar por user_id (dados novos) ou worker (dados antigos)
+              if (e.user_id) {
+                return e.user_id === auth.id
+              }
+              return e.worker === auth.name
+            })
 
             return dedupTimeEntries([...result.data, ...localOnlyEntries])
           })
