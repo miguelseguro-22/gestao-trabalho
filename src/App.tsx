@@ -318,7 +318,19 @@ const TimeEntriesService = {
 
   // 📊 Sync incremental - apenas registos novos/alterados
   async syncBatch(entries: any[], userId: string, userName: string, lastSyncTime: string | null) {
-    if (!supabaseReady || !supabase) return { success: false, error: 'Supabase não disponível' }
+    console.log('📤 [syncBatch] Iniciando...', {
+      totalEntries: entries.length,
+      userId,
+      userName,
+      lastSyncTime,
+      supabaseReady,
+      supabaseExists: !!supabase
+    })
+
+    if (!supabaseReady || !supabase) {
+      console.error('❌ [syncBatch] Supabase não disponível!')
+      return { success: false, error: 'Supabase não disponível' }
+    }
 
     try {
       // Filtrar apenas registos criados/alterados desde último sync
@@ -329,7 +341,17 @@ const TimeEntriesService = {
           })
         : entries
 
+      console.log('📤 [syncBatch] Registos a sincronizar:', {
+        total: entriesToSync.length,
+        exemplos: entriesToSync.slice(0, 3).map(e => ({
+          worker: e.worker,
+          date: e.date,
+          user_id: e.user_id
+        }))
+      })
+
       if (entriesToSync.length === 0) {
+        console.log('✅ [syncBatch] Nada para sincronizar')
         return { success: true, synced: 0 }
       }
 
@@ -358,9 +380,11 @@ const TimeEntriesService = {
         .upsert(dbEntries, { onConflict: 'id' })
 
       if (error) {
-        console.error('❌ Erro ao sync batch:', error)
+        console.error('❌ [syncBatch] Erro ao fazer upsert:', error)
         return { success: false, error: error.message }
       }
+
+      console.log(`✅ [syncBatch] SUCESSO! ${dbEntries.length} registos gravados no Supabase`)
 
       return { success: true, synced: dbEntries.length }
     } catch (err) {
@@ -9336,11 +9360,24 @@ function App() {
   // 🔥 SYNC AUTOMÁTICO PARA SUPABASE (Incremental)
   // -------------------------------------------------------------
   useEffect(() => {
-    if (!supabaseActive || !auth?.id || !auth?.name) return
+    console.log('🔄 [Sync Auto] Verificando condições:', {
+      supabaseActive,
+      authId: auth?.id,
+      authName: auth?.name,
+      totalEntries: timeEntries.length
+    })
+
+    if (!supabaseActive || !auth?.id || !auth?.name) {
+      console.log('⏸️ [Sync Auto] BLOQUEADO - Condições não satisfeitas')
+      return
+    }
 
     const syncTimer = setTimeout(async () => {
       try {
-        console.log('☁️ Sincronizando time_entries para Supabase...')
+        console.log('☁️ [Sync Auto] Iniciando sincronização...', {
+          totalEntries: timeEntries.length,
+          lastSyncTime
+        })
         setIsSyncing(true)
 
         const result = await TimeEntriesService.syncBatch(
