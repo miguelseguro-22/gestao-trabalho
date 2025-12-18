@@ -9035,8 +9035,8 @@ function App() {
     { id: uid(), name: "JTI", manager: "", type: "Eletricidade", family: "Modus 55" },
   ];
 
-  // 🔒 Filtrar timeEntries na inicialização para incluir APENAS dados do user atual
-  // Isto previne carregar dados de outros utilizadores do localStorage
+  // 🔒 Filtrar timeEntries na inicialização APENAS para técnicos/encarregados
+  // Admin, diretor, logística veem TUDO (sem filtro)
   const [timeEntries, setTimeEntries] = useState(() => {
     const currentUser = (window as any).Auth?.user?.()
     const entries = persisted?.timeEntries || defaultTime
@@ -9046,7 +9046,13 @@ function App() {
       return dedupTimeEntries(entries)
     }
 
-    // Filtrar para incluir APENAS registos do user atual
+    // ✅ Admin, diretor, logistica - carregam TUDO (sem filtro)
+    if (currentUser.role === 'admin' || currentUser.role === 'diretor' || currentUser.role === 'logistica') {
+      console.log(`🔓 [Init] ${currentUser.role} a carregar TODOS os registos do localStorage`)
+      return dedupTimeEntries(entries)
+    }
+
+    // 🔒 Técnicos e encarregados - filtrar para incluir APENAS registos do user atual
     const filtered = entries.filter((e: any) => {
       if (e.user_id && currentUser.id) {
         return e.user_id === currentUser.id
@@ -9054,6 +9060,7 @@ function App() {
       return e.worker === currentUser.name
     })
 
+    console.log(`🔒 [Init] ${currentUser.role} a carregar APENAS seus registos do localStorage`)
     return dedupTimeEntries(filtered)
   });
   const [orders, setOrders] = useState(
@@ -9261,12 +9268,17 @@ function App() {
           setTimeEntries(prevEntries => {
             const cloudIds = new Set(result.data.map(e => e.id))
 
-            // 🔒 FILTRAR registos locais para incluir APENAS os que pertencem ao user atual
-            // Isto previne que registos de outros utilizadores (de sessões antigas) sejam mantidos
+            // 🔒 FILTRAR registos locais APENAS para técnicos/encarregados
+            // Admin, diretor, logistica mantêm TODOS os registos locais
             const localOnlyEntries = prevEntries.filter(e => {
               if (cloudIds.has(e.id)) return false // Já vem do cloud
 
-              // Filtrar por user_id (dados novos) ou worker (dados antigos)
+              // ✅ Admin, diretor, logistica - mantêm TODOS os registos locais
+              if (auth.role === 'admin' || auth.role === 'diretor' || auth.role === 'logistica') {
+                return true
+              }
+
+              // 🔒 Técnicos e encarregados - filtrar por user_id (novos) ou worker (antigos)
               if (e.user_id) {
                 return e.user_id === auth.id
               }
