@@ -212,6 +212,19 @@ const TimeEntriesService = {
         return { success: false, error: error.message, data: [] }
       }
 
+      console.log(`✅ [Backend Query] Dados carregados:`, {
+        role,
+        totalRegistos: data?.length || 0,
+        workers: [...new Set((data || []).map(e => e.worker))],
+        user_ids: [...new Set((data || []).map(e => e.user_id))],
+        primeiros3: (data || []).slice(0, 3).map(e => ({
+          worker: e.worker,
+          user_id: e.user_id,
+          date: e.date,
+          template: e.template
+        }))
+      })
+
       // Converter campos snake_case para camelCase
       const entries = (data || []).map(entry => ({
         id: entry.id,
@@ -4869,6 +4882,18 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
 
   // Calcular estatísticas por colaborador
   const stats = useMemo(() => {
+    console.log(`📊 [MonthlyReport] Recebendo dados:`, {
+      totalTimeEntries: timeEntries.length,
+      workers: [...new Set(timeEntries.map(e => e.worker))],
+      user_ids: [...new Set(timeEntries.map(e => e.user_id))],
+      primeiros3: timeEntries.slice(0, 3).map(e => ({
+        worker: e.worker,
+        user_id: e.user_id,
+        date: e.date,
+        template: e.template
+      }))
+    });
+
     const [year, month] = selectedMonth.split('-').map(Number);
     const startDate = new Date(year, month - 2, 21);
     const endDate = new Date(year, month - 1, 20);
