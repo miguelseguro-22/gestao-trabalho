@@ -25,16 +25,31 @@ A aplicação foi **completamente reformulada** para suportar **20+ colaboradore
 
 ### 1.2 Executar o Schema SQL
 
-1. Abrir o ficheiro: `supabase-schema.sql`
+#### ⚠️ IMPORTANTE: Se a tabela `time_entries` JÁ EXISTE
+
+Se recebeste o erro: **"column worker does not exist"**, significa que a tabela já existe com estrutura diferente.
+
+**OPÇÃO A: Fazer backup primeiro** (Recomendado se tens dados importantes)
+
+1. Abrir o ficheiro: `supabase-backup.sql`
+2. Copiar e executar no SQL Editor (cria backup)
+3. Depois executar o `supabase-schema.sql`
+4. Restaurar dados com o resto do `supabase-backup.sql`
+
+**OPÇÃO B: Recriar sem backup** (Se não tens dados importantes)
+
+1. Abrir o ficheiro: `supabase-schema.sql` (já inclui DROP TABLE)
 2. **Copiar TODO o conteúdo** do ficheiro
 3. **Colar** no SQL Editor do Supabase
 4. Clicar em: **"Run"** (ou `Ctrl+Enter`)
 
 **✅ Sucesso:** Deves ver mensagens de sucesso para:
-- `CREATE TABLE time_entries`
+- `DROP TABLE IF EXISTS time_entries` (remove tabela antiga)
+- `CREATE TABLE time_entries` (cria nova)
 - `CREATE INDEX` (6 índices)
 - `CREATE POLICY` (6 políticas)
 - `CREATE FUNCTION` (2 funções)
+- `✅✅✅ SCHEMA CRIADO COM SUCESSO!` (verificação final)
 
 ---
 

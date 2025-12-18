@@ -3,9 +3,36 @@
 -- Backend Real para Registos de Horas
 -- =====================================================
 
--- 1. TABELA DE REGISTOS DE TEMPO (Time Entries)
+-- ⚠️ ATENÇÃO: Este script faz DROP da tabela existente!
+-- Certifica-te de fazer backup antes de executar.
+
+-- 1. REMOVER OBJETOS EXISTENTES (se existirem)
 -- =====================================================
-CREATE TABLE IF NOT EXISTS time_entries (
+
+-- Remover VIEW
+DROP VIEW IF EXISTS monthly_summary CASCADE;
+
+-- Remover TRIGGER
+DROP TRIGGER IF EXISTS update_time_entries_updated_at ON time_entries;
+
+-- Remover FUNÇÃO do trigger
+DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
+
+-- Remover POLÍTICAS RLS (se existirem)
+DROP POLICY IF EXISTS "admin_all_access" ON time_entries;
+DROP POLICY IF EXISTS "management_read_all" ON time_entries;
+DROP POLICY IF EXISTS "tecnico_own_data" ON time_entries;
+DROP POLICY IF EXISTS "tecnico_insert_own" ON time_entries;
+DROP POLICY IF EXISTS "tecnico_update_own" ON time_entries;
+DROP POLICY IF EXISTS "tecnico_delete_own" ON time_entries;
+
+-- Remover TABELA (⚠️ CUIDADO: Isto apaga todos os dados!)
+DROP TABLE IF EXISTS time_entries CASCADE;
+
+-- =====================================================
+-- 2. TABELA DE REGISTOS DE TEMPO (Time Entries)
+-- =====================================================
+CREATE TABLE time_entries (
   -- Identificação
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -214,6 +241,48 @@ COMMENT ON COLUMN time_entries.user_id IS 'ID do utilizador que criou o registo 
 COMMENT ON COLUMN time_entries.worker IS 'Nome do colaborador (deve corresponder a profiles.name)';
 COMMENT ON COLUMN time_entries.template IS 'Tipo de registo: Trabalho Normal, Férias, Baixa, Falta, etc.';
 COMMENT ON COLUMN time_entries.status IS 'Estado: pending (aguarda aprovação), approved, rejected';
+
+-- =====================================================
+-- 5. VERIFICAÇÕES FINAIS
+-- =====================================================
+
+-- Verificar que a tabela foi criada corretamente
+DO $$
+BEGIN
+  -- Verificar tabela
+  IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'time_entries') THEN
+    RAISE EXCEPTION '❌ ERRO: Tabela time_entries não foi criada!';
+  ELSE
+    RAISE NOTICE '✅ Tabela time_entries criada com sucesso';
+  END IF;
+
+  -- Verificar RLS ativo
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_tables
+    WHERE tablename = 'time_entries'
+    AND rowsecurity = true
+  ) THEN
+    RAISE EXCEPTION '❌ ERRO: RLS não está ativo na tabela time_entries!';
+  ELSE
+    RAISE NOTICE '✅ RLS ativo na tabela time_entries';
+  END IF;
+
+  -- Contar políticas
+  IF (SELECT COUNT(*) FROM pg_policies WHERE tablename = 'time_entries') < 6 THEN
+    RAISE WARNING '⚠️ AVISO: Menos de 6 políticas RLS encontradas!';
+  ELSE
+    RAISE NOTICE '✅ % políticas RLS criadas', (SELECT COUNT(*) FROM pg_policies WHERE tablename = 'time_entries');
+  END IF;
+
+  -- Contar índices
+  IF (SELECT COUNT(*) FROM pg_indexes WHERE tablename = 'time_entries') < 6 THEN
+    RAISE WARNING '⚠️ AVISO: Menos de 6 índices encontrados!';
+  ELSE
+    RAISE NOTICE '✅ % índices criados', (SELECT COUNT(*) FROM pg_indexes WHERE tablename = 'time_entries');
+  END IF;
+
+  RAISE NOTICE '✅✅✅ SCHEMA CRIADO COM SUCESSO! ✅✅✅';
+END $$;
 
 -- =====================================================
 -- NOTAS DE IMPLEMENTAÇÃO
