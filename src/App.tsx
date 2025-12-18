@@ -215,6 +215,7 @@ const TimeEntriesService = {
       // Converter campos snake_case para camelCase
       const entries = (data || []).map(entry => ({
         id: entry.id,
+        user_id: entry.user_id,  // ✅ CRÍTICO: Preservar user_id!
         date: entry.date,
         template: entry.template,
         hours: entry.hours,
