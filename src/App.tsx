@@ -10827,178 +10827,485 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
   };
 
   const exportAnalysisReport = () => {
-    // Ordenar obras por custo (mais caras primeiro)
-    const projectsByCost = Array.from(costData.entries())
-      .map(([name, data]) => ({ name, cost: data.total, hours: data.totalHours, data }))
-      .sort((a, b) => b.cost - a.cost);
+    // 📊 Preparar dados para análise
+    const allProjects = Array.from(costData.entries()).map(([name, data]) => ({
+      name,
+      cost: data.total,
+      hours: data.totalHours,
+      workers: data.workers.size,
+      costPerHour: data.totalHours > 0 ? data.total / data.totalHours : 0,
+      overtimePercent: data.overtimePercent || 0,
+      normalCost: data.custoNormal || 0,
+      extraCost: data.custoExtra || 0,
+      fdsCost: data.custoFDS || 0,
+      feriadoCost: data.custoFeriado || 0,
+      budget: data.budget || 0,
+      variance: data.budget > 0 ? ((data.total - data.budget) / data.budget) * 100 : 0,
+      cpi: data.cpi || 0,
+      data
+    }));
 
-    // Ordenar obras por horas (mais presença primeiro)
-    const projectsByHours = Array.from(costData.entries())
-      .map(([name, data]) => ({ name, cost: data.total, hours: data.totalHours, data }))
-      .sort((a, b) => b.hours - a.hours);
+    // Ordenações
+    const projectsByCost = [...allProjects].sort((a, b) => b.cost - a.cost);
+    const projectsByHours = [...allProjects].sort((a, b) => b.hours - a.hours);
+    const projectsByEfficiency = [...allProjects].sort((a, b) => a.costPerHour - b.costPerHour);
 
-    // Top 5 obras mais dispendiosas
+    // Métricas globais
+    const totalCost = allProjects.reduce((sum, p) => sum + p.cost, 0);
+    const totalHours = allProjects.reduce((sum, p) => sum + p.hours, 0);
+    const avgCostPerHour = totalHours > 0 ? totalCost / totalHours : 0;
+    const totalBudget = allProjects.reduce((sum, p) => sum + p.budget, 0);
+
+    // Top e Bottom performers
     const top5Expensive = projectsByCost.slice(0, 5);
+    const top5Efficient = projectsByEfficiency.slice(0, 5);
+    const bottom5Efficient = projectsByEfficiency.slice(-5).reverse();
+
+    // 🤖 Gerar insights automáticos
+    const insights = [];
+
+    // Insight 1: Obras acima da média de custo/hora
+    const expensiveProjects = allProjects.filter(p => p.costPerHour > avgCostPerHour * 1.2);
+    if (expensiveProjects.length > 0) {
+      insights.push({
+        type: 'warning',
+        title: 'Obras com Custos Elevados',
+        message: `${expensiveProjects.length} obra(s) têm custo/hora superior a 20% da média (${currency(avgCostPerHour)})`,
+        projects: expensiveProjects.slice(0, 3).map(p => p.name).join(', ')
+      });
+    }
+
+    // Insight 2: Obras com muito overtime
+    const highOvertimeProjects = allProjects.filter(p => p.overtimePercent > 15);
+    if (highOvertimeProjects.length > 0) {
+      insights.push({
+        type: 'warning',
+        title: 'Horas Extra Excessivas',
+        message: `${highOvertimeProjects.length} obra(s) têm mais de 15% de horas extra`,
+        projects: highOvertimeProjects.slice(0, 3).map(p => `${p.name} (${p.overtimePercent.toFixed(1)}%)`).join(', ')
+      });
+    }
+
+    // Insight 3: Obras eficientes
+    if (top5Efficient.length > 0 && top5Efficient[0].costPerHour < avgCostPerHour * 0.8) {
+      insights.push({
+        type: 'success',
+        title: 'Obras com Excelente Eficiência',
+        message: `${top5Efficient[0].name} tem custo/hora ${((1 - top5Efficient[0].costPerHour / avgCostPerHour) * 100).toFixed(0)}% abaixo da média`,
+        projects: top5Efficient.slice(0, 3).map(p => p.name).join(', ')
+      });
+    }
+
+    // Insight 4: Obras sobre orçamento
+    const overBudgetProjects = allProjects.filter(p => p.budget > 0 && p.variance > 10);
+    if (overBudgetProjects.length > 0) {
+      insights.push({
+        type: 'critical',
+        title: 'Obras Sobre Orçamento',
+        message: `${overBudgetProjects.length} obra(s) excederam o orçamento em mais de 10%`,
+        projects: overBudgetProjects.slice(0, 3).map(p => `${p.name} (+${p.variance.toFixed(0)}%)`).join(', ')
+      });
+    }
+
+    // Insight 5: Distribuição de custos
+    const totalNormal = allProjects.reduce((sum, p) => sum + p.normalCost, 0);
+    const totalExtra = allProjects.reduce((sum, p) => sum + p.extraCost, 0);
+    const totalFDS = allProjects.reduce((sum, p) => sum + p.fdsCost, 0);
+    const totalFeriado = allProjects.reduce((sum, p) => sum + p.feriadoCost, 0);
+    const extraPercentage = totalCost > 0 ? ((totalExtra + totalFDS + totalFeriado) / totalCost) * 100 : 0;
+
+    if (extraPercentage > 10) {
+      insights.push({
+        type: 'info',
+        title: 'Custos de Horas Extra',
+        message: `${extraPercentage.toFixed(1)}% do custo total é de horas extra, FDS e feriados`,
+        projects: ''
+      });
+    }
 
     const html = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Relatório de Análise de Obras</title>
+  <title>Relatório Executivo de Análise de Obras</title>
   <style>
-    @page { size: A4; margin: 20mm; }
+    @page { size: A4; margin: 15mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-      font-size: 11pt;
+      font-size: 10pt;
       line-height: 1.4;
       color: #1e293b;
+      background: white;
     }
     .header {
-      text-align: center;
+      background: linear-gradient(135deg, #00677F 0%, #00A9B8 100%);
+      color: white;
+      padding: 30px;
       margin-bottom: 30px;
-      border-bottom: 3px solid #00A9B8;
-      padding-bottom: 15px;
+      border-radius: 10px;
     }
     .header h1 {
-      font-size: 24pt;
-      color: #00677F;
-      margin-bottom: 5px;
+      font-size: 28pt;
+      margin-bottom: 8px;
+      font-weight: 800;
     }
     .header .subtitle {
-      font-size: 12pt;
+      font-size: 13pt;
+      opacity: 0.95;
+      font-weight: 400;
+    }
+    .executive-summary {
+      background: linear-gradient(to right, #f8fafc, #f1f5f9);
+      border-left: 5px solid #00A9B8;
+      padding: 20px;
+      margin-bottom: 30px;
+      border-radius: 8px;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+    .kpi-card {
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 15px;
+      text-align: center;
+    }
+    .kpi-card.primary { border-color: #00A9B8; background: linear-gradient(to bottom, #ffffff, #f0f9ff); }
+    .kpi-card.success { border-color: #10b981; background: linear-gradient(to bottom, #ffffff, #f0fdf4); }
+    .kpi-card.warning { border-color: #f59e0b; background: linear-gradient(to bottom, #ffffff, #fffbeb); }
+    .kpi-card.danger { border-color: #ef4444; background: linear-gradient(to bottom, #ffffff, #fef2f2); }
+    .kpi-label {
+      font-size: 9pt;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    .kpi-value {
+      font-size: 24pt;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 5px;
+    }
+    .kpi-card.primary .kpi-value { color: #00677F; }
+    .kpi-card.success .kpi-value { color: #059669; }
+    .kpi-card.warning .kpi-value { color: #d97706; }
+    .kpi-card.danger .kpi-value { color: #dc2626; }
+    .kpi-detail {
+      font-size: 8pt;
       color: #64748b;
     }
-    .info-box {
-      background: #f1f5f9;
-      padding: 15px;
+    .insights-section {
+      background: #fffbeb;
+      border-left: 5px solid #f59e0b;
+      padding: 20px;
+      margin-bottom: 30px;
       border-radius: 8px;
-      margin-bottom: 20px;
+      page-break-inside: avoid;
+    }
+    .insights-section h2 {
+      color: #92400e;
+      margin-bottom: 15px;
+      font-size: 14pt;
+    }
+    .insight {
+      margin-bottom: 12px;
+      padding: 12px;
+      background: white;
+      border-radius: 6px;
+      border-left: 4px solid #64748b;
+    }
+    .insight.warning { border-left-color: #f59e0b; background: #fffef7; }
+    .insight.critical { border-left-color: #ef4444; background: #fef8f8; }
+    .insight.success { border-left-color: #10b981; background: #f7fef8; }
+    .insight.info { border-left-color: #3b82f6; background: #f7f9fe; }
+    .insight-title {
+      font-weight: 700;
+      margin-bottom: 5px;
+      font-size: 10pt;
+    }
+    .insight-message {
+      font-size: 9pt;
+      color: #475569;
+      line-height: 1.5;
     }
     .section {
-      margin-bottom: 40px;
+      margin-bottom: 35px;
       page-break-inside: avoid;
     }
     .section h2 {
       font-size: 16pt;
       color: #00677F;
       margin-bottom: 15px;
-      border-bottom: 2px solid #00A9B8;
-      padding-bottom: 5px;
+      padding-bottom: 8px;
+      border-bottom: 3px solid #00A9B8;
+      font-weight: 700;
     }
     .chart-bar {
       display: flex;
       align-items: center;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
+      padding: 5px;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+    .chart-bar:hover {
+      background: #f8fafc;
+    }
+    .chart-rank {
+      width: 25px;
+      font-weight: 700;
+      color: #64748b;
+      font-size: 10pt;
     }
     .chart-label {
-      width: 150px;
+      width: 180px;
       font-weight: 600;
-      font-size: 10pt;
+      font-size: 9.5pt;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
     .chart-bar-container {
       flex: 1;
-      height: 30px;
+      height: 28px;
       background: #e2e8f0;
-      border-radius: 4px;
+      border-radius: 6px;
       overflow: hidden;
       position: relative;
-      margin: 0 10px;
+      margin: 0 12px;
     }
     .chart-bar-fill {
       height: 100%;
       background: linear-gradient(90deg, #00677F, #00A9B8);
       transition: width 0.3s;
+      box-shadow: inset 0 2px 4px rgba(255,255,255,0.3);
     }
     .chart-value {
       width: 100px;
       text-align: right;
-      font-weight: bold;
+      font-weight: 700;
       color: #00677F;
+      font-size: 10pt;
     }
+    .efficiency-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 8pt;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    .efficiency-badge.excellent { background: #d1fae5; color: #065f46; }
+    .efficiency-badge.good { background: #dbeafe; color: #1e40af; }
+    .efficiency-badge.average { background: #fef3c7; color: #92400e; }
+    .efficiency-badge.poor { background: #fee2e2; color: #991b1b; }
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 15px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     th {
-      background: #00677F;
+      background: linear-gradient(to bottom, #00677F, #005666);
       color: white;
-      padding: 10px 8px;
+      padding: 12px 8px;
       text-align: left;
       font-weight: 600;
-      font-size: 10pt;
+      font-size: 9pt;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
     th.right { text-align: right; }
     td {
-      padding: 8px;
+      padding: 10px 8px;
       border-bottom: 1px solid #e2e8f0;
-      font-size: 10pt;
+      font-size: 9.5pt;
     }
     td.right { text-align: right; }
     td.bold { font-weight: 700; }
     tr:nth-child(even) {
       background: #f8fafc;
     }
+    tr:hover {
+      background: #f1f5f9;
+    }
     .rank {
       display: inline-block;
-      width: 30px;
-      height: 30px;
+      width: 35px;
+      height: 35px;
       border-radius: 50%;
       background: #00677F;
       color: white;
       text-align: center;
-      line-height: 30px;
-      font-weight: bold;
-      margin-right: 10px;
+      line-height: 35px;
+      font-weight: 800;
+      margin-right: 12px;
+      font-size: 14pt;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
-    .rank.gold { background: #FFD700; color: #1e293b; }
-    .rank.silver { background: #C0C0C0; color: #1e293b; }
-    .rank.bronze { background: #CD7F32; color: white; }
+    .rank.gold { background: linear-gradient(135deg, #FFD700, #FFA500); color: #1e293b; }
+    .rank.silver { background: linear-gradient(135deg, #C0C0C0, #A8A8A8); color: #1e293b; }
+    .rank.bronze { background: linear-gradient(135deg, #CD7F32, #B8732D); color: white; }
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .mini-chart {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 15px;
+    }
+    .mini-chart h4 {
+      font-size: 10pt;
+      color: #475569;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    .cost-pie-segment {
+      margin: 5px 0;
+      display: flex;
+      align-items: center;
+      font-size: 8.5pt;
+    }
+    .pie-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      margin-right: 8px;
+    }
+    .pie-label {
+      flex: 1;
+      color: #64748b;
+    }
+    .pie-value {
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .page-break {
+      page-break-before: always;
+    }
   </style>
 </head>
 <body>
+  <!-- HEADER -->
   <div class="header">
-    <h1>📊 Relatório de Análise de Obras</h1>
-    <div class="subtitle">Comparação de Custos e Presença</div>
+    <h1>📊 Relatório Executivo de Análise de Obras</h1>
+    <div class="subtitle">Análise Avançada de Custos, Eficiência e Performance</div>
   </div>
 
-  <div class="info-box">
-    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-      <span style="font-weight: 600; color: #475569;">Período:</span>
-      <span>${new Date(startDate).toLocaleDateString('pt-PT')} até ${new Date(endDate).toLocaleDateString('pt-PT')}</span>
-    </div>
-    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-      <span style="font-weight: 600; color: #475569;">Total de Obras:</span>
-      <span>${costData.size}</span>
-    </div>
-    <div style="display: flex; justify-content: space-between;">
-      <span style="font-weight: 600; color: #475569;">Data de Emissão:</span>
-      <span>${new Date().toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+  <!-- EXECUTIVE SUMMARY -->
+  <div class="executive-summary">
+    <h3 style="margin-bottom: 12px; font-size: 13pt; color: #00677F;">📋 Sumário Executivo</h3>
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 9.5pt;">
+      <div><strong>Período:</strong> ${new Date(startDate).toLocaleDateString('pt-PT')} - ${new Date(endDate).toLocaleDateString('pt-PT')}</div>
+      <div><strong>Total de Obras:</strong> ${allProjects.length}</div>
+      <div><strong>Custo Total:</strong> ${currency(totalCost)}</div>
+      <div><strong>Horas Totais:</strong> ${totalHours.toFixed(1)}h</div>
+      <div><strong>Custo Médio/Hora:</strong> ${currency(avgCostPerHour)}</div>
+      <div><strong>Data de Emissão:</strong> ${new Date().toLocaleDateString('pt-PT', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
     </div>
   </div>
 
+  <!-- KPIs PRINCIPAIS -->
+  <div class="kpi-grid">
+    <div class="kpi-card primary">
+      <div class="kpi-label">💰 Custo Total</div>
+      <div class="kpi-value">${currency(totalCost)}</div>
+      <div class="kpi-detail">${totalHours.toFixed(0)}h trabalhadas</div>
+    </div>
+    <div class="kpi-card ${totalBudget > 0 && totalCost <= totalBudget ? 'success' : 'warning'}">
+      <div class="kpi-label">📊 Eficiência Média</div>
+      <div class="kpi-value">${currency(avgCostPerHour)}</div>
+      <div class="kpi-detail">por hora trabalhada</div>
+    </div>
+    <div class="kpi-card ${extraPercentage > 15 ? 'danger' : extraPercentage > 10 ? 'warning' : 'success'}">
+      <div class="kpi-label">⏰ Horas Extra</div>
+      <div class="kpi-value">${extraPercentage.toFixed(1)}%</div>
+      <div class="kpi-detail">do custo total</div>
+    </div>
+    <div class="kpi-card ${allProjects.length >= 50 ? 'primary' : 'success'}">
+      <div class="kpi-label">🏗️ Obras Ativas</div>
+      <div class="kpi-value">${allProjects.length}</div>
+      <div class="kpi-detail">no período</div>
+    </div>
+  </div>
+
+  <!-- INSIGHTS AUTOMÁTICOS -->
+  ${insights.length > 0 ? `
+  <div class="insights-section">
+    <h2>🤖 Insights Automáticos & Alertas</h2>
+    ${insights.map(insight => `
+      <div class="insight ${insight.type}">
+        <div class="insight-title">${insight.title}</div>
+        <div class="insight-message">${insight.message}${insight.projects ? `<br><em>${insight.projects}</em>` : ''}</div>
+      </div>
+    `).join('')}
+  </div>
+  ` : ''}
+
+  <!-- TOP 10 OBRAS MAIS CARAS -->
   <div class="section">
     <h2>💰 Top 10 Obras Mais Caras</h2>
     ${projectsByCost.slice(0, 10).map((project, index) => {
       const maxCost = projectsByCost[0].cost;
       const percentage = (project.cost / maxCost) * 100;
+      const efficiencyBadge = project.costPerHour < avgCostPerHour * 0.8 ? 'excellent' :
+                               project.costPerHour < avgCostPerHour ? 'good' :
+                               project.costPerHour < avgCostPerHour * 1.2 ? 'average' : 'poor';
+      const badgeText = efficiencyBadge === 'excellent' ? 'Excelente' :
+                        efficiencyBadge === 'good' ? 'Bom' :
+                        efficiencyBadge === 'average' ? 'Médio' : 'Atenção';
       return `
         <div class="chart-bar">
-          <div class="chart-label" title="${project.name}">${index + 1}. ${project.name}</div>
+          <div class="chart-rank">${index + 1}</div>
+          <div class="chart-label" title="${project.name}">${project.name}</div>
           <div class="chart-bar-container">
             <div class="chart-bar-fill" style="width: ${percentage}%"></div>
           </div>
-          <div class="chart-value">${currency(project.cost)}</div>
+          <div class="chart-value">
+            ${currency(project.cost)}
+            <span class="efficiency-badge ${efficiencyBadge}">${badgeText}</span>
+          </div>
         </div>
       `;
     }).join('')}
   </div>
 
+  <!-- TOP 10 EFICIÊNCIA -->
+  <div class="section">
+    <h2>⚡ Top 10 Obras Mais Eficientes (Melhor Custo/Hora)</h2>
+    ${projectsByEfficiency.slice(0, 10).map((project, index) => {
+      const maxValue = projectsByEfficiency[0].costPerHour;
+      const percentage = projectsByEfficiency.length > 0 ? (project.costPerHour / projectsByEfficiency[projectsByEfficiency.length - 1].costPerHour) * 100 : 0;
+      const savingsPercent = avgCostPerHour > 0 ? ((avgCostPerHour - project.costPerHour) / avgCostPerHour) * 100 : 0;
+      return `
+        <div class="chart-bar">
+          <div class="chart-rank">${index + 1}</div>
+          <div class="chart-label" title="${project.name}">${project.name}</div>
+          <div class="chart-bar-container">
+            <div class="chart-bar-fill" style="width: ${percentage}%; background: linear-gradient(90deg, #059669, #10b981);"></div>
+          </div>
+          <div class="chart-value" style="color: #059669;">
+            ${currency(project.costPerHour)}/h
+            ${savingsPercent > 0 ? `<span class="efficiency-badge excellent">-${savingsPercent.toFixed(0)}%</span>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('')}
+  </div>
+
+  <!-- TOP 10 HORAS -->
   <div class="section">
     <h2>⏱️ Top 10 Obras com Mais Presença (Horas)</h2>
     ${projectsByHours.slice(0, 10).map((project, index) => {
@@ -11006,11 +11313,15 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
       const percentage = (project.hours / maxHours) * 100;
       return `
         <div class="chart-bar">
-          <div class="chart-label" title="${project.name}">${index + 1}. ${project.name}</div>
+          <div class="chart-rank">${index + 1}</div>
+          <div class="chart-label" title="${project.name}">${project.name}</div>
           <div class="chart-bar-container">
-            <div class="chart-bar-fill" style="width: ${percentage}%"></div>
+            <div class="chart-bar-fill" style="width: ${percentage}%; background: linear-gradient(90deg, #7c3aed, #a78bfa);"></div>
           </div>
-          <div class="chart-value">${project.hours.toFixed(1)}h</div>
+          <div class="chart-value" style="color: #7c3aed;">
+            ${project.hours.toFixed(1)}h
+            <span style="font-size: 8pt; color: #64748b;">(${project.workers} colab.)</span>
+          </div>
         </div>
       `;
     }).join('')}
@@ -11018,18 +11329,96 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
 
   <div style="page-break-before: always;"></div>
 
+  <!-- DETALHE TOP 5 -->
   <div class="section">
     <h2>🏆 Detalhe das 5 Obras Mais Dispendiosas</h2>
     ${top5Expensive.map((project, index) => {
       const workers = Array.from(project.data.workers.values()).sort((a, b) => b.custoTotal - a.custoTotal);
       const rankClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+      const normalPerc = project.cost > 0 ? (project.normalCost / project.cost) * 100 : 0;
+      const extraPerc = project.cost > 0 ? (project.extraCost / project.cost) * 100 : 0;
+      const fdsPerc = project.cost > 0 ? (project.fdsCost / project.cost) * 100 : 0;
+      const feriadoPerc = project.cost > 0 ? (project.feriadoCost / project.cost) * 100 : 0;
       return `
-        <div style="margin-bottom: 30px; page-break-inside: avoid;">
-          <div style="display: flex; align-items: center; margin-bottom: 10px;">
-            <span class="rank ${rankClass}">${index + 1}</span>
-            <div>
-              <div style="font-size: 14pt; font-weight: bold; color: #00677F;">${project.name}</div>
-              <div style="font-size: 20pt; font-weight: bold; color: #00A9B8;">${currency(project.cost)}</div>
+        <div style="margin-bottom: 40px; page-break-inside: avoid; background: #f8fafc; padding: 20px; border-radius: 10px; border: 2px solid #e2e8f0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+            <div style="display: flex; align-items: center;">
+              <span class="rank ${rankClass}">${index + 1}</span>
+              <div>
+                <div style="font-size: 16pt; font-weight: bold; color: #00677F;">${project.name}</div>
+                <div style="font-size: 24pt; font-weight: 900; color: #00A9B8;">${currency(project.cost)}</div>
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 9pt; color: #64748b;">Eficiência</div>
+              <div style="font-size: 14pt; font-weight: 700; color: ${project.costPerHour < avgCostPerHour ? '#059669' : '#dc2626'};">
+                ${currency(project.costPerHour)}/h
+              </div>
+              <div style="font-size: 8pt; color: #64748b;">
+                ${project.costPerHour < avgCostPerHour ?
+                  `${((1 - project.costPerHour / avgCostPerHour) * 100).toFixed(0)}% abaixo da média` :
+                  `${((project.costPerHour / avgCostPerHour - 1) * 100).toFixed(0)}% acima da média`}
+              </div>
+            </div>
+          </div>
+
+          <!-- Mini Distribuição de Custos -->
+          <div class="comparison-grid" style="margin-bottom: 15px;">
+            <div class="mini-chart">
+              <h4>📊 Distribuição de Custos</h4>
+              ${normalPerc > 0 ? `
+                <div class="cost-pie-segment">
+                  <div class="pie-color" style="background: #00677F;"></div>
+                  <div class="pie-label">Horas Normais</div>
+                  <div class="pie-value">${normalPerc.toFixed(1)}% (${currency(project.normalCost)})</div>
+                </div>
+              ` : ''}
+              ${extraPerc > 0 ? `
+                <div class="cost-pie-segment">
+                  <div class="pie-color" style="background: #00A9B8;"></div>
+                  <div class="pie-label">Horas Extra</div>
+                  <div class="pie-value">${extraPerc.toFixed(1)}% (${currency(project.extraCost)})</div>
+                </div>
+              ` : ''}
+              ${fdsPerc > 0 ? `
+                <div class="cost-pie-segment">
+                  <div class="pie-color" style="background: #BE8A3A;"></div>
+                  <div class="pie-label">Fim de Semana</div>
+                  <div class="pie-value">${fdsPerc.toFixed(1)}% (${currency(project.fdsCost)})</div>
+                </div>
+              ` : ''}
+              ${feriadoPerc > 0 ? `
+                <div class="cost-pie-segment">
+                  <div class="pie-color" style="background: #8B5CF6;"></div>
+                  <div class="pie-label">Feriados</div>
+                  <div class="pie-value">${feriadoPerc.toFixed(1)}% (${currency(project.feriadoCost)})</div>
+                </div>
+              ` : ''}
+            </div>
+            <div class="mini-chart">
+              <h4>📈 Métricas da Obra</h4>
+              <div style="margin-bottom: 8px;">
+                <div style="font-size: 8pt; color: #64748b;">Total de Horas</div>
+                <div style="font-size: 12pt; font-weight: 700;">${project.hours.toFixed(1)}h</div>
+              </div>
+              <div style="margin-bottom: 8px;">
+                <div style="font-size: 8pt; color: #64748b;">Colaboradores</div>
+                <div style="font-size: 12pt; font-weight: 700;">${workers.length}</div>
+              </div>
+              <div style="margin-bottom: 8px;">
+                <div style="font-size: 8pt; color: #64748b;">% Horas Extra</div>
+                <div style="font-size: 12pt; font-weight: 700; color: ${project.overtimePercent > 15 ? '#dc2626' : '#059669'};">
+                  ${project.overtimePercent.toFixed(1)}%
+                </div>
+              </div>
+              ${project.budget > 0 ? `
+              <div>
+                <div style="font-size: 8pt; color: #64748b;">Variação Orçamento</div>
+                <div style="font-size: 12pt; font-weight: 700; color: ${project.variance <= 0 ? '#059669' : '#dc2626'};">
+                  ${project.variance > 0 ? '+' : ''}${project.variance.toFixed(0)}%
+                </div>
+              </div>
+              ` : ''}
             </div>
           </div>
 
@@ -11077,25 +11466,6 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
               </tr>
             </tbody>
           </table>
-
-          <div style="margin-top: 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; font-size: 9pt;">
-            <div style="background: #f1f5f9; padding: 8px; border-radius: 4px;">
-              <div style="color: #64748b;">Total Horas</div>
-              <div style="font-weight: bold;">${project.hours.toFixed(1)}h</div>
-            </div>
-            <div style="background: #f1f5f9; padding: 8px; border-radius: 4px;">
-              <div style="color: #64748b;">Colaboradores</div>
-              <div style="font-weight: bold;">${workers.length}</div>
-            </div>
-            <div style="background: #f1f5f9; padding: 8px; border-radius: 4px;">
-              <div style="color: #64748b;">% Horas Extra</div>
-              <div style="font-weight: bold;">${project.data.overtimePercent.toFixed(1)}%</div>
-            </div>
-            <div style="background: #f1f5f9; padding: 8px; border-radius: 4px;">
-              <div style="color: #64748b;">Custo Médio/Hora</div>
-              <div style="font-weight: bold;">${currency(project.hours > 0 ? project.cost / project.hours : 0)}</div>
-            </div>
-          </div>
         </div>
       `;
     }).join('')}
