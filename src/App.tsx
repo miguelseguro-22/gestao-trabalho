@@ -10446,7 +10446,11 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
           horasNormais: 0,
           horasExtra: 0,
           horasFDS: 0,
-          horasFeriado: 0
+          horasFeriado: 0,
+          custoNormal: 0,
+          custoExtra: 0,
+          custoFDS: 0,
+          custoFeriado: 0
         });
       }
 
@@ -10491,29 +10495,37 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
       }
 
       if (isFeriado) {
+        const custo = (hours + overtime) * rates.fimSemana;
         workerData.horasFeriado += hours + overtime;
-        workerData.custoFeriado += (hours + overtime) * rates.fimSemana;
+        workerData.custoFeriado += custo;
         projectData.horasFeriado += hours + overtime;
+        projectData.custoFeriado += custo;
       } else if (isWeekend) {
+        const custo = (hours + overtime) * rates.fimSemana;
         workerData.horasFDS += hours + overtime;
-        workerData.custoFDS += (hours + overtime) * rates.fimSemana;
+        workerData.custoFDS += custo;
         projectData.horasFDS += hours + overtime;
+        projectData.custoFDS += custo;
       } else {
+        const custoNormal = hours * rates.normal;
         workerData.horasNormais += hours;
-        workerData.custoNormal += hours * rates.normal;
+        workerData.custoNormal += custoNormal;
         projectData.horasNormais += hours;
+        projectData.custoNormal += custoNormal;
 
         if (overtime > 0) {
+          const custoExtra = overtime * rates.extra;
           workerData.horasExtra += overtime;
-          workerData.custoExtra += overtime * rates.extra;
+          workerData.custoExtra += custoExtra;
           projectData.horasExtra += overtime;
+          projectData.custoExtra += custoExtra;
         }
       }
 
       workerData.totalHoras = workerData.horasNormais + workerData.horasExtra + workerData.horasFDS + workerData.horasFeriado;
       workerData.custoTotal = workerData.custoNormal + workerData.custoExtra + workerData.custoFDS + workerData.custoFeriado;
-      projectData.total += workerData.custoTotal;
-      projectData.totalHours += workerData.totalHoras;
+      projectData.total = projectData.custoNormal + projectData.custoExtra + projectData.custoFDS + projectData.custoFeriado;
+      projectData.totalHours = projectData.horasNormais + projectData.horasExtra + projectData.horasFDS + projectData.horasFeriado;
     });
 
       // Calcular KPIs por projeto
@@ -10814,6 +10826,298 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
     }
   };
 
+  const exportAnalysisReport = () => {
+    // Ordenar obras por custo (mais caras primeiro)
+    const projectsByCost = Array.from(costData.entries())
+      .map(([name, data]) => ({ name, cost: data.total, hours: data.totalHours, data }))
+      .sort((a, b) => b.cost - a.cost);
+
+    // Ordenar obras por horas (mais presença primeiro)
+    const projectsByHours = Array.from(costData.entries())
+      .map(([name, data]) => ({ name, cost: data.total, hours: data.totalHours, data }))
+      .sort((a, b) => b.hours - a.hours);
+
+    // Top 5 obras mais dispendiosas
+    const top5Expensive = projectsByCost.slice(0, 5);
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Relatório de Análise de Obras</title>
+  <style>
+    @page { size: A4; margin: 20mm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.4;
+      color: #1e293b;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 3px solid #00A9B8;
+      padding-bottom: 15px;
+    }
+    .header h1 {
+      font-size: 24pt;
+      color: #00677F;
+      margin-bottom: 5px;
+    }
+    .header .subtitle {
+      font-size: 12pt;
+      color: #64748b;
+    }
+    .info-box {
+      background: #f1f5f9;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .section {
+      margin-bottom: 40px;
+      page-break-inside: avoid;
+    }
+    .section h2 {
+      font-size: 16pt;
+      color: #00677F;
+      margin-bottom: 15px;
+      border-bottom: 2px solid #00A9B8;
+      padding-bottom: 5px;
+    }
+    .chart-bar {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .chart-label {
+      width: 150px;
+      font-weight: 600;
+      font-size: 10pt;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .chart-bar-container {
+      flex: 1;
+      height: 30px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+      margin: 0 10px;
+    }
+    .chart-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #00677F, #00A9B8);
+      transition: width 0.3s;
+    }
+    .chart-value {
+      width: 100px;
+      text-align: right;
+      font-weight: bold;
+      color: #00677F;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    th {
+      background: #00677F;
+      color: white;
+      padding: 10px 8px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 10pt;
+    }
+    th.right { text-align: right; }
+    td {
+      padding: 8px;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 10pt;
+    }
+    td.right { text-align: right; }
+    td.bold { font-weight: 700; }
+    tr:nth-child(even) {
+      background: #f8fafc;
+    }
+    .rank {
+      display: inline-block;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: #00677F;
+      color: white;
+      text-align: center;
+      line-height: 30px;
+      font-weight: bold;
+      margin-right: 10px;
+    }
+    .rank.gold { background: #FFD700; color: #1e293b; }
+    .rank.silver { background: #C0C0C0; color: #1e293b; }
+    .rank.bronze { background: #CD7F32; color: white; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📊 Relatório de Análise de Obras</h1>
+    <div class="subtitle">Comparação de Custos e Presença</div>
+  </div>
+
+  <div class="info-box">
+    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+      <span style="font-weight: 600; color: #475569;">Período:</span>
+      <span>${new Date(startDate).toLocaleDateString('pt-PT')} até ${new Date(endDate).toLocaleDateString('pt-PT')}</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+      <span style="font-weight: 600; color: #475569;">Total de Obras:</span>
+      <span>${costData.size}</span>
+    </div>
+    <div style="display: flex; justify-content: space-between;">
+      <span style="font-weight: 600; color: #475569;">Data de Emissão:</span>
+      <span>${new Date().toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 Top 10 Obras Mais Caras</h2>
+    ${projectsByCost.slice(0, 10).map((project, index) => {
+      const maxCost = projectsByCost[0].cost;
+      const percentage = (project.cost / maxCost) * 100;
+      return `
+        <div class="chart-bar">
+          <div class="chart-label" title="${project.name}">${index + 1}. ${project.name}</div>
+          <div class="chart-bar-container">
+            <div class="chart-bar-fill" style="width: ${percentage}%"></div>
+          </div>
+          <div class="chart-value">${currency(project.cost)}</div>
+        </div>
+      `;
+    }).join('')}
+  </div>
+
+  <div class="section">
+    <h2>⏱️ Top 10 Obras com Mais Presença (Horas)</h2>
+    ${projectsByHours.slice(0, 10).map((project, index) => {
+      const maxHours = projectsByHours[0].hours;
+      const percentage = (project.hours / maxHours) * 100;
+      return `
+        <div class="chart-bar">
+          <div class="chart-label" title="${project.name}">${index + 1}. ${project.name}</div>
+          <div class="chart-bar-container">
+            <div class="chart-bar-fill" style="width: ${percentage}%"></div>
+          </div>
+          <div class="chart-value">${project.hours.toFixed(1)}h</div>
+        </div>
+      `;
+    }).join('')}
+  </div>
+
+  <div style="page-break-before: always;"></div>
+
+  <div class="section">
+    <h2>🏆 Detalhe das 5 Obras Mais Dispendiosas</h2>
+    ${top5Expensive.map((project, index) => {
+      const workers = Array.from(project.data.workers.values()).sort((a, b) => b.custoTotal - a.custoTotal);
+      const rankClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+      return `
+        <div style="margin-bottom: 30px; page-break-inside: avoid;">
+          <div style="display: flex; align-items: center; margin-bottom: 10px;">
+            <span class="rank ${rankClass}">${index + 1}</span>
+            <div>
+              <div style="font-size: 14pt; font-weight: bold; color: #00677F;">${project.name}</div>
+              <div style="font-size: 20pt; font-weight: bold; color: #00A9B8;">${currency(project.cost)}</div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Colaborador</th>
+                <th class="right">H. Normais</th>
+                <th class="right">Custo</th>
+                <th class="right">H. Extra</th>
+                <th class="right">Custo</th>
+                <th class="right">H. FDS</th>
+                <th class="right">Custo</th>
+                <th class="right">H. Feriado</th>
+                <th class="right">Custo</th>
+                <th class="right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${workers.map(worker => `
+                <tr>
+                  <td>${worker.name}</td>
+                  <td class="right">${worker.horasNormais.toFixed(1)}h</td>
+                  <td class="right">${currency(worker.custoNormal)}</td>
+                  <td class="right">${worker.horasExtra.toFixed(1)}h</td>
+                  <td class="right">${currency(worker.custoExtra)}</td>
+                  <td class="right">${worker.horasFDS.toFixed(1)}h</td>
+                  <td class="right">${currency(worker.custoFDS)}</td>
+                  <td class="right">${worker.horasFeriado.toFixed(1)}h</td>
+                  <td class="right">${currency(worker.custoFeriado)}</td>
+                  <td class="right bold" style="color: #00A9B8;">${currency(worker.custoTotal)}</td>
+                </tr>
+              `).join('')}
+              <tr style="background: #e0f2fe !important; font-weight: 700;">
+                <td><strong>TOTAL</strong></td>
+                <td class="right">${project.data.horasNormais.toFixed(1)}h</td>
+                <td class="right">${currency(project.data.custoNormal)}</td>
+                <td class="right">${project.data.horasExtra.toFixed(1)}h</td>
+                <td class="right">${currency(project.data.custoExtra)}</td>
+                <td class="right">${project.data.horasFDS.toFixed(1)}h</td>
+                <td class="right">${currency(project.data.custoFDS)}</td>
+                <td class="right">${project.data.horasFeriado.toFixed(1)}h</td>
+                <td class="right">${currency(project.data.custoFeriado)}</td>
+                <td class="right bold" style="color: #00677F; font-size: 12pt;">${currency(project.cost)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div style="margin-top: 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; font-size: 9pt;">
+            <div style="background: #f1f5f9; padding: 8px; border-radius: 4px;">
+              <div style="color: #64748b;">Total Horas</div>
+              <div style="font-weight: bold;">${project.hours.toFixed(1)}h</div>
+            </div>
+            <div style="background: #f1f5f9; padding: 8px; border-radius: 4px;">
+              <div style="color: #64748b;">Colaboradores</div>
+              <div style="font-weight: bold;">${workers.length}</div>
+            </div>
+            <div style="background: #f1f5f9; padding: 8px; border-radius: 4px;">
+              <div style="color: #64748b;">% Horas Extra</div>
+              <div style="font-weight: bold;">${project.data.overtimePercent.toFixed(1)}%</div>
+            </div>
+            <div style="background: #f1f5f9; padding: 8px; border-radius: 4px;">
+              <div style="color: #64748b;">Custo Médio/Hora</div>
+              <div style="font-weight: bold;">${currency(project.hours > 0 ? project.cost / project.hours : 0)}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('')}
+  </div>
+
+  <div style="margin-top: 40px; padding-top: 15px; border-top: 1px solid #cbd5e1; text-align: center; font-size: 9pt; color: #64748b;">
+    <p>Relatório gerado automaticamente pela Plataforma de Gestão de Trabalho</p>
+    <p style="margin-top: 5px;">Este documento é confidencial e destina-se apenas para uso interno</p>
+  </div>
+</body>
+</html>`;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    }
+  };
+
   return (
     <section className="space-y-4">
       <PageHeader
@@ -10900,6 +11204,31 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
         </h3>
         <CostForecastTool workers={workersList} people={people} vehicles={vehicles} />
       </Card>
+
+      {/* Relatório de Análise de Obras */}
+      {costData.size > 0 && (
+        <Card className="p-6 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
+                <span className="text-2xl">📊</span>
+                Relatório de Análise de Obras
+              </h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                Gerar relatório comparativo com obras mais caras, mais presença e detalhe das top 5
+              </p>
+            </div>
+            <Button
+              variant="primary"
+              onClick={exportAnalysisReport}
+              className="flex items-center gap-2"
+            >
+              <span>📈</span>
+              Gerar Relatório
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* Dashboard Executivo - Semáforos de Status */}
       {analytics.totalBudget > 0 && (
@@ -11014,10 +11343,10 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
       {/* Tabelas por Obra */}
       {Array.from(costData.entries()).map(([projectName, projectData]) => {
         const costDistribution = [
-          { label: 'Normal', value: projectData.horasNormais * (projectData.horasNormais > 0 ? projectData.total / projectData.totalHours : 0), color: '#00677F' },
-          { label: 'Extra', value: projectData.horasExtra * (projectData.horasExtra > 0 ? projectData.total / projectData.totalHours : 0), color: '#00A9B8' },
-          { label: 'FDS', value: projectData.horasFDS * (projectData.horasFDS > 0 ? projectData.total / projectData.totalHours : 0), color: '#BE8A3A' },
-          { label: 'Feriado', value: projectData.horasFeriado * (projectData.horasFeriado > 0 ? projectData.total / projectData.totalHours : 0), color: '#8B5CF6' }
+          { label: 'Normal', value: projectData.custoNormal || 0, color: '#00677F' },
+          { label: 'Extra', value: projectData.custoExtra || 0, color: '#00A9B8' },
+          { label: 'FDS', value: projectData.custoFDS || 0, color: '#BE8A3A' },
+          { label: 'Feriado', value: projectData.custoFeriado || 0, color: '#8B5CF6' }
         ].filter(d => d.value > 0);
 
         return (
