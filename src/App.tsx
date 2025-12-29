@@ -10419,6 +10419,15 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
         return true;
       });
 
+      // 🔧 MAPA: Contar quantas obras cada trabalhador tem por dia
+      // Formato: Map<"worker|date", count>
+      const projectsPerWorkerDay = new Map();
+      filtered.forEach(entry => {
+        const worker = entry.worker || entry.supervisor || 'Desconhecido';
+        const key = `${worker}|${entry.date}`;
+        projectsPerWorkerDay.set(key, (projectsPerWorkerDay.get(key) || 0) + 1);
+      });
+
       const byProject = new Map();
 
       filtered.forEach(entry => {
@@ -10460,12 +10469,26 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
       }
 
       const workerData = projectData.workers.get(worker);
-      const hours = Number(entry.hours) || 0;
+      let hours = Number(entry.hours) || 0;
       const overtime = Number(entry.overtime) || 0;
 
       const isWeekend = new Date(entry.date).getDay() === 0 || new Date(entry.date).getDay() === 6;
       const template = entry.template || '';
       const isFeriado = template.includes('Feriado');
+
+      // 🔧 CORREÇÃO: Se hours = 0 num dia útil, assumir 8h divididas pelas obras
+      if (hours === 0 && !isWeekend && !isFeriado) {
+        const workerDayKey = `${worker}|${entry.date}`;
+        const projectCount = projectsPerWorkerDay.get(workerDayKey) || 1;
+        hours = 8 / projectCount; // Divide 8 horas pelo número de obras do dia
+      }
+
+      // 🔧 CORREÇÃO: Para feriados, se hours = 0, assumir 8h divididas pelas obras
+      if (isFeriado && hours === 0 && overtime === 0) {
+        const workerDayKey = `${worker}|${entry.date}`;
+        const projectCount = projectsPerWorkerDay.get(workerDayKey) || 1;
+        hours = 8 / projectCount; // Divide 8 horas pelo número de obras do dia
+      }
 
       if (isFeriado) {
         workerData.horasFeriado += hours + overtime;
