@@ -10336,7 +10336,7 @@ const Sparkline = ({ values, width = 60, height = 20, color = '#00A9B8' }) => {
 };
 
 // 📊 VIEW: RELATÓRIOS DE CUSTOS POR OBRA (ADVANCED)
-const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
+const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicles }) => {
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [selectedProject, setSelectedProject] = useState('all');
   const [startDate, setStartDate] = useState(() => {
@@ -10351,6 +10351,11 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
     sunday.setDate(now.getDate() - now.getDay() + 7);
     return sunday.toISOString().slice(0, 10);
   });
+
+  // 🆕 Estado para consolidação de obras
+  const [showConsolidateModal, setShowConsolidateModal] = useState(false);
+  const [selectedProjects, setSelectedProjects] = useState([]);
+  const [consolidatedName, setConsolidatedName] = useState('');
 
   const projectNames = useMemo(() => {
     return Array.from(new Set(timeEntries.map(t => t.project).filter(Boolean))).sort();
@@ -10641,6 +10646,47 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
       previousCost: previousPeriodData.totalCost
     };
   }, [costData, previousPeriodData]);
+
+  // 🆕 Função para consolidar obras (renomear múltiplas obras para um nome único)
+  const handleConsolidateProjects = () => {
+    if (selectedProjects.length < 2) {
+      alert('Selecione pelo menos 2 obras para consolidar');
+      return;
+    }
+    if (!consolidatedName.trim()) {
+      alert('Digite o nome consolidado');
+      return;
+    }
+
+    const finalName = consolidatedName.trim();
+
+    // Renomear todas as obras selecionadas nos time entries
+    const updatedEntries = timeEntries.map(entry => {
+      if (selectedProjects.includes(entry.project)) {
+        return { ...entry, project: finalName };
+      }
+      return entry;
+    });
+
+    setTimeEntries(updatedEntries);
+
+    // Fechar modal e limpar seleção
+    setShowConsolidateModal(false);
+    setSelectedProjects([]);
+    setConsolidatedName('');
+
+    // Feedback
+    alert(`${selectedProjects.length} obras consolidadas em "${finalName}"`);
+  };
+
+  // 🆕 Toggle seleção de obra
+  const toggleProjectSelection = (projectName) => {
+    setSelectedProjects(prev =>
+      prev.includes(projectName)
+        ? prev.filter(p => p !== projectName)
+        : [...prev, projectName]
+    );
+  };
 
   const exportProjectPDF = (projectName, projectData) => {
     const workers = Array.from(projectData.workers.values()).sort((a, b) => b.custoTotal - a.custoTotal);
@@ -11575,6 +11621,20 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
             </select>
           </div>
         </div>
+
+        {/* 🆕 Botão Consolidar Obras */}
+        {projectNames.length > 1 && (
+          <div className="mt-4 flex justify-end">
+            <Button
+              variant="secondary"
+              onClick={() => setShowConsolidateModal(true)}
+              className="flex items-center gap-2"
+            >
+              <Icon name="git-merge" />
+              Consolidar Obras ({projectNames.length} obras encontradas)
+            </Button>
+          </div>
+        )}
       </Card>
 
       {/* Previsão de Custos */}
@@ -11870,6 +11930,108 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
             Ajusta os filtros para ver os relatórios de custos
           </div>
         </Card>
+      )}
+
+      {/* 🆕 Modal de Consolidação de Obras */}
+      {showConsolidateModal && (
+        <Modal
+          open={showConsolidateModal}
+          onClose={() => {
+            setShowConsolidateModal(false);
+            setSelectedProjects([]);
+            setConsolidatedName('');
+          }}
+          title="Consolidar Obras"
+          wide
+        >
+          <div className="space-y-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-start gap-3">
+                <Icon name="info" className="text-blue-600 dark:text-blue-400 mt-1" />
+                <div className="text-sm text-blue-900 dark:text-blue-100">
+                  <p className="font-medium mb-1">Como funciona:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-blue-800 dark:text-blue-200">
+                    <li>Selecione as obras que são a mesma (ex: "EDP Lisboa" e "edp lisboa")</li>
+                    <li>Digite o nome final que quer usar</li>
+                    <li>Clique em "Consolidar" para renomear todas automaticamente</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
+            {/* Nome consolidado */}
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Nome Consolidado (novo nome para as obras selecionadas)
+              </label>
+              <input
+                type="text"
+                value={consolidatedName}
+                onChange={(e) => setConsolidatedName(e.target.value)}
+                placeholder="Ex: EDP Lisboa - Subestação Central"
+                className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Lista de obras */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium">
+                  Obras encontradas no período ({projectNames.length})
+                </label>
+                <div className="text-xs text-slate-500">
+                  {selectedProjects.length} selecionadas
+                </div>
+              </div>
+
+              <div className="border dark:border-slate-700 rounded-lg max-h-96 overflow-y-auto">
+                {projectNames.map((projectName, index) => (
+                  <label
+                    key={index}
+                    className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b dark:border-slate-700 last:border-b-0 ${
+                      selectedProjects.includes(projectName)
+                        ? 'bg-blue-50 dark:bg-blue-900/20'
+                        : ''
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedProjects.includes(projectName)}
+                      onChange={() => toggleProjectSelection(projectName)}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="flex-1 font-medium">{projectName}</span>
+                    {selectedProjects.includes(projectName) && (
+                      <Icon name="check" className="text-blue-600 dark:text-blue-400" />
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Ações */}
+            <div className="flex gap-2 justify-end pt-4 border-t dark:border-slate-700">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowConsolidateModal(false);
+                  setSelectedProjects([]);
+                  setConsolidatedName('');
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleConsolidateProjects}
+                disabled={selectedProjects.length < 2 || !consolidatedName.trim()}
+              >
+                <Icon name="git-merge" />
+                Consolidar {selectedProjects.length > 0 && `(${selectedProjects.length} obras)`}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </section>
   );
@@ -13119,6 +13281,7 @@ function TableMaterials() {
           {view === "cost-reports" && (
             <CostReportsView
               timeEntries={timeEntries}
+              setTimeEntries={setTimeEntries}
               projects={projects}
               people={people}
               vehicles={vehicles}
