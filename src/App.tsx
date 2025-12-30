@@ -10358,7 +10358,23 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
   const [consolidatedName, setConsolidatedName] = useState('');
 
   const projectNames = useMemo(() => {
-    return Array.from(new Set(timeEntries.map(t => t.project).filter(Boolean))).sort();
+    const allProjects = new Set();
+
+    timeEntries.forEach(entry => {
+      if (!entry.project) return;
+
+      // Se o projeto contém "/", dividir em múltiplos projetos
+      if (entry.project.includes('/')) {
+        entry.project.split('/').forEach(part => {
+          const trimmed = part.trim();
+          if (trimmed) allProjects.add(trimmed);
+        });
+      } else {
+        allProjects.add(entry.project);
+      }
+    });
+
+    return Array.from(allProjects).sort();
   }, [timeEntries]);
 
   // Lista de colaboradores para Previsão de Custos
@@ -10436,113 +10452,129 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
       const byProject = new Map();
 
       filtered.forEach(entry => {
-        const project = entry.project || 'Sem Obra';
         const worker = entry.worker || entry.supervisor || 'Desconhecido';
         const rates = personRates(people, worker, null);
 
-      if (!byProject.has(project)) {
-        const budgetInfo = projectBudgets.get(project) || { budget: 0, estimatedHours: 0 };
-        byProject.set(project, {
-          workers: new Map(),
-          total: 0,
-          totalHours: 0,
-          budget: budgetInfo.budget,
-          estimatedHours: budgetInfo.estimatedHours,
-          horasNormais: 0,
-          horasExtra: 0,
-          horasFDS: 0,
-          horasFeriado: 0,
-          custoNormal: 0,
-          custoExtra: 0,
-          custoFDS: 0,
-          custoFeriado: 0
-        });
-      }
+        // 🔧 Se o projeto contém "/", dividir em múltiplos projetos
+        const projectRaw = entry.project || 'Sem Obra';
+        const projects = projectRaw.includes('/')
+          ? projectRaw.split('/').map(p => p.trim()).filter(Boolean)
+          : [projectRaw];
 
-      const projectData = byProject.get(project);
+        const projectCount = projects.length;
 
-      if (!projectData.workers.has(worker)) {
-        projectData.workers.set(worker, {
-          name: worker,
-          horasNormais: 0,
-          horasExtra: 0,
-          horasFDS: 0,
-          horasFeriado: 0,
-          custoNormal: 0,
-          custoExtra: 0,
-          custoFDS: 0,
-          custoFeriado: 0,
-          custoTotal: 0,
-          totalHoras: 0
-        });
-      }
+        // Processar para CADA projeto separado
+        projects.forEach(project => {
+          if (!byProject.has(project)) {
+            const budgetInfo = projectBudgets.get(project) || { budget: 0, estimatedHours: 0 };
+            byProject.set(project, {
+              workers: new Map(),
+              total: 0,
+              totalHours: 0,
+              budget: budgetInfo.budget,
+              estimatedHours: budgetInfo.estimatedHours,
+              horasNormais: 0,
+              horasExtra: 0,
+              horasFDS: 0,
+              horasFeriado: 0,
+              custoNormal: 0,
+              custoExtra: 0,
+              custoFDS: 0,
+              custoFeriado: 0
+            });
+          }
 
-      const workerData = projectData.workers.get(worker);
-      let hours = Number(entry.hours) || 0;
-      const overtime = Number(entry.overtime) || 0;
+          const projectData = byProject.get(project);
 
-      // 🔧 Detectar tipo de dia (igual ao MonthlyReportView para consistência)
-      const entryDate = new Date(entry.date);
-      const dayOfWeek = entryDate.getDay(); // 0=Domingo, 6=Sábado
-      const isSaturday = dayOfWeek === 6;
-      const isSunday = dayOfWeek === 0;
-      const template = entry.template || '';
-      const isFeriado = template.includes('Feriado');
+          if (!projectData.workers.has(worker)) {
+            projectData.workers.set(worker, {
+              name: worker,
+              horasNormais: 0,
+              horasExtra: 0,
+              horasFDS: 0,
+              horasFeriado: 0,
+              custoNormal: 0,
+              custoExtra: 0,
+              custoFDS: 0,
+              custoFeriado: 0,
+              custoTotal: 0,
+              totalHoras: 0
+            });
+          }
 
-      // 🔧 CORREÇÃO: Se hours = 0 num dia útil, assumir 8h divididas pelas obras
-      if (hours === 0 && !isSaturday && !isSunday && !isFeriado) {
-        const workerDayKey = `${worker}|${entry.date}`;
-        const projectCount = projectsPerWorkerDay.get(workerDayKey) || 1;
-        hours = 8 / projectCount; // Divide 8 horas pelo número de obras do dia
-      }
+          const workerData = projectData.workers.get(worker);
+          let hours = Number(entry.hours) || 0;
+          let overtime = Number(entry.overtime) || 0;
 
-      // 🔧 CORREÇÃO: Para feriados/FDS, se hours = 0, assumir 8h divididas pelas obras
-      if ((isSaturday || isSunday || isFeriado) && hours === 0 && overtime === 0) {
-        const workerDayKey = `${worker}|${entry.date}`;
-        const projectCount = projectsPerWorkerDay.get(workerDayKey) || 1;
-        hours = 8 / projectCount; // Divide 8 horas pelo número de obras do dia
-      }
+          // 🔧 DIVIDIR horas quando há múltiplos projetos (ex: "FACCIA / JTI" → 8h vira 4h em cada)
+          if (projectCount > 1) {
+            hours = hours / projectCount;
+            overtime = overtime / projectCount;
+          }
 
-      // ✅ CLASSIFICAÇÃO CORRETA (igual ao MonthlyReportView):
-      // 1. Sábado → FDS
-      // 2. Domingo OU Feriado → Feriado
-      // 3. Resto → Normal/Extra
+          // 🔧 Detectar tipo de dia (igual ao MonthlyReportView para consistência)
+          const entryDate = new Date(entry.date);
+          const dayOfWeek = entryDate.getDay(); // 0=Domingo, 6=Sábado
+          const isSaturday = dayOfWeek === 6;
+          const isSunday = dayOfWeek === 0;
+          const template = entry.template || '';
+          const isFeriado = template.includes('Feriado');
 
-      if (isSaturday) {
-        // Sábado → FDS
-        const custo = (hours + overtime) * rates.fimSemana;
-        workerData.horasFDS += hours + overtime;
-        workerData.custoFDS += custo;
-        projectData.horasFDS += hours + overtime;
-        projectData.custoFDS += custo;
-      } else if (isSunday || isFeriado) {
-        // Domingo OU Feriado → Feriado
-        const custo = (hours + overtime) * rates.fimSemana;
-        workerData.horasFeriado += hours + overtime;
-        workerData.custoFeriado += custo;
-        projectData.horasFeriado += hours + overtime;
-        projectData.custoFeriado += custo;
-      } else {
-        const custoNormal = hours * rates.normal;
-        workerData.horasNormais += hours;
-        workerData.custoNormal += custoNormal;
-        projectData.horasNormais += hours;
-        projectData.custoNormal += custoNormal;
+          // 🔧 CORREÇÃO: Se hours = 0 num dia útil, assumir 8h divididas pelas obras
+          if (hours === 0 && !isSaturday && !isSunday && !isFeriado) {
+            const workerDayKey = `${worker}|${entry.date}`;
+            const totalProjectsForWorkerDay = projectsPerWorkerDay.get(workerDayKey) || 1;
+            hours = 8 / totalProjectsForWorkerDay; // Divide 8 horas pelo número de obras do dia
+          }
 
-        if (overtime > 0) {
-          const custoExtra = overtime * rates.extra;
-          workerData.horasExtra += overtime;
-          workerData.custoExtra += custoExtra;
-          projectData.horasExtra += overtime;
-          projectData.custoExtra += custoExtra;
-        }
-      }
+          // 🔧 CORREÇÃO: Para feriados/FDS, se hours = 0, assumir 8h divididas pelas obras
+          if ((isSaturday || isSunday || isFeriado) && hours === 0 && overtime === 0) {
+            const workerDayKey = `${worker}|${entry.date}`;
+            const totalProjectsForWorkerDay = projectsPerWorkerDay.get(workerDayKey) || 1;
+            hours = 8 / totalProjectsForWorkerDay; // Divide 8 horas pelo número de obras do dia
+          }
 
-      workerData.totalHoras = workerData.horasNormais + workerData.horasExtra + workerData.horasFDS + workerData.horasFeriado;
-      workerData.custoTotal = workerData.custoNormal + workerData.custoExtra + workerData.custoFDS + workerData.custoFeriado;
-      projectData.total = projectData.custoNormal + projectData.custoExtra + projectData.custoFDS + projectData.custoFeriado;
-      projectData.totalHours = projectData.horasNormais + projectData.horasExtra + projectData.horasFDS + projectData.horasFeriado;
-    });
+          // ✅ CLASSIFICAÇÃO CORRETA (igual ao MonthlyReportView):
+          // 1. Sábado → FDS
+          // 2. Domingo OU Feriado → Feriado
+          // 3. Resto → Normal/Extra
+
+          if (isSaturday) {
+            // Sábado → FDS
+            const custo = (hours + overtime) * rates.fimSemana;
+            workerData.horasFDS += hours + overtime;
+            workerData.custoFDS += custo;
+            projectData.horasFDS += hours + overtime;
+            projectData.custoFDS += custo;
+          } else if (isSunday || isFeriado) {
+            // Domingo OU Feriado → Feriado
+            const custo = (hours + overtime) * rates.fimSemana;
+            workerData.horasFeriado += hours + overtime;
+            workerData.custoFeriado += custo;
+            projectData.horasFeriado += hours + overtime;
+            projectData.custoFeriado += custo;
+          } else {
+            const custoNormal = hours * rates.normal;
+            workerData.horasNormais += hours;
+            workerData.custoNormal += custoNormal;
+            projectData.horasNormais += hours;
+            projectData.custoNormal += custoNormal;
+
+            if (overtime > 0) {
+              const custoExtra = overtime * rates.extra;
+              workerData.horasExtra += overtime;
+              workerData.custoExtra += custoExtra;
+              projectData.horasExtra += overtime;
+              projectData.custoExtra += custoExtra;
+            }
+          }
+
+          workerData.totalHoras = workerData.horasNormais + workerData.horasExtra + workerData.horasFDS + workerData.horasFeriado;
+          workerData.custoTotal = workerData.custoNormal + workerData.custoExtra + workerData.custoFDS + workerData.custoFeriado;
+          projectData.total = projectData.custoNormal + projectData.custoExtra + projectData.custoFDS + projectData.custoFeriado;
+          projectData.totalHours = projectData.horasNormais + projectData.horasExtra + projectData.horasFDS + projectData.horasFeriado;
+        }); // Fechar projects.forEach
+      }); // Fechar filtered.forEach
 
       // Calcular KPIs por projeto
       byProject.forEach((projectData, projectName) => {
