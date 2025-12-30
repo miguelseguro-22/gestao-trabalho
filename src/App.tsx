@@ -10476,36 +10476,47 @@ const CostReportsView = ({ timeEntries, projects, people, vehicles }) => {
       let hours = Number(entry.hours) || 0;
       const overtime = Number(entry.overtime) || 0;
 
-      const isWeekend = new Date(entry.date).getDay() === 0 || new Date(entry.date).getDay() === 6;
+      // 🔧 Detectar tipo de dia (igual ao MonthlyReportView para consistência)
+      const entryDate = new Date(entry.date);
+      const dayOfWeek = entryDate.getDay(); // 0=Domingo, 6=Sábado
+      const isSaturday = dayOfWeek === 6;
+      const isSunday = dayOfWeek === 0;
       const template = entry.template || '';
       const isFeriado = template.includes('Feriado');
 
       // 🔧 CORREÇÃO: Se hours = 0 num dia útil, assumir 8h divididas pelas obras
-      if (hours === 0 && !isWeekend && !isFeriado) {
+      if (hours === 0 && !isSaturday && !isSunday && !isFeriado) {
         const workerDayKey = `${worker}|${entry.date}`;
         const projectCount = projectsPerWorkerDay.get(workerDayKey) || 1;
         hours = 8 / projectCount; // Divide 8 horas pelo número de obras do dia
       }
 
-      // 🔧 CORREÇÃO: Para feriados, se hours = 0, assumir 8h divididas pelas obras
-      if (isFeriado && hours === 0 && overtime === 0) {
+      // 🔧 CORREÇÃO: Para feriados/FDS, se hours = 0, assumir 8h divididas pelas obras
+      if ((isSaturday || isSunday || isFeriado) && hours === 0 && overtime === 0) {
         const workerDayKey = `${worker}|${entry.date}`;
         const projectCount = projectsPerWorkerDay.get(workerDayKey) || 1;
         hours = 8 / projectCount; // Divide 8 horas pelo número de obras do dia
       }
 
-      if (isFeriado) {
-        const custo = (hours + overtime) * rates.fimSemana;
-        workerData.horasFeriado += hours + overtime;
-        workerData.custoFeriado += custo;
-        projectData.horasFeriado += hours + overtime;
-        projectData.custoFeriado += custo;
-      } else if (isWeekend) {
+      // ✅ CLASSIFICAÇÃO CORRETA (igual ao MonthlyReportView):
+      // 1. Sábado → FDS
+      // 2. Domingo OU Feriado → Feriado
+      // 3. Resto → Normal/Extra
+
+      if (isSaturday) {
+        // Sábado → FDS
         const custo = (hours + overtime) * rates.fimSemana;
         workerData.horasFDS += hours + overtime;
         workerData.custoFDS += custo;
         projectData.horasFDS += hours + overtime;
         projectData.custoFDS += custo;
+      } else if (isSunday || isFeriado) {
+        // Domingo OU Feriado → Feriado
+        const custo = (hours + overtime) * rates.fimSemana;
+        workerData.horasFeriado += hours + overtime;
+        workerData.custoFeriado += custo;
+        projectData.horasFeriado += hours + overtime;
+        projectData.custoFeriado += custo;
       } else {
         const custoNormal = hours * rates.normal;
         workerData.horasNormais += hours;
