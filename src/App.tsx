@@ -9132,7 +9132,9 @@ function App() {
   const applySnapshot = (snap: any) => {
     if (!snap) return
 
-    setTimeEntries(dedupTimeEntries(snap.timeEntries || []))
+    // ⚠️ NÃO carregar timeEntries aqui - eles têm sistema dedicado (time_entries table)
+    // setTimeEntries é gerido pelo TimeEntriesService.fetchUserEntries
+    // Apenas carregar dados que NÃO têm tabela dedicada no Supabase
     setOrders(snap.orders || [])
     setProjects(snap.projects || [])
     setActivity((snap.activity || []).map((a: any) => ({ ...a, ts: a?.ts ? new Date(a.ts) : new Date() })))
@@ -9389,6 +9391,94 @@ function App() {
   }, [timeEntries, auth?.id, auth?.name, supabaseActive])
 
   // -------------------------------------------------------------
+  // 🔴 REALTIME - Ouvir mudanças na tabela time_entries
+  // -------------------------------------------------------------
+  useEffect(() => {
+    if (!supabaseActive || !supabase || !auth?.id || !auth?.role) return
+
+    console.log('🔴 Ativando Realtime para time_entries...')
+
+    const channel = supabase
+      .channel('time_entries_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'time_entries'
+        },
+        (payload) => {
+          console.log('🔴 Mudança detectada em time_entries:', payload)
+
+          // Para admin/diretor/logistica - recarregar tudo
+          if (auth.role === 'admin' || auth.role === 'diretor' || auth.role === 'logistica') {
+            console.log('🔓 Admin detectou mudança - recarregando todos os registos...')
+            TimeEntriesService.fetchUserEntries(auth.id, auth.role).then(result => {
+              if (result.success) {
+                setTimeEntries(dedupTimeEntries(result.data))
+                console.log(`✅ ${result.data.length} registos recarregados em tempo real`)
+              }
+            })
+          } else {
+            // Para técnicos/encarregados - apenas atualizar se for o seu registo
+            const newEntry = payload.new as any
+            const oldEntry = payload.old as any
+
+            if (payload.eventType === 'INSERT' && newEntry?.user_id === auth.id) {
+              console.log('🔒 Novo registo do user detectado')
+              setTimeEntries(prev => dedupTimeEntries([...prev, {
+                id: newEntry.id,
+                user_id: newEntry.user_id,
+                date: newEntry.date,
+                template: newEntry.template,
+                hours: newEntry.hours,
+                overtime: newEntry.overtime,
+                project: newEntry.project,
+                supervisor: newEntry.supervisor,
+                worker: newEntry.worker,
+                colaborador: newEntry.colaborador,
+                displacement: newEntry.displacement,
+                periodStart: newEntry.period_start,
+                periodEnd: newEntry.period_end,
+                sickDays: newEntry.sick_days,
+                status: newEntry.status,
+              }]))
+            } else if (payload.eventType === 'UPDATE' && newEntry?.user_id === auth.id) {
+              console.log('🔒 Registo do user atualizado')
+              setTimeEntries(prev => prev.map(e =>
+                e.id === newEntry.id ? {
+                  ...e,
+                  date: newEntry.date,
+                  template: newEntry.template,
+                  hours: newEntry.hours,
+                  overtime: newEntry.overtime,
+                  project: newEntry.project,
+                  supervisor: newEntry.supervisor,
+                  worker: newEntry.worker,
+                  colaborador: newEntry.colaborador,
+                  displacement: newEntry.displacement,
+                  periodStart: newEntry.period_start,
+                  periodEnd: newEntry.period_end,
+                  sickDays: newEntry.sick_days,
+                  status: newEntry.status,
+                } : e
+              ))
+            } else if (payload.eventType === 'DELETE' && oldEntry?.user_id === auth.id) {
+              console.log('🔒 Registo do user removido')
+              setTimeEntries(prev => prev.filter(e => e.id !== oldEntry.id))
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      console.log('🔴 Desativando Realtime para time_entries')
+      supabase.removeChannel(channel)
+    }
+  }, [auth?.id, auth?.role, supabaseActive])
+
+  // -------------------------------------------------------------
   // 🔄 REFRESH SUPABASE AO INICIAR
   // -------------------------------------------------------------
 // -------------------------------------------------------------
@@ -9443,7 +9533,8 @@ useEffect(() => {
   useEffect(() => {
     const updatedAt = new Date().toISOString()
     const snapshot = {
-      timeEntries,
+      // ⚠️ NÃO incluir timeEntries - eles têm tabela dedicada
+      // timeEntries são geridos por time_entries table, não app_state
       orders,
       projects,
       activity,
@@ -9464,7 +9555,7 @@ useEffect(() => {
     saveState(snapshot)
     setCloudStamp(updatedAt)
   }, [
-    timeEntries,
+    // timeEntries removido - não persiste no app_state
     orders,
     projects,
     activity,
@@ -9488,7 +9579,7 @@ useEffect(() => {
 
     const updatedAt = new Date().toISOString()
     const snapshot = {
-      timeEntries,
+      // ⚠️ NÃO incluir timeEntries - eles têm tabela dedicada
       orders,
       projects,
       activity,
@@ -9545,7 +9636,7 @@ useEffect(() => {
       }
     }, 400)
   }, [
-    timeEntries,
+    // timeEntries removido - têm sync dedicado
     orders,
     projects,
     activity,
@@ -9573,7 +9664,7 @@ useEffect(() => {
       // Tenta salvar antes de fechar
       const updatedAt = new Date().toISOString()
       const snapshot = {
-        timeEntries,
+        // ⚠️ NÃO incluir timeEntries - sync automático já funciona
         orders,
         projects,
         activity,
@@ -9600,7 +9691,7 @@ useEffect(() => {
 
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [timeEntries, orders, projects, activity, theme, density, catalog, people, prefs, vehicles, agenda, suppliers, notifications, supabaseActive, cloudReady, cloudKey])
+  }, [orders, projects, activity, theme, density, catalog, people, prefs, vehicles, agenda, suppliers, notifications, supabaseActive, cloudReady, cloudKey])
 
   // -------------------------------------------------------------
   // 🔄 FORÇAR SINCRONIZAÇÃO MANUAL
@@ -9616,8 +9707,10 @@ useEffect(() => {
       setIsSyncing(true)
 
       const updatedAt = new Date().toISOString()
+
+      // 1️⃣ Sincronizar app_state (sem timeEntries)
       const snapshot = {
-        timeEntries,
+        // ⚠️ NÃO incluir timeEntries - sync separado abaixo
         orders,
         projects,
         activity,
@@ -9634,6 +9727,18 @@ useEffect(() => {
       }
 
       await saveCloudState(snapshot, cloudKey)
+
+      // 2️⃣ Sincronizar timeEntries via tabela dedicada
+      if (auth?.id && auth?.name) {
+        const syncResult = await TimeEntriesService.syncBatch(
+          timeEntries,
+          auth.id,
+          auth.name,
+          null // Sincronizar tudo
+        )
+        console.log('✅ TimeEntries sincronizados:', syncResult)
+      }
+
       setLastSyncTime(new Date().toISOString())
       console.log('✅ Sincronização manual completa')
       addToast('Dados sincronizados com sucesso!', 'success')
