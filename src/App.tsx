@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, supabaseReady } from './lib/supabaseClient'
+import { Chart, registerables } from 'chart.js';
+
+// Registrar componentes do Chart.js
+Chart.register(...registerables);
+
 /* ---------- Helpers ---------- */
 const Icon=({name,className='w-5 h-5'})=>{
   const S={stroke:'currentColor',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'};
@@ -10360,7 +10365,14 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
   const projectNames = useMemo(() => {
     const allProjects = new Set();
 
-    timeEntries.forEach(entry => {
+    // 🔧 Filtrar apenas registos do período selecionado
+    const filteredEntries = timeEntries.filter(entry => {
+      if (!isNormalWork(entry.template)) return false;
+      if (entry.date < startDate || entry.date > endDate) return false;
+      return true;
+    });
+
+    filteredEntries.forEach(entry => {
       if (!entry.project) return;
 
       // Se o projeto contém "/", dividir em múltiplos projetos
@@ -10375,7 +10387,7 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
     });
 
     return Array.from(allProjects).sort();
-  }, [timeEntries]);
+  }, [timeEntries, startDate, endDate]);
 
   // Lista de colaboradores para Previsão de Custos
   const workersList = useMemo(() => {
@@ -10915,7 +10927,120 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
     }
   };
 
-  const exportAnalysisReport = () => {
+  // 📊 Helper: Gerar gráfico de pizza (pie chart) como imagem base64
+  const generatePieChart = async (labels: string[], data: number[], colors: string[], title: string) => {
+    return new Promise<string>((resolve) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 600;
+      canvas.height = 400;
+
+      const chart = new Chart(canvas, {
+        type: 'pie',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: data,
+            backgroundColor: colors,
+            borderWidth: 2,
+            borderColor: '#ffffff'
+          }]
+        },
+        options: {
+          responsive: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'right',
+              labels: {
+                font: { size: 10 },
+                padding: 8,
+                generateLabels: (chart) => {
+                  const data = chart.data;
+                  if (data.labels.length && data.datasets.length) {
+                    return data.labels.map((label, i) => {
+                      const value = data.datasets[0].data[i];
+                      const total = (data.datasets[0].data as number[]).reduce((a, b) => a + b, 0);
+                      const percentage = total > 0 ? ((value as number / total) * 100).toFixed(1) : '0';
+                      return {
+                        text: `${label} (${percentage}%)`,
+                        fillStyle: data.datasets[0].backgroundColor[i],
+                        hidden: false,
+                        index: i
+                      };
+                    });
+                  }
+                  return [];
+                }
+              }
+            },
+            title: {
+              display: true,
+              text: title,
+              font: { size: 14, weight: 'bold' }
+            }
+          }
+        }
+      });
+
+      setTimeout(() => {
+        const imageData = canvas.toDataURL('image/png');
+        chart.destroy();
+        resolve(imageData);
+      }, 500);
+    });
+  };
+
+  // 📊 Helper: Gerar gráfico de barras horizontais como imagem base64
+  const generateBarChart = async (labels: string[], data: number[], title: string, color: string) => {
+    return new Promise<string>((resolve) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 700;
+      canvas.height = 500;
+
+      const chart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: title,
+            data: data,
+            backgroundColor: color,
+            borderColor: color,
+            borderWidth: 1
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: false,
+          plugins: {
+            legend: { display: false },
+            title: {
+              display: true,
+              text: title,
+              font: { size: 14, weight: 'bold' }
+            }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              grid: { display: true }
+            },
+            y: {
+              grid: { display: false }
+            }
+          }
+        }
+      });
+
+      setTimeout(() => {
+        const imageData = canvas.toDataURL('image/png');
+        chart.destroy();
+        resolve(imageData);
+      }, 500);
+    });
+  };
+
+  const exportAnalysisReport = async () => {
     // 📊 Preparar dados para análise
     const allProjects = Array.from(costData.entries()).map(([name, data]) => ({
       name,
@@ -11011,6 +11136,41 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
         projects: ''
       });
     }
+
+    // 📊 Gerar gráficos visuais
+    const top10Cost = projectsByCost.slice(0, 10);
+    const top10Efficient = projectsByEfficiency.slice(0, 10);
+    const top10Hours = projectsByHours.slice(0, 10);
+
+    // Paleta de cores vibrante
+    const colors = [
+      '#00677F', '#00A9B8', '#059669', '#10b981', '#3b82f6',
+      '#8b5cf6', '#ec4899', '#f59e0b', '#ef4444', '#64748b'
+    ];
+
+    // Gráfico 1: Top 10 Obras Mais Caras (Pie Chart)
+    const chart1 = await generatePieChart(
+      top10Cost.map(p => p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name),
+      top10Cost.map(p => p.cost),
+      colors,
+      'Top 10 Obras Mais Caras'
+    );
+
+    // Gráfico 2: Top 10 Obras Mais Eficientes (Pie Chart)
+    const chart2 = await generatePieChart(
+      top10Efficient.map(p => p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name),
+      top10Efficient.map(p => p.costPerHour),
+      colors,
+      'Top 10 Obras Mais Eficientes (Custo/Hora)'
+    );
+
+    // Gráfico 3: Top 10 Obras com Mais Presença (Bar Chart)
+    const chart3 = await generateBarChart(
+      top10Hours.map(p => p.name.length > 30 ? p.name.substring(0, 30) + '...' : p.name),
+      top10Hours.map(p => p.hours),
+      'Top 10 Obras com Mais Presença (Horas)',
+      '#7c3aed'
+    );
 
     const html = `
 <!DOCTYPE html>
@@ -11333,6 +11493,9 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
   <!-- TOP 10 OBRAS MAIS CARAS -->
   <div class="section">
     <h2>💰 Top 10 Obras Mais Caras</h2>
+    <div style="text-align: center; margin: 20px 0;">
+      <img src="${chart1}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
+    </div>
     ${projectsByCost.slice(0, 10).map((project, index) => {
       const maxCost = projectsByCost[0].cost;
       const percentage = (project.cost / maxCost) * 100;
@@ -11361,6 +11524,9 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
   <!-- TOP 10 EFICIÊNCIA -->
   <div class="section">
     <h2>⚡ Top 10 Obras Mais Eficientes (Melhor Custo/Hora)</h2>
+    <div style="text-align: center; margin: 20px 0;">
+      <img src="${chart2}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
+    </div>
     ${projectsByEfficiency.slice(0, 10).map((project, index) => {
       const maxValue = projectsByEfficiency[0].costPerHour;
       const percentage = projectsByEfficiency.length > 0 ? (project.costPerHour / projectsByEfficiency[projectsByEfficiency.length - 1].costPerHour) * 100 : 0;
@@ -11384,6 +11550,9 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
   <!-- TOP 10 HORAS -->
   <div class="section">
     <h2>⏱️ Top 10 Obras com Mais Presença (Horas)</h2>
+    <div style="text-align: center; margin: 20px 0;">
+      <img src="${chart3}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
+    </div>
     ${projectsByHours.slice(0, 10).map((project, index) => {
       const maxHours = projectsByHours[0].hours;
       const percentage = (project.hours / maxHours) * 100;
