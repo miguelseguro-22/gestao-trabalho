@@ -11314,7 +11314,7 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
       <div class="kpi-detail">${totalHours.toFixed(0)}h trabalhadas</div>
     </div>
     <div class="kpi-card ${totalBudget > 0 && totalCost <= totalBudget ? 'success' : 'warning'}">
-      <div class="kpi-label">📊 Eficiência Média</div>
+      <div class="kpi-label">📊 Custo Médio/Hora</div>
       <div class="kpi-value">${currency(avgCostPerHour)}</div>
       <div class="kpi-detail">por hora trabalhada</div>
     </div>
@@ -11329,19 +11329,6 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
       <div class="kpi-detail">no período</div>
     </div>
   </div>
-
-  <!-- INSIGHTS AUTOMÁTICOS -->
-  ${insights.length > 0 ? `
-  <div class="insights-section">
-    <h2>🤖 Insights Automáticos & Alertas</h2>
-    ${insights.map(insight => `
-      <div class="insight ${insight.type}">
-        <div class="insight-title">${insight.title}</div>
-        <div class="insight-message">${insight.message}${insight.projects ? `<br><em>${insight.projects}</em>` : ''}</div>
-      </div>
-    `).join('')}
-  </div>
-  ` : ''}
 
   <!-- TOP 10 OBRAS MAIS CARAS -->
   <div class="section">
@@ -11439,7 +11426,7 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
               </div>
             </div>
             <div style="text-align: right;">
-              <div style="font-size: 9pt; color: #64748b;">Eficiência</div>
+              <div style="font-size: 9pt; color: #64748b;">Custo Médio/Hora</div>
               <div style="font-size: 14pt; font-weight: 700; color: ${project.costPerHour < avgCostPerHour ? '#059669' : '#dc2626'};">
                 ${currency(project.costPerHour)}/h
               </div>
