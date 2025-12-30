@@ -8992,7 +8992,6 @@ function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [isSyncing, setIsSyncing] = useState(false)
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null)
-  const [isInitialLoading, setIsInitialLoading] = useState(true) // 🆕 Loading até carregar do Supabase
 
   // -------------------------------------------------------------
   // 🔐 AUTH E NAVEGAÇÃO
@@ -9199,7 +9198,6 @@ function App() {
       if(!supabaseActive){
         console.log('ℹ️ Supabase não ativo - usando apenas localStorage')
         setCloudReady(true)
-        setIsInitialLoading(false)  // 🔧 Marca loading como completo
         return
       }
 
@@ -9230,13 +9228,11 @@ function App() {
 
         setCloudReady(true)
         setIsSyncing(false)
-        setIsInitialLoading(false)  // 🔧 Marca loading como completo
       } catch (error) {
         console.error('❌ Erro ao carregar dados da cloud:', error)
         // ✅ Mesmo com erro, marca como pronto para permitir uso offline
         setCloudReady(true)
         setIsSyncing(false)
-        setIsInitialLoading(false)  // 🔧 Marca loading como completo mesmo com erro
       }
     })()
 
@@ -13183,24 +13179,6 @@ function TableMaterials() {
   // -------------------------------------------------------------
   // 🌍 RETURN PRINCIPAL — LAYOUT DA APP
   // -------------------------------------------------------------
-
-  // 🔧 LOADING SCREEN - Aguardar carregamento inicial do Supabase
-  if (isInitialLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: theme === 'dark' ? '#1e293b' : '#f8fafc' }}>
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-t-[#00677F] border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-lg font-medium" style={{ color: theme === 'dark' ? '#e2e8f0' : '#334155' }}>
-            A carregar dados do Supabase...
-          </p>
-          <p className="text-sm opacity-60 mt-2" style={{ color: theme === 'dark' ? '#94a3b8' : '#64748b' }}>
-            {supabaseActive ? 'Conectando à base de dados' : 'Supabase não disponível'}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
       className={`min-h-screen ${
