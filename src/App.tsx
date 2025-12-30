@@ -8985,12 +8985,14 @@ const DEFAULT_OT_MULTIPLIER = 1.5;
 // 🔥 APLICAÇÃO PRINCIPAL
 // ---------------------------------------------------------------
 function App() {
-  const persisted = loadState?.();
-  const [cloudStamp, setCloudStamp] = useState<string | null>(persisted?.updatedAt || null)
+  // ⚠️ MUDANÇA CRÍTICA: Não carregar localStorage como fonte primária
+  // localStorage é apenas cache offline, Supabase é a fonte da verdade
+  const [cloudStamp, setCloudStamp] = useState<string | null>(null)
   const [cloudReady, setCloudReady] = useState(false)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [isSyncing, setIsSyncing] = useState(false)
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null)
+  const [isInitialLoading, setIsInitialLoading] = useState(true) // 🆕 Loading até carregar do Supabase
 
   // -------------------------------------------------------------
   // 🔐 AUTH E NAVEGAÇÃO
@@ -9007,7 +9009,7 @@ function App() {
   const [modal, setModal] = useState<any | null>(null);
   const [cycleOffset, setCycleOffset] = useState(0); // 🆕 Estado para manter o mês do calendário
   // 🆕 Sistema de Notificações
-  const [notifications, setNotifications] = useState<any[]>(persisted?.notifications || []);
+  const [notifications, setNotifications] = useState<any[]>([]);  // 🔧 Inicializar vazio
   const cloudSaveTimer = useRef<any>(null)
   const [supabaseActive] = useState(() => supabaseReady)
   // 🔐 Isolamento por utilizador - cada user tem seu próprio estado na cloud
@@ -9026,24 +9028,21 @@ function App() {
   // -------------------------------------------------------------
   // 🎨 TEMA E DENSIDADE
   // -------------------------------------------------------------
-  const [theme, setTheme] = useState(persisted?.theme || "light");
-  const [density, setDensity] = useState(persisted?.density || "comfy");
+  const [theme, setTheme] = useState("light");  // 🔧 Inicializar com default
+  const [density, setDensity] = useState("comfy");  // 🔧 Inicializar com default
 
   // -------------------------------------------------------------
   // 📊 DADOS PRINCIPAIS
   // -------------------------------------------------------------
-  const [people, setPeople] = useState(
-    migratePeople(persisted?.people) || {}
-  );
-  const [vehicles, setVehicles] = useState(persisted?.vehicles || []);
-  const [agenda, setAgenda] = useState(persisted?.agenda || []);
-  const [suppliers, setSuppliers] = useState(persisted?.suppliers || {});
-  const [prefs, setPrefs] = useState(
-    persisted?.prefs || {
-      defaultRate: DEFAULT_HOURLY_RATE,
-      otMultiplier: DEFAULT_OT_MULTIPLIER,
-    }
-  );
+  // 🔧 Todos inicializados vazios - serão carregados do Supabase
+  const [people, setPeople] = useState({});
+  const [vehicles, setVehicles] = useState([]);
+  const [agenda, setAgenda] = useState([]);
+  const [suppliers, setSuppliers] = useState({});
+  const [prefs, setPrefs] = useState({
+    defaultRate: DEFAULT_HOURLY_RATE,
+    otMultiplier: DEFAULT_OT_MULTIPLIER,
+  });
   const [projectFocus, setProjectFocus] = useState(null);
 
   // Defaults
@@ -9090,46 +9089,16 @@ function App() {
     { id: uid(), name: "JTI", manager: "", type: "Eletricidade", family: "Modus 55" },
   ];
 
-  // 🔒 Filtrar timeEntries na inicialização APENAS para técnicos/encarregados
-  // Admin, diretor, logística veem TUDO (sem filtro)
-  const [timeEntries, setTimeEntries] = useState(() => {
-    const currentUser = (window as any).Auth?.user?.()
-    const entries = persisted?.timeEntries || defaultTime
-
-    // Se não houver user autenticado, carregar tudo (será filtrado depois)
-    if (!currentUser?.id && !currentUser?.name) {
-      return dedupTimeEntries(entries)
-    }
-
-    // ✅ Admin, diretor, logistica - carregam TUDO (sem filtro)
-    if (currentUser.role === 'admin' || currentUser.role === 'diretor' || currentUser.role === 'logistica') {
-      console.log(`🔓 [Init] ${currentUser.role} a carregar TODOS os registos do localStorage`)
-      return dedupTimeEntries(entries)
-    }
-
-    // 🔒 Técnicos e encarregados - filtrar para incluir APENAS registos do user atual
-    const filtered = entries.filter((e: any) => {
-      if (e.user_id && currentUser.id) {
-        return e.user_id === currentUser.id
-      }
-      return e.worker === currentUser.name
-    })
-
-    console.log(`🔒 [Init] ${currentUser.role} a carregar APENAS seus registos do localStorage`)
-    return dedupTimeEntries(filtered)
-  });
-  const [orders, setOrders] = useState(
-    persisted?.orders || defaultOrders
-  );
-  const [projects, setProjects] = useState(
-    persisted?.projects || defaultProjects
-  );
-  const [activity, setActivity] = useState(
-    persisted?.activity || [
-      { id: uid(), ts: new Date(), text: "App iniciada." },
-    ]
-  );
-  const [catalog, setCatalog] = useState(persisted?.catalog || []);
+  // 🔒 timeEntries agora são carregados do Supabase (não do localStorage)
+  // A inicialização é vazia - os dados virão do backend via TimeEntriesService
+  const [timeEntries, setTimeEntries] = useState<any[]>([]);
+  // 🔧 Inicializar com defaults - serão carregados do Supabase
+  const [orders, setOrders] = useState(defaultOrders);
+  const [projects, setProjects] = useState(defaultProjects);
+  const [activity, setActivity] = useState([
+    { id: uid(), ts: new Date(), text: "App iniciada." },
+  ]);
+  const [catalog, setCatalog] = useState([]);
 
   // 🔐 FILTRO DE DADOS POR ROLE
   // Técnicos E Encarregados veem apenas seus próprios registos
@@ -9228,6 +9197,7 @@ function App() {
       if(!supabaseActive){
         console.log('ℹ️ Supabase não ativo - usando apenas localStorage')
         setCloudReady(true)
+        setIsInitialLoading(false)  // 🔧 Marca loading como completo
         return
       }
 
@@ -9248,26 +9218,23 @@ function App() {
           hasPayload: !!cloud?.payload
         })
 
-        if(cloud?.payload && remoteTs > localTs){
-          console.log('✅ Aplicando dados da cloud (mais recentes)')
+        if(cloud?.payload){
+          console.log('✅ Aplicando dados da cloud')
           applySnapshot({ ...cloud.payload, updatedAt: cloud.updatedAt })
           setLastSyncTime(new Date().toISOString())
-        } else if (cloud?.payload && remoteTs === localTs) {
-          console.log('ℹ️ Dados locais e cloud estão sincronizados')
-          setLastSyncTime(new Date().toISOString())
-        } else if (!cloud?.payload) {
-          console.log('⚠️ Sem dados na cloud - primeira sincronização pendente')
         } else {
-          console.log('ℹ️ Dados locais são mais recentes que a cloud')
+          console.log('⚠️ Sem dados na cloud - usando defaults')
         }
 
         setCloudReady(true)
         setIsSyncing(false)
+        setIsInitialLoading(false)  // 🔧 Marca loading como completo
       } catch (error) {
         console.error('❌ Erro ao carregar dados da cloud:', error)
         // ✅ Mesmo com erro, marca como pronto para permitir uso offline
         setCloudReady(true)
         setIsSyncing(false)
+        setIsInitialLoading(false)  // 🔧 Marca loading como completo mesmo com erro
       }
     })()
 
@@ -9492,7 +9459,8 @@ useEffect(() => {
       updatedAt,
     }
 
-    // ✅ SEMPRE salva no localStorage (modo offline)
+    // 💾 Salva no localStorage apenas como CACHE offline
+    // ⚠️ localStorage NÃO é a fonte primária - Supabase é!
     saveState(snapshot)
     setCloudStamp(updatedAt)
   }, [
@@ -13110,6 +13078,24 @@ function TableMaterials() {
   // -------------------------------------------------------------
   // 🌍 RETURN PRINCIPAL — LAYOUT DA APP
   // -------------------------------------------------------------
+
+  // 🔧 LOADING SCREEN - Aguardar carregamento inicial do Supabase
+  if (isInitialLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: theme === 'dark' ? '#1e293b' : '#f8fafc' }}>
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-t-[#00677F] border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-lg font-medium" style={{ color: theme === 'dark' ? '#e2e8f0' : '#334155' }}>
+            A carregar dados do Supabase...
+          </p>
+          <p className="text-sm opacity-60 mt-2" style={{ color: theme === 'dark' ? '#94a3b8' : '#64748b' }}>
+            {supabaseActive ? 'Conectando à base de dados' : 'Supabase não disponível'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`min-h-screen ${
