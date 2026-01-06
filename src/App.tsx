@@ -8798,8 +8798,9 @@ function App() {
   const [notifications, setNotifications] = useState<any[]>([]);  // 🔧 Inicializar vazio
   const cloudSaveTimer = useRef<any>(null)
   const [supabaseActive] = useState(() => supabaseReady)
-  // 🔐 Isolamento por utilizador - cada user tem seu próprio estado na cloud
-  const cloudKey = useMemo(() => auth?.id ? `user_${auth.id}` : CLOUD_ROW_ID, [auth?.id])
+  // ✅ TODOS os utilizadores partilham o mesmo estado ('shared')
+  // Isolamento é feito pelos filtros de role no frontend
+  const cloudKey = useMemo(() => 'shared', [])
   const latestStampRef = useRef<string | null>(cloudStamp)
   // 🆕 Estado de sincronização
   const [syncError, setSyncError] = useState<string | null>(null)
