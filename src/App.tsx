@@ -183,221 +183,8 @@ const saveCloudState=async(payload,rowId:string=CLOUD_ROW_ID)=>{
   }
 }
 // =====================================================
-// 🔥 SUPABASE TIME ENTRIES SERVICE - Backend Real
+// Sistema de sync baseado em app_state (sistema antigo - FUNCIONA!)
 // =====================================================
-// Sync incremental para múltiplos utilizadores concorrentes
-
-const TimeEntriesService = {
-  // 📥 Carregar registos do utilizador atual
-  async fetchUserEntries(userId: string, role: string) {
-    if (!supabaseReady || !supabase) return { success: false, error: 'Supabase não disponível', data: [] }
-
-    try {
-      let query = supabase
-        .from('time_entries')
-        .select('*')
-        .order('date', { ascending: false })
-
-      // 🔐 FILTRO POR ROLE:
-      // Admin, diretor, logistica → veem TODOS os registos (sem filtro)
-      // Técnico, encarregado → veem APENAS os seus registos (filtro por user_id)
-      if (role === 'admin' || role === 'diretor' || role === 'logistica') {
-        // Não aplica filtro - carrega TUDO
-        console.log(`🔓 [Backend] ${role} a carregar TODOS os registos`)
-      } else {
-        // Técnico E encarregado - filtra por user_id
-        query = query.eq('user_id', userId)
-        console.log(`🔒 [Backend] ${role} a carregar APENAS seus registos (user_id=${userId})`)
-      }
-
-      const { data, error } = await query
-
-      if (error) {
-        console.error('❌ Erro ao carregar time_entries:', error)
-        return { success: false, error: error.message, data: [] }
-      }
-
-      console.log(`✅ [Backend Query] Dados carregados:`, {
-        role,
-        totalRegistos: data?.length || 0,
-        workers: [...new Set((data || []).map(e => e.worker))],
-        user_ids: [...new Set((data || []).map(e => e.user_id))],
-        primeiros3: (data || []).slice(0, 3).map(e => ({
-          worker: e.worker,
-          user_id: e.user_id,
-          date: e.date,
-          template: e.template
-        }))
-      })
-
-      // Converter campos snake_case para camelCase
-      const entries = (data || []).map(entry => ({
-        id: entry.id,
-        user_id: entry.user_id,  // ✅ CRÍTICO: Preservar user_id!
-        date: entry.date,
-        template: entry.template,
-        hours: entry.hours,
-        overtime: entry.overtime,
-        project: entry.project,
-        supervisor: entry.supervisor,
-        worker: entry.worker,
-        colaborador: entry.colaborador,
-        displacement: entry.displacement,
-        periodStart: entry.period_start,
-        periodEnd: entry.period_end,
-        sickDays: entry.sick_days,
-        status: entry.status,
-        createdAt: entry.created_at,
-        updatedAt: entry.updated_at
-      }))
-
-      return { success: true, data: entries }
-    } catch (err) {
-      console.error('❌ Erro inesperado ao carregar entries:', err)
-      return { success: false, error: String(err), data: [] }
-    }
-  },
-
-  // 💾 Salvar/Atualizar um registo
-  async saveEntry(entry: any, userId: string, userName: string) {
-    if (!supabaseReady || !supabase) return { success: false, error: 'Supabase não disponível' }
-
-    try {
-      // Converter camelCase para snake_case
-      const dbEntry = {
-        id: entry.id,
-        user_id: userId,
-        date: entry.date,
-        template: entry.template,
-        hours: entry.hours || 0,
-        overtime: entry.overtime || 0,
-        project: entry.project,
-        supervisor: entry.supervisor,
-        worker: entry.worker || userName,
-        colaborador: entry.colaborador,
-        displacement: entry.displacement,
-        period_start: entry.periodStart,
-        period_end: entry.periodEnd,
-        sick_days: entry.sickDays,
-        status: entry.status || 'approved',
-        updated_by: userId
-      }
-
-      const { error } = await supabase
-        .from('time_entries')
-        .upsert(dbEntry, { onConflict: 'id' })
-
-      if (error) {
-        console.error('❌ Erro ao salvar entry:', error)
-        return { success: false, error: error.message }
-      }
-
-      return { success: true }
-    } catch (err) {
-      console.error('❌ Erro inesperado ao salvar entry:', err)
-      return { success: false, error: String(err) }
-    }
-  },
-
-  // 🗑️ Apagar um registo
-  async deleteEntry(entryId: string) {
-    if (!supabaseReady || !supabase) return { success: false, error: 'Supabase não disponível' }
-
-    try {
-      const { error } = await supabase
-        .from('time_entries')
-        .delete()
-        .eq('id', entryId)
-
-      if (error) {
-        console.error('❌ Erro ao apagar entry:', error)
-        return { success: false, error: error.message }
-      }
-
-      return { success: true }
-    } catch (err) {
-      console.error('❌ Erro inesperado ao apagar entry:', err)
-      return { success: false, error: String(err) }
-    }
-  },
-
-  // 📊 Sync incremental - apenas registos novos/alterados
-  async syncBatch(entries: any[], userId: string, userName: string, lastSyncTime: string | null) {
-    console.log('📤 [syncBatch] Iniciando...', {
-      totalEntries: entries.length,
-      userId,
-      userName,
-      lastSyncTime,
-      supabaseReady,
-      supabaseExists: !!supabase
-    })
-
-    if (!supabaseReady || !supabase) {
-      console.error('❌ [syncBatch] Supabase não disponível!')
-      return { success: false, error: 'Supabase não disponível' }
-    }
-
-    try {
-      // Filtrar apenas registos criados/alterados desde último sync
-      const entriesToSync = lastSyncTime
-        ? entries.filter(e => {
-            const entryTime = e.updatedAt || e.createdAt || new Date().toISOString()
-            return entryTime > lastSyncTime
-          })
-        : entries
-
-      console.log('📤 [syncBatch] Registos a sincronizar:', {
-        total: entriesToSync.length,
-        exemplos: entriesToSync.slice(0, 3).map(e => ({
-          worker: e.worker,
-          date: e.date,
-          user_id: e.user_id
-        }))
-      })
-
-      if (entriesToSync.length === 0) {
-        console.log('✅ [syncBatch] Nada para sincronizar')
-        return { success: true, synced: 0 }
-      }
-
-      // Batch upsert
-      const dbEntries = entriesToSync.map(entry => ({
-        id: entry.id,
-        user_id: userId,
-        date: entry.date,
-        template: entry.template,
-        hours: entry.hours || 0,
-        overtime: entry.overtime || 0,
-        project: entry.project,
-        supervisor: entry.supervisor,
-        worker: entry.worker || userName,
-        colaborador: entry.colaborador,
-        displacement: entry.displacement,
-        period_start: entry.periodStart,
-        period_end: entry.periodEnd,
-        sick_days: entry.sickDays,
-        status: entry.status || 'approved',
-        updated_by: userId
-      }))
-
-      const { error } = await supabase
-        .from('time_entries')
-        .upsert(dbEntries, { onConflict: 'id' })
-
-      if (error) {
-        console.error('❌ [syncBatch] Erro ao fazer upsert:', error)
-        return { success: false, error: error.message }
-      }
-
-      console.log(`✅ [syncBatch] SUCESSO! ${dbEntries.length} registos gravados no Supabase`)
-
-      return { success: true, synced: dbEntries.length }
-    } catch (err) {
-      console.error('❌ Erro inesperado ao sync batch:', err)
-      return { success: false, error: String(err) }
-    }
-  }
-}
 
 const toCSV=(headers,rows)=>{const esc=v=>`"${String(v??'').replace(/"/g,'""')}"`;return[headers.join(','),...rows.map(r=>r.map(esc).join(','))].join('\r\n')};
 const download=(filename,content,mime='text/csv')=>{const blob=new Blob([content],{type:mime});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url)};
@@ -9088,10 +8875,9 @@ function App() {
     { id: uid(), name: "JTI", manager: "", type: "Eletricidade", family: "Modus 55" },
   ];
 
-  // 🔒 timeEntries agora são carregados do Supabase (não do localStorage)
-  // A inicialização é vazia - os dados virão do backend via TimeEntriesService
+  // ✅ Sistema antigo - dados carregados via app_state (FUNCIONA!)
+  // Inicialização vazia - serão carregados do Supabase app_state table
   const [timeEntries, setTimeEntries] = useState<any[]>([]);
-  // 🔧 Inicializar com defaults - serão carregados do Supabase
   const [orders, setOrders] = useState(defaultOrders);
   const [projects, setProjects] = useState(defaultProjects);
   const [activity, setActivity] = useState([
@@ -9131,9 +8917,8 @@ function App() {
   const applySnapshot = (snap: any) => {
     if (!snap) return
 
-    // ⚠️ NÃO carregar timeEntries aqui - eles têm sistema dedicado (time_entries table)
-    // setTimeEntries é gerido pelo TimeEntriesService.fetchUserEntries
-    // Apenas carregar dados que NÃO têm tabela dedicada no Supabase
+    // ✅ SISTEMA ANTIGO: Carregar TODOS os dados do app_state (incluindo timeEntries)
+    setTimeEntries(dedupTimeEntries(snap.timeEntries || []))
     setOrders(snap.orders || [])
     setProjects(snap.projects || [])
     setActivity((snap.activity || []).map((a: any) => ({ ...a, ts: a?.ts ? new Date(a.ts) : new Date() })))
@@ -9261,218 +9046,14 @@ function App() {
     }
   },[cloudKey, supabaseActive])
 
-  // -------------------------------------------------------------
-  // 🔥 CARREGAR TIME_ENTRIES DO SUPABASE (Backend Real)
-  // -------------------------------------------------------------
-  useEffect(() => {
-    let cancelled = false
+  // ✅ SISTEMA ANTIGO: Dados carregados via applySnapshot (app_state)
+  // Não precisa de carregar time_entries separadamente!
 
-    ;(async () => {
-      if (!supabaseActive || !auth?.id || !auth?.role) {
-        console.log('ℹ️ Aguardando auth para carregar time_entries...')
-        return
-      }
+  // ✅ SISTEMA ANTIGO: Sync automático via saveCloudState (app_state)
+  // Acontece automaticamente quando dados mudam
 
-      try {
-        console.log('📥 Carregando time_entries do Supabase...')
-        setIsSyncing(true)
-
-        const result = await TimeEntriesService.fetchUserEntries(auth.id, auth.role)
-
-        if (cancelled) return
-
-        if (result.success) {
-          console.log(`✅ ${result.data.length} time_entries carregados do Supabase`)
-
-          // Merge com dados locais (manter registos locais não sincronizados)
-          setTimeEntries(prevEntries => {
-            const cloudIds = new Set(result.data.map(e => e.id))
-
-            // 🔒 FILTRAR registos locais APENAS para técnicos/encarregados
-            // Admin, diretor, logistica mantêm TODOS os registos locais
-            const localOnlyEntries = prevEntries.filter(e => {
-              if (cloudIds.has(e.id)) return false // Já vem do cloud
-
-              // ✅ Admin, diretor, logistica - mantêm TODOS os registos locais
-              if (auth.role === 'admin' || auth.role === 'diretor' || auth.role === 'logistica') {
-                return true
-              }
-
-              // 🔒 Técnicos e encarregados - filtrar por user_id (novos) ou worker (antigos)
-              if (e.user_id) {
-                return e.user_id === auth.id
-              }
-              return e.worker === auth.name
-            })
-
-            return dedupTimeEntries([...result.data, ...localOnlyEntries])
-          })
-
-          setLastSyncTime(new Date().toISOString())
-          setSyncError(null)
-        } else {
-          console.error('❌ Erro ao carregar time_entries:', result.error)
-          setSyncError(result.error)
-        }
-
-        setIsSyncing(false)
-      } catch (error) {
-        console.error('❌ Erro inesperado ao carregar time_entries:', error)
-        setIsSyncing(false)
-        setSyncError(String(error))
-      }
-    })()
-
-    return () => { cancelled = true }
-  }, [auth?.id, auth?.role, supabaseActive])
-
-  // -------------------------------------------------------------
-  // 🔥 SYNC AUTOMÁTICO PARA SUPABASE (Incremental)
-  // -------------------------------------------------------------
-  useEffect(() => {
-    console.log('🔄 [Sync Auto] Verificando condições:', {
-      supabaseActive,
-      authId: auth?.id,
-      authName: auth?.name,
-      totalEntries: timeEntries.length
-    })
-
-    if (!supabaseActive || !auth?.id || !auth?.name) {
-      console.log('⏸️ [Sync Auto] BLOQUEADO - Condições não satisfeitas')
-      return
-    }
-
-    const syncTimer = setTimeout(async () => {
-      try {
-        console.log('☁️ [Sync Auto] Iniciando sincronização...', {
-          totalEntries: timeEntries.length,
-          lastSyncTime
-        })
-        setIsSyncing(true)
-
-        const result = await TimeEntriesService.syncBatch(
-          timeEntries,
-          auth.id,
-          auth.name,
-          lastSyncTime
-        )
-
-        if (result.success) {
-          if (result.synced > 0) {
-            console.log(`✅ ${result.synced} registos sincronizados para Supabase`)
-          }
-          setLastSyncTime(new Date().toISOString())
-          setSyncError(null)
-        } else {
-          console.error('❌ Erro ao sincronizar:', result.error)
-          setSyncError(result.error)
-
-          setNotifications(prev => [...prev, {
-            id: uid(),
-            type: 'error',
-            message: '⚠️ Erro ao sincronizar time_entries! Não feche o navegador.',
-            timestamp: new Date().toISOString()
-          }])
-        }
-
-        setIsSyncing(false)
-      } catch (error) {
-        console.error('❌ Erro inesperado ao sincronizar:', error)
-        setIsSyncing(false)
-        setSyncError(String(error))
-      }
-    }, 1000) // 1 segundo de debounce
-
-    return () => clearTimeout(syncTimer)
-  }, [timeEntries, auth?.id, auth?.name, supabaseActive])
-
-  // -------------------------------------------------------------
-  // 🔴 REALTIME - Ouvir mudanças na tabela time_entries
-  // -------------------------------------------------------------
-  useEffect(() => {
-    if (!supabaseActive || !supabase || !auth?.id || !auth?.role) return
-
-    console.log('🔴 Ativando Realtime para time_entries...')
-
-    const channel = supabase
-      .channel('time_entries_realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // INSERT, UPDATE, DELETE
-          schema: 'public',
-          table: 'time_entries'
-        },
-        (payload) => {
-          console.log('🔴 Mudança detectada em time_entries:', payload)
-
-          // Para admin/diretor/logistica - recarregar tudo
-          if (auth.role === 'admin' || auth.role === 'diretor' || auth.role === 'logistica') {
-            console.log('🔓 Admin detectou mudança - recarregando todos os registos...')
-            TimeEntriesService.fetchUserEntries(auth.id, auth.role).then(result => {
-              if (result.success) {
-                setTimeEntries(dedupTimeEntries(result.data))
-                console.log(`✅ ${result.data.length} registos recarregados em tempo real`)
-              }
-            })
-          } else {
-            // Para técnicos/encarregados - apenas atualizar se for o seu registo
-            const newEntry = payload.new as any
-            const oldEntry = payload.old as any
-
-            if (payload.eventType === 'INSERT' && newEntry?.user_id === auth.id) {
-              console.log('🔒 Novo registo do user detectado')
-              setTimeEntries(prev => dedupTimeEntries([...prev, {
-                id: newEntry.id,
-                user_id: newEntry.user_id,
-                date: newEntry.date,
-                template: newEntry.template,
-                hours: newEntry.hours,
-                overtime: newEntry.overtime,
-                project: newEntry.project,
-                supervisor: newEntry.supervisor,
-                worker: newEntry.worker,
-                colaborador: newEntry.colaborador,
-                displacement: newEntry.displacement,
-                periodStart: newEntry.period_start,
-                periodEnd: newEntry.period_end,
-                sickDays: newEntry.sick_days,
-                status: newEntry.status,
-              }]))
-            } else if (payload.eventType === 'UPDATE' && newEntry?.user_id === auth.id) {
-              console.log('🔒 Registo do user atualizado')
-              setTimeEntries(prev => prev.map(e =>
-                e.id === newEntry.id ? {
-                  ...e,
-                  date: newEntry.date,
-                  template: newEntry.template,
-                  hours: newEntry.hours,
-                  overtime: newEntry.overtime,
-                  project: newEntry.project,
-                  supervisor: newEntry.supervisor,
-                  worker: newEntry.worker,
-                  colaborador: newEntry.colaborador,
-                  displacement: newEntry.displacement,
-                  periodStart: newEntry.period_start,
-                  periodEnd: newEntry.period_end,
-                  sickDays: newEntry.sick_days,
-                  status: newEntry.status,
-                } : e
-              ))
-            } else if (payload.eventType === 'DELETE' && oldEntry?.user_id === auth.id) {
-              console.log('🔒 Registo do user removido')
-              setTimeEntries(prev => prev.filter(e => e.id !== oldEntry.id))
-            }
-          }
-        }
-      )
-      .subscribe()
-
-    return () => {
-      console.log('🔴 Desativando Realtime para time_entries')
-      supabase.removeChannel(channel)
-    }
-  }, [auth?.id, auth?.role, supabaseActive])
+  // ✅ SISTEMA ANTIGO: Realtime via app_state (já configurado acima)
+  // Mudanças são detectadas e aplicadas via applySnapshot
 
   // -------------------------------------------------------------
   // 🔄 REFRESH SUPABASE AO INICIAR
@@ -9529,8 +9110,8 @@ useEffect(() => {
   useEffect(() => {
     const updatedAt = new Date().toISOString()
     const snapshot = {
-      // ⚠️ NÃO incluir timeEntries - eles têm tabela dedicada
-      // timeEntries são geridos por time_entries table, não app_state
+      // ✅ SISTEMA ANTIGO: Incluir TODOS os dados (incluindo timeEntries)
+      timeEntries,
       orders,
       projects,
       activity,
@@ -9542,16 +9123,15 @@ useEffect(() => {
       vehicles,
       agenda,
       suppliers,
-      notifications, // 🆕
+      notifications,
       updatedAt,
     }
 
-    // 💾 Salva no localStorage apenas como CACHE offline
-    // ⚠️ localStorage NÃO é a fonte primária - Supabase é!
+    // 💾 Salva no localStorage + Supabase app_state
     saveState(snapshot)
     setCloudStamp(updatedAt)
   }, [
-    // timeEntries removido - não persiste no app_state
+    timeEntries,
     orders,
     projects,
     activity,
@@ -9704,9 +9284,9 @@ useEffect(() => {
 
       const updatedAt = new Date().toISOString()
 
-      // 1️⃣ Sincronizar app_state (sem timeEntries)
+      // ✅ SISTEMA ANTIGO: Tudo num único snapshot (incluindo timeEntries)
       const snapshot = {
-        // ⚠️ NÃO incluir timeEntries - sync separado abaixo
+        timeEntries,  // ✅ Incluir timeEntries no app_state!
         orders,
         projects,
         activity,
@@ -9723,17 +9303,6 @@ useEffect(() => {
       }
 
       await saveCloudState(snapshot, cloudKey)
-
-      // 2️⃣ Sincronizar timeEntries via tabela dedicada
-      if (auth?.id && auth?.name) {
-        const syncResult = await TimeEntriesService.syncBatch(
-          timeEntries,
-          auth.id,
-          auth.name,
-          null // Sincronizar tudo
-        )
-        console.log('✅ TimeEntries sincronizados:', syncResult)
-      }
 
       setLastSyncTime(new Date().toISOString())
       console.log('✅ Sincronização manual completa')
