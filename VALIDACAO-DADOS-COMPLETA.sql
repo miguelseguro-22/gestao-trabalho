@@ -57,14 +57,14 @@ SELECT
        THEN jsonb_array_length(payload->'notifications')
        ELSE NULL END as total_notifications,
 
-  -- Objetos
+  -- Objetos (contagem de chaves)
   CASE WHEN payload ? 'people'
-       THEN jsonb_object_keys(payload->'people')::text
-       ELSE 'N/A' END as people_keys,
+       THEN (SELECT COUNT(*) FROM jsonb_object_keys(payload->'people'))
+       ELSE 0 END as total_people,
 
   CASE WHEN payload ? 'suppliers'
-       THEN 'OK'
-       ELSE 'MISSING' END as suppliers_status,
+       THEN (SELECT COUNT(*) FROM jsonb_object_keys(payload->'suppliers'))
+       ELSE 0 END as total_suppliers,
 
   CASE WHEN payload ? 'prefs'
        THEN 'OK'
