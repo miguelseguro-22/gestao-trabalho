@@ -9156,7 +9156,8 @@ useEffect(() => {
 
     const updatedAt = new Date().toISOString()
     const snapshot = {
-      // ⚠️ NÃO incluir timeEntries - eles têm tabela dedicada
+      // ✅ INCLUIR timeEntries no sync automático (FIX)
+      timeEntries,
       orders,
       projects,
       activity,
@@ -9213,7 +9214,8 @@ useEffect(() => {
       }
     }, 400)
   }, [
-    // timeEntries removido - têm sync dedicado
+    // ✅ INCLUIR timeEntries nas dependências (FIX)
+    timeEntries,
     orders,
     projects,
     activity,
@@ -9241,7 +9243,8 @@ useEffect(() => {
       // Tenta salvar antes de fechar
       const updatedAt = new Date().toISOString()
       const snapshot = {
-        // ⚠️ NÃO incluir timeEntries - sync automático já funciona
+        // ✅ INCLUIR timeEntries no save antes de fechar (FIX)
+        timeEntries,
         orders,
         projects,
         activity,
@@ -9268,7 +9271,7 @@ useEffect(() => {
 
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [orders, projects, activity, theme, density, catalog, people, prefs, vehicles, agenda, suppliers, notifications, supabaseActive, cloudReady, cloudKey])
+  }, [timeEntries, orders, projects, activity, theme, density, catalog, people, prefs, vehicles, agenda, suppliers, notifications, supabaseActive, cloudReady, cloudKey])
 
   // -------------------------------------------------------------
   // 🔄 FORÇAR SINCRONIZAÇÃO MANUAL
