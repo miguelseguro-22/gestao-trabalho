@@ -7566,6 +7566,8 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
           </Card>
         </div>
       )}
+        </>
+      )}
 
       {/* 📊 MODAL DE INFORMAÇÕES DETALHADAS DOS CARDS */}
       {infoModal && (
@@ -8286,8 +8288,6 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
             </div>
           </Card>
         </div>
-      )}
-        </>
       )}
     </section>
   );
