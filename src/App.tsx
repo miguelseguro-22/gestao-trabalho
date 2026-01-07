@@ -5310,6 +5310,82 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
     });
   }, [stats, people]);
 
+  // 🔍 ESTADOS PARA FILTROS E PESQUISA
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'critical', 'warning', 'info', 'ok', 'no_records'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('status'); // 'status', 'name', 'overtime', 'presence'
+  const [sortOrder, setSortOrder] = useState('asc');
+
+  // 🎯 APLICAR FILTROS E ORDENAÇÃO
+  const filteredAndSortedStats = useMemo(() => {
+    let filtered = [...sortedStats];
+
+    // Filtro por pesquisa
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(s => s.name.toLowerCase().includes(query));
+    }
+
+    // Filtro por status
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(s => {
+        const workerAlerts = alerts.alerts.find(a => a.worker === s.name);
+        const hasNoRecords = s.entries.length === 0 && s.diasFerias === 0 && s.diasBaixa === 0;
+
+        switch (statusFilter) {
+          case 'critical':
+            return workerAlerts?.alerts.some(a => a.level === 'error');
+          case 'warning':
+            return workerAlerts?.alerts.some(a => a.level === 'warning') && !workerAlerts.alerts.some(a => a.level === 'error');
+          case 'info':
+            return workerAlerts?.alerts.every(a => a.level === 'info');
+          case 'ok':
+            return !workerAlerts && !hasNoRecords;
+          case 'no_records':
+            return hasNoRecords;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Ordenação
+    filtered.sort((a, b) => {
+      const aAlerts = alerts.alerts.find(alert => alert.worker === a.name);
+      const bAlerts = alerts.alerts.find(alert => alert.worker === b.name);
+
+      if (sortBy === 'status') {
+        // Ordenar por severidade: error > warning > info > ok
+        const aLevel = aAlerts?.alerts.some(al => al.level === 'error') ? 3
+                     : aAlerts?.alerts.some(al => al.level === 'warning') ? 2
+                     : aAlerts?.alerts.some(al => al.level === 'info') ? 1
+                     : 0;
+        const bLevel = bAlerts?.alerts.some(al => al.level === 'error') ? 3
+                     : bAlerts?.alerts.some(al => al.level === 'warning') ? 2
+                     : bAlerts?.alerts.some(al => al.level === 'info') ? 1
+                     : 0;
+        return sortOrder === 'desc' ? aLevel - bLevel : bLevel - aLevel;
+      } else if (sortBy === 'name') {
+        return sortOrder === 'asc'
+          ? a.name.localeCompare(b.name)
+          : b.name.localeCompare(a.name);
+      } else if (sortBy === 'overtime') {
+        return sortOrder === 'asc'
+          ? a.horasExtra - b.horasExtra
+          : b.horasExtra - a.horasExtra;
+      } else if (sortBy === 'presence') {
+        const aPresence = parseInt(a.presence) || 0;
+        const bPresence = parseInt(b.presence) || 0;
+        return sortOrder === 'asc'
+          ? aPresence - bPresence
+          : bPresence - aPresence;
+      }
+      return 0;
+    });
+
+    return filtered;
+  }, [sortedStats, statusFilter, searchQuery, sortBy, sortOrder, alerts]);
+
   // 🆕 Atualizar workerOrder quando aparecem novos trabalhadores
   useEffect(() => {
     const currentNames = stats.map(s => s.name);
@@ -5740,6 +5816,183 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
         </Card>
       )}
 
+      {/* 📊 DASHBOARD VISUAL DE KPIs */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Card 1: Taxa de Cobertura */}
+        <Card
+          className="p-5 cursor-pointer hover:scale-105 transition-all"
+          style={{ background: 'linear-gradient(to br, #00A9B8, #008A96)' }}
+          onClick={() => setStatusFilter('ok')}
+        >
+          <div className="text-white">
+            <div className="text-sm opacity-90 mb-2">Taxa de Cobertura</div>
+            <div className="text-4xl font-bold mb-2">
+              {Math.round((alerts.summary.workersWithRecords / alerts.summary.totalWorkers) * 100)}%
+            </div>
+            <div className="text-xs opacity-80">
+              {alerts.summary.workersWithRecords} de {alerts.summary.totalWorkers} colaboradores
+            </div>
+            <div className="mt-3 w-full h-2 bg-white/20 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-white rounded-full transition-all"
+                style={{ width: `${(alerts.summary.workersWithRecords / alerts.summary.totalWorkers) * 100}%` }}
+              />
+            </div>
+          </div>
+        </Card>
+
+        {/* Card 2: Alertas Críticos */}
+        <Card
+          className="p-5 cursor-pointer hover:scale-105 transition-all"
+          style={{ background: 'linear-gradient(to br, #DC2626, #B91C1C)' }}
+          onClick={() => setStatusFilter('critical')}
+        >
+          <div className="text-white">
+            <div className="text-sm opacity-90 mb-2">🔴 Alertas Críticos</div>
+            <div className="text-4xl font-bold mb-2">
+              {alerts.alerts.filter(a => a.alerts.some(al => al.level === 'error')).length}
+            </div>
+            <div className="text-xs opacity-80">
+              Requerem atenção imediata
+            </div>
+            <div className="mt-3 flex items-center gap-2 text-xs">
+              <span className="px-2 py-1 bg-white/20 rounded-full">
+                Sem registos: {alerts.summary.workersWithoutRecords}
+              </span>
+            </div>
+          </div>
+        </Card>
+
+        {/* Card 3: Horas Extra */}
+        <Card
+          className="p-5 cursor-pointer hover:scale-105 transition-all"
+          style={{ background: 'linear-gradient(to br, #F59E0B, #D97706)' }}
+          onClick={() => {
+            setSortBy('overtime');
+            setSortOrder('desc');
+          }}
+        >
+          <div className="text-white">
+            <div className="text-sm opacity-90 mb-2">⏰ Total Horas Extra</div>
+            <div className="text-4xl font-bold mb-2">{alerts.summary.totalOvertime}h</div>
+            <div className="text-xs opacity-80">
+              {alerts.summary.workersWithHighOvertime} com horas elevadas
+            </div>
+            <div className="mt-3 flex items-center gap-2 text-xs">
+              <span className="px-2 py-1 bg-white/20 rounded-full">
+                Média: {Math.round(alerts.summary.totalOvertime / Math.max(alerts.summary.workersWithRecords, 1))}h/pessoa
+              </span>
+            </div>
+          </div>
+        </Card>
+
+        {/* Card 4: Situação Geral */}
+        <Card
+          className="p-5 cursor-pointer hover:scale-105 transition-all"
+          style={{ background: 'linear-gradient(to br, #10B981, #059669)' }}
+          onClick={() => setStatusFilter('all')}
+        >
+          <div className="text-white">
+            <div className="text-sm opacity-90 mb-2">✅ Situação Geral</div>
+            <div className="text-4xl font-bold mb-2">
+              {sortedStats.length - alerts.alerts.length}
+            </div>
+            <div className="text-xs opacity-80">Colaboradores sem problemas</div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+              <span className="px-2 py-1 bg-white/20 rounded-full text-center">
+                Faltas: {alerts.summary.workersWithAbsences}
+              </span>
+              <span className="px-2 py-1 bg-white/20 rounded-full text-center">
+                Baixas: {alerts.summary.workersWithSickLeave}
+              </span>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* 🔍 BARRA DE FILTROS E PESQUISA */}
+      <Card className="p-4">
+        <div className="flex flex-col md:flex-row gap-4 items-center">
+          {/* Pesquisa */}
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="🔍 Pesquisar colaborador..."
+              className="w-full px-4 py-2 pl-10 rounded-lg border dark:border-slate-700 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Filtros Rápidos */}
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                statusFilter === 'all'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              Todos ({sortedStats.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('critical')}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                statusFilter === 'critical'
+                  ? 'bg-red-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              🔴 Críticos ({alerts.alerts.filter(a => a.alerts.some(al => al.level === 'error')).length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('warning')}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                statusFilter === 'warning'
+                  ? 'bg-orange-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              🟠 Atenção ({alerts.alerts.filter(a => a.alerts.some(al => al.level === 'warning') && !a.alerts.some(al => al.level === 'error')).length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('ok')}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                statusFilter === 'ok'
+                  ? 'bg-green-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              ✅ OK ({sortedStats.length - alerts.alerts.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('no_records')}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                statusFilter === 'no_records'
+                  ? 'bg-slate-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              📭 Sem Registos ({alerts.summary.workersWithoutRecords})
+            </button>
+          </div>
+
+          {/* Info de Resultados */}
+          <div className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
+            {filteredAndSortedStats.length} de {sortedStats.length}
+          </div>
+        </div>
+      </Card>
+
       {/* Tabela Principal - NOVO LAYOUT DETALHADO */}
       <Card className="p-4">
         <div className="overflow-auto rounded-xl border dark:border-slate-800">
@@ -5785,12 +6038,29 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
                 </tr>
               )}
 
-              {sortedStats.map((worker) => (
+              {filteredAndSortedStats.map((worker) => {
+                const workerAlerts = alerts.alerts.find(a => a.worker === worker.name);
+                const hasError = workerAlerts?.alerts.some(a => a.level === 'error');
+                const hasWarning = workerAlerts?.alerts.some(a => a.level === 'warning');
+                const hasInfo = workerAlerts?.alerts.some(a => a.level === 'info');
+                const hasNoRecords = worker.entries.length === 0 && worker.diasFerias === 0 && worker.diasBaixa === 0;
+
+                // Determinar cor de fundo
+                let bgColor = '';
+                if (hasError) {
+                  bgColor = 'bg-red-50 dark:bg-red-950/20';
+                } else if (hasWarning) {
+                  bgColor = 'bg-orange-50 dark:bg-orange-950/20';
+                } else if (hasInfo) {
+                  bgColor = 'bg-blue-50 dark:bg-blue-950/20';
+                }
+
+                return (
                 <tr
                   key={worker.name}
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, worker.name)}
-                  className={`border-t dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-opacity ${
+                  className={`border-t dark:border-slate-800 hover:shadow-md transition-all ${bgColor} ${
                     draggedWorker === worker.name ? 'opacity-50' : 'opacity-100'
                   }`}
                 >
@@ -5800,7 +6070,7 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
                   </td>
 
                   {/* NOME */}
-                  <td className="px-2 py-2 font-medium text-xs border-r dark:border-slate-700 sticky left-0 bg-white dark:bg-slate-950">
+                  <td className={`px-2 py-2 font-medium text-xs border-r dark:border-slate-700 sticky left-0 ${bgColor || 'bg-white dark:bg-slate-950'}`}>
                     <div className="flex items-center gap-2 group">
                       <span
                         className="text-slate-400 select-none hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
@@ -5812,6 +6082,26 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
                         ⋮⋮
                       </span>
                       <span className="flex-1">{worker.name}</span>
+                      {hasError && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-red-600 text-white">
+                          CRÍTICO
+                        </span>
+                      )}
+                      {!hasError && hasWarning && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-orange-500 text-white">
+                          ATENÇÃO
+                        </span>
+                      )}
+                      {!hasError && !hasWarning && hasInfo && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-blue-500 text-white">
+                          INFO
+                        </span>
+                      )}
+                      {!workerAlerts && !hasNoRecords && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-green-500 text-white">
+                          OK
+                        </span>
+                      )}
                       {manuallyAddedWorkers.includes(worker.name) && worker.entries.length === 0 && (
                         <button
                           onClick={(e) => {
@@ -5857,7 +6147,8 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
                     </Button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
