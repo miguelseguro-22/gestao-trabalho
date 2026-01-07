@@ -6745,9 +6745,12 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card
               className="p-4 hover:shadow-lg transition-all cursor-pointer hover:scale-105"
-              onClick={() => setInfoModal({ type: 'vehicles', data: { vehicles, vehiclesInUse: adminStats.vehiclesInUse } })}
+              onClick={() => {
+                console.log('🚗 Viaturas clicked!', { vehicles, vehiclesInUse: adminStats.vehiclesInUse });
+                setInfoModal({ type: 'vehicles', data: { vehicles, vehiclesInUse: adminStats.vehiclesInUse } });
+              }}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pointer-events-none">
                 <div>
                   <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{adminStats.totalVehicles}</div>
                   <div className="text-sm text-slate-600 dark:text-slate-400">Viaturas</div>
@@ -6756,14 +6759,17 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                   <span className="text-2xl">🚗</span>
                 </div>
               </div>
-              <div className="text-xs text-slate-500 mt-2">{adminStats.vehiclesInUse} em uso · Clique para lista</div>
+              <div className="text-xs text-slate-500 mt-2 pointer-events-none">{adminStats.vehiclesInUse} em uso · Clique para lista</div>
             </Card>
 
             <Card
               className="p-4 hover:shadow-lg transition-all cursor-pointer hover:scale-105"
-              onClick={() => setInfoModal({ type: 'orders', data: { orders, pendingOrders: adminStats.pendingOrders } })}
+              onClick={() => {
+                console.log('📦 Pedidos clicked!', { orders, pendingOrders: adminStats.pendingOrders });
+                setInfoModal({ type: 'orders', data: { orders, pendingOrders: adminStats.pendingOrders } });
+              }}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pointer-events-none">
                 <div>
                   <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{adminStats.totalOrders}</div>
                   <div className="text-sm text-slate-600 dark:text-slate-400">Pedidos</div>
@@ -6772,14 +6778,17 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                   <span className="text-2xl">📦</span>
                 </div>
               </div>
-              <div className="text-xs text-slate-500 mt-2">{adminStats.pendingOrders} pendentes · Clique para lista</div>
+              <div className="text-xs text-slate-500 mt-2 pointer-events-none">{adminStats.pendingOrders} pendentes · Clique para lista</div>
             </Card>
 
             <Card
               className="p-4 hover:shadow-lg transition-all cursor-pointer hover:scale-105"
-              onClick={() => setInfoModal({ type: 'catalog', data: { catalog } })}
+              onClick={() => {
+                console.log('📋 Catálogo clicked!', { catalog });
+                setInfoModal({ type: 'catalog', data: { catalog } });
+              }}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pointer-events-none">
                 <div>
                   <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{adminStats.totalCatalogItems}</div>
                   <div className="text-sm text-slate-600 dark:text-slate-400">Itens Catálogo</div>
@@ -6788,14 +6797,17 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                   <span className="text-2xl">📋</span>
                 </div>
               </div>
-              <div className="text-xs text-slate-500 mt-2">disponíveis · Clique para lista</div>
+              <div className="text-xs text-slate-500 mt-2 pointer-events-none">disponíveis · Clique para lista</div>
             </Card>
 
             <Card
               className="p-4 hover:shadow-lg transition-all cursor-pointer hover:scale-105"
-              onClick={() => setInfoModal({ type: 'activeToday', data: { timeEntries, workersToday: adminStats.workersToday } })}
+              onClick={() => {
+                console.log('👷 Ativos Hoje clicked!', { timeEntries, workersToday: adminStats.workersToday });
+                setInfoModal({ type: 'activeToday', data: { timeEntries, workersToday: adminStats.workersToday } });
+              }}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pointer-events-none">
                 <div>
                   <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{adminStats.workersToday}</div>
                   <div className="text-sm text-slate-600 dark:text-slate-400">Ativos Hoje</div>
@@ -6804,7 +6816,7 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                   <span className="text-2xl">👷</span>
                 </div>
               </div>
-              <div className="text-xs text-slate-500 mt-2">colaboradores · Clique para lista</div>
+              <div className="text-xs text-slate-500 mt-2 pointer-events-none">colaboradores · Clique para lista</div>
             </Card>
           </div>
 
