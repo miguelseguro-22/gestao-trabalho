@@ -1321,7 +1321,7 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,auth}
 };
 
 /* ---------- Import Center ---------- */
-const ImportCenter=({onClose,setters,addToast,log})=>{
+const ImportCenter=({onClose,setters,addToast,log,people})=>{
   const [mode,setMode]=useState('catalog'); // 'catalog' | 'csv' | 'json'
   const [section,setSection]=useState('timesheets');
   const [csvPreview,setCsvPreview]=useState({headers:[],rows:[],delim:','});
@@ -13866,7 +13866,7 @@ function TableMaterials() {
       </Modal>
 
       <Modal open={modal?.name==='import'} title="Importar / Exportar Dados" onClose={()=>setModal(null)} wide>
-        <ImportCenter onClose={()=>setModal(null)} setters={setters} addToast={()=>{}} log={(m)=>addToast(m)}/>
+        <ImportCenter onClose={()=>setModal(null)} setters={setters} addToast={()=>{}} log={(m)=>addToast(m)} people={people}/>
       </Modal>
     </div>
   );     
