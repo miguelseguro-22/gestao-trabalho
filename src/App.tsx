@@ -6269,6 +6269,7 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [detailModal, setDetailModal] = useState(null);
   const [showAdminDashboard, setShowAdminDashboard] = useState(auth?.role === 'admin');
+  const [infoModal, setInfoModal] = useState(null); // 📊 Modal para detalhes dos cards clicáveis
 
   // 🔐 Estados para mudança de password
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -6695,34 +6696,57 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
         <>
           {/* KPIs Principais do Sistema */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #00677F, #005666)' }}>
+            <Card
+              className="p-5 text-white cursor-pointer hover:scale-105 transition-all"
+              style={{ background: 'linear-gradient(to bottom right, #00677F, #005666)' }}
+              onClick={() => setInfoModal({ type: 'workers', data: adminStats })}
+            >
               <div className="text-sm opacity-90">Total de Colaboradores</div>
               <div className="text-4xl font-bold mt-2">{adminStats.totalWorkers}</div>
               <div className="text-sm opacity-80 mt-1">{adminStats.workersToday} ativos hoje</div>
+              <div className="text-xs opacity-70 mt-2">👆 Clique para detalhes</div>
             </Card>
 
-            <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #00A9B8, #008A96)' }}>
+            <Card
+              className="p-5 text-white cursor-pointer hover:scale-105 transition-all"
+              style={{ background: 'linear-gradient(to bottom right, #00A9B8, #008A96)' }}
+              onClick={() => setInfoModal({ type: 'projects', data: adminStats })}
+            >
               <div className="text-sm opacity-90">Obras Ativas</div>
               <div className="text-4xl font-bold mt-2">{adminStats.totalProjects}</div>
               <div className="text-sm opacity-80 mt-1">{adminStats.topProjects.length} com registos</div>
+              <div className="text-xs opacity-70 mt-2">👆 Clique para detalhes</div>
             </Card>
 
-            <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #BE8A3A, #A07430)' }}>
+            <Card
+              className="p-5 text-white cursor-pointer hover:scale-105 transition-all"
+              style={{ background: 'linear-gradient(to bottom right, #BE8A3A, #A07430)' }}
+              onClick={() => setInfoModal({ type: 'hours', data: adminStats })}
+            >
               <div className="text-sm opacity-90">Horas Este Mês</div>
               <div className="text-4xl font-bold mt-2">{Math.round(adminStats.hoursThisMonth)}h</div>
               <div className="text-sm opacity-80 mt-1">{Math.round(adminStats.hoursThisWeek)}h esta semana</div>
+              <div className="text-xs opacity-70 mt-2">👆 Clique para detalhes</div>
             </Card>
 
-            <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #2C3134, #1A1D1F)' }}>
+            <Card
+              className="p-5 text-white cursor-pointer hover:scale-105 transition-all"
+              style={{ background: 'linear-gradient(to bottom right, #2C3134, #1A1D1F)' }}
+              onClick={() => setInfoModal({ type: 'entries', data: adminStats })}
+            >
               <div className="text-sm opacity-90">Registos Totais</div>
               <div className="text-4xl font-bold mt-2">{adminStats.totalTimeEntries}</div>
               <div className="text-sm opacity-80 mt-1">no sistema</div>
+              <div className="text-xs opacity-70 mt-2">👆 Clique para detalhes</div>
             </Card>
           </div>
 
           {/* Estatísticas Secundárias */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="p-4 hover:shadow-lg transition-shadow">
+            <Card
+              className="p-4 hover:shadow-lg transition-all cursor-pointer hover:scale-105"
+              onClick={() => setInfoModal({ type: 'vehicles', data: { vehicles, vehiclesInUse: adminStats.vehiclesInUse } })}
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{adminStats.totalVehicles}</div>
@@ -6732,10 +6756,13 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                   <span className="text-2xl">🚗</span>
                 </div>
               </div>
-              <div className="text-xs text-slate-500 mt-2">{adminStats.vehiclesInUse} em uso</div>
+              <div className="text-xs text-slate-500 mt-2">{adminStats.vehiclesInUse} em uso · Clique para lista</div>
             </Card>
 
-            <Card className="p-4 hover:shadow-lg transition-shadow">
+            <Card
+              className="p-4 hover:shadow-lg transition-all cursor-pointer hover:scale-105"
+              onClick={() => setInfoModal({ type: 'orders', data: { orders, pendingOrders: adminStats.pendingOrders } })}
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{adminStats.totalOrders}</div>
@@ -6745,10 +6772,13 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                   <span className="text-2xl">📦</span>
                 </div>
               </div>
-              <div className="text-xs text-slate-500 mt-2">{adminStats.pendingOrders} pendentes</div>
+              <div className="text-xs text-slate-500 mt-2">{adminStats.pendingOrders} pendentes · Clique para lista</div>
             </Card>
 
-            <Card className="p-4 hover:shadow-lg transition-shadow">
+            <Card
+              className="p-4 hover:shadow-lg transition-all cursor-pointer hover:scale-105"
+              onClick={() => setInfoModal({ type: 'catalog', data: { catalog } })}
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{adminStats.totalCatalogItems}</div>
@@ -6758,10 +6788,13 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                   <span className="text-2xl">📋</span>
                 </div>
               </div>
-              <div className="text-xs text-slate-500 mt-2">disponíveis</div>
+              <div className="text-xs text-slate-500 mt-2">disponíveis · Clique para lista</div>
             </Card>
 
-            <Card className="p-4 hover:shadow-lg transition-shadow">
+            <Card
+              className="p-4 hover:shadow-lg transition-all cursor-pointer hover:scale-105"
+              onClick={() => setInfoModal({ type: 'activeToday', data: { timeEntries, workersToday: adminStats.workersToday } })}
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{adminStats.workersToday}</div>
@@ -6771,7 +6804,7 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                   <span className="text-2xl">👷</span>
                 </div>
               </div>
-              <div className="text-xs text-slate-500 mt-2">colaboradores</div>
+              <div className="text-xs text-slate-500 mt-2">colaboradores · Clique para lista</div>
             </Card>
           </div>
 
@@ -6911,32 +6944,52 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
         <>
           {/* KPIs Principais */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #00677F, #005666)' }}>
+        <Card
+          className="p-5 text-white cursor-pointer hover:scale-105 transition-all"
+          style={{ background: 'linear-gradient(to bottom right, #00677F, #005666)' }}
+          onClick={() => setInfoModal({ type: 'monthlyOverview', data: { monthlyStats, myEntries } })}
+        >
           <div className="text-sm opacity-90">Visão Geral do Mês</div>
           <div className="text-4xl font-bold mt-2">
             {monthlyStats.registeredDays}/{monthlyStats.workingDays}
           </div>
           <div className="text-sm opacity-80 mt-1">dias registados/úteis</div>
+          <div className="text-xs opacity-70 mt-2">👆 Clique para detalhes</div>
         </Card>
 
-        <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #00A9B8, #008A96)' }}>
+        <Card
+          className="p-5 text-white cursor-pointer hover:scale-105 transition-all"
+          style={{ background: 'linear-gradient(to bottom right, #00A9B8, #008A96)' }}
+          onClick={() => setInfoModal({ type: 'totalHours', data: { stats, myEntries } })}
+        >
           <div className="text-sm opacity-90">Horas Totais</div>
           <div className="text-4xl font-bold mt-2">{stats.totalHours}h</div>
-          <div className="text-sm opacity-80 mt-1">horas trabalhadas</div>
+          <div className="text-sm opacity-80 mt-1">horas trabalhadas ({stats.totalOvertime}h extra)</div>
+          <div className="text-xs opacity-70 mt-2">👆 Clique para detalhes</div>
         </Card>
 
-        <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #BE8A3A, #A07430)' }}>
+        <Card
+          className="p-5 text-white cursor-pointer hover:scale-105 transition-all"
+          style={{ background: 'linear-gradient(to bottom right, #BE8A3A, #A07430)' }}
+          onClick={() => setInfoModal({ type: 'holidays', data: { stats } })}
+        >
           <div className="text-sm opacity-90">Férias Gozadas</div>
           <div className="text-4xl font-bold mt-2">{stats.holidayDays}</div>
-          <div className="text-sm opacity-80 mt-1">dias de férias</div>
+          <div className="text-sm opacity-80 mt-1">dias de férias · {stats.holidayEntries.length} períodos</div>
+          <div className="text-xs opacity-70 mt-2">👆 Clique para detalhes</div>
         </Card>
 
-        <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #2C3134, #1A1D1F)' }}>
+        <Card
+          className="p-5 text-white cursor-pointer hover:scale-105 transition-all"
+          style={{ background: 'linear-gradient(to bottom right, #2C3134, #1A1D1F)' }}
+          onClick={() => setInfoModal({ type: 'absences', data: { stats } })}
+        >
           <div className="text-sm opacity-90">Baixas/Faltas</div>
           <div className="text-4xl font-bold mt-2">{stats.sickDays + stats.absenceDays}</div>
           <div className="text-sm opacity-80 mt-1">
             {stats.sickDays}b · {stats.absenceDays}f
           </div>
+          <div className="text-xs opacity-70 mt-2">👆 Clique para detalhes</div>
         </Card>
       </div>
 
@@ -7489,6 +7542,362 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                   )}
                 </div>
               )}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* 📊 MODAL DE INFORMAÇÕES DETALHADAS DOS CARDS */}
+      {infoModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setInfoModal(null)}
+        >
+          <Card
+            className="max-w-4xl w-full max-h-[85vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              {/* Header do Modal */}
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+                  {infoModal.type === 'workers' && '👥 Lista de Colaboradores'}
+                  {infoModal.type === 'projects' && '🏗️ Lista de Obras'}
+                  {infoModal.type === 'hours' && '⏰ Detalhes de Horas Trabalhadas'}
+                  {infoModal.type === 'entries' && '📊 Detalhes dos Registos'}
+                  {infoModal.type === 'vehicles' && '🚗 Lista de Viaturas'}
+                  {infoModal.type === 'orders' && '📦 Lista de Pedidos de Material'}
+                  {infoModal.type === 'catalog' && '📋 Lista de Itens do Catálogo'}
+                  {infoModal.type === 'activeToday' && '👷 Colaboradores Ativos Hoje'}
+                  {infoModal.type === 'monthlyOverview' && '📅 Visão Mensal Detalhada'}
+                  {infoModal.type === 'totalHours' && '⏰ Distribuição de Horas'}
+                  {infoModal.type === 'holidays' && '🏖️ Histórico de Férias'}
+                  {infoModal.type === 'absences' && '🤒 Histórico de Baixas e Faltas'}
+                </h3>
+                <button
+                  onClick={() => setInfoModal(null)}
+                  className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                >
+                  <Icon name="x" />
+                </button>
+              </div>
+
+              {/* Conteúdo do Modal */}
+              <div className="space-y-4">
+                {/* COLABORADORES */}
+                {infoModal.type === 'workers' && (
+                  <div className="space-y-3">
+                    <div className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                      Total de {Object.keys(people || {}).length} colaboradores registados no sistema
+                    </div>
+                    {Object.entries(people || {}).sort((a, b) => a[0].localeCompare(b[0])).map(([name, data]) => (
+                      <div key={name} className="p-4 rounded-xl border dark:border-slate-800 hover:shadow-md transition-shadow">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-semibold text-slate-800 dark:text-slate-100">{name}</div>
+                            <div className="text-sm text-slate-500 mt-1">
+                              Taxa horária: €{data.rate || 0}/h
+                              {data.isMaintenance && ' · 🔧 Manutenção'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* OBRAS */}
+                {infoModal.type === 'projects' && (
+                  <div className="space-y-3">
+                    <div className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                      Total de {projects.length} obras no sistema · {infoModal.data.topProjects.length} com registos de horas
+                    </div>
+                    {infoModal.data.topProjects.map((proj, i) => (
+                      <div key={i} className="p-4 rounded-xl border dark:border-slate-800 hover:shadow-md transition-shadow">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-semibold text-slate-800 dark:text-slate-100">{proj.name}</div>
+                            <div className="text-sm text-slate-500">{Math.round(proj.hours)} horas trabalhadas</div>
+                          </div>
+                          <div className="text-2xl font-bold" style={{ color: '#00A9B8' }}>#{i + 1}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* HORAS */}
+                {infoModal.type === 'hours' && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 rounded-xl" style={{ background: 'linear-gradient(to br, #00A9B8, #008A96)' }}>
+                        <div className="text-white text-sm opacity-90">Horas Este Mês</div>
+                        <div className="text-white text-3xl font-bold mt-2">{Math.round(infoModal.data.hoursThisMonth)}h</div>
+                      </div>
+                      <div className="p-4 rounded-xl" style={{ background: 'linear-gradient(to br, #00677F, #005666)' }}>
+                        <div className="text-white text-sm opacity-90">Horas Esta Semana</div>
+                        <div className="text-white text-3xl font-bold mt-2">{Math.round(infoModal.data.hoursThisWeek)}h</div>
+                      </div>
+                    </div>
+                    <div className="text-sm text-slate-600 dark:text-slate-400">
+                      Estas estatísticas incluem apenas horas de trabalho normal e horas extra
+                    </div>
+                  </div>
+                )}
+
+                {/* REGISTOS TOTAIS */}
+                {infoModal.type === 'entries' && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-3">
+                      <div className="p-4 rounded-xl border dark:border-slate-800">
+                        <div className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                          {infoModal.data.totalTimeEntries} registos totais
+                        </div>
+                        <div className="text-sm text-slate-500 mt-2">
+                          Todos os tipos de registos (Trabalho, Férias, Baixas, Faltas, etc.)
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* VIATURAS */}
+                {infoModal.type === 'vehicles' && (
+                  <div className="space-y-3">
+                    <div className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                      {infoModal.data.vehicles.length} viaturas · {infoModal.data.vehiclesInUse} em uso
+                    </div>
+                    {infoModal.data.vehicles.map((v, i) => (
+                      <div key={i} className="p-4 rounded-xl border dark:border-slate-800 hover:shadow-md transition-shadow">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-semibold text-slate-800 dark:text-slate-100">{v.plate || 'Sem matrícula'}</div>
+                            <div className="text-sm text-slate-500">{v.model || 'Sem modelo'}</div>
+                          </div>
+                          <div>
+                            {v.currentDriver ? (
+                              <Badge tone="blue">🚗 {v.currentDriver}</Badge>
+                            ) : (
+                              <Badge tone="slate">Disponível</Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* PEDIDOS */}
+                {infoModal.type === 'orders' && (
+                  <div className="space-y-3">
+                    <div className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                      {infoModal.data.orders.length} pedidos · {infoModal.data.pendingOrders} pendentes
+                    </div>
+                    {infoModal.data.orders.slice(0, 20).map((o, i) => (
+                      <div key={i} className="p-4 rounded-xl border dark:border-slate-800 hover:shadow-md transition-shadow">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-semibold text-slate-800 dark:text-slate-100">{o.project || 'Sem obra'}</div>
+                          <Badge tone={o.status === 'Pendente' ? 'amber' : o.status === 'Aprovado' ? 'blue' : 'slate'}>
+                            {o.status}
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-slate-500">
+                          {o.items?.length || 0} itens · Por {o.requestedBy || 'N/A'}
+                        </div>
+                      </div>
+                    ))}
+                    {infoModal.data.orders.length > 20 && (
+                      <div className="text-center text-sm text-slate-500">
+                        ... e mais {infoModal.data.orders.length - 20} pedidos
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* CATÁLOGO */}
+                {infoModal.type === 'catalog' && (
+                  <div className="space-y-3">
+                    <div className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                      {infoModal.data.catalog.length} itens disponíveis no catálogo
+                    </div>
+                    {infoModal.data.catalog.slice(0, 30).map((item, i) => (
+                      <div key={i} className="p-4 rounded-xl border dark:border-slate-800 hover:shadow-md transition-shadow">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-semibold text-slate-800 dark:text-slate-100">{item.name || 'Sem nome'}</div>
+                            <div className="text-sm text-slate-500">{item.code || 'Sem código'}</div>
+                          </div>
+                          {item.price > 0 && (
+                            <div className="text-lg font-bold" style={{ color: '#BE8A3A' }}>€{item.price}</div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {infoModal.data.catalog.length > 30 && (
+                      <div className="text-center text-sm text-slate-500">
+                        ... e mais {infoModal.data.catalog.length - 30} itens
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ATIVOS HOJE */}
+                {infoModal.type === 'activeToday' && (
+                  <div className="space-y-3">
+                    <div className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                      {infoModal.data.workersToday} colaboradores com registos hoje
+                    </div>
+                    {(() => {
+                      const today = new Date().toISOString().slice(0, 10);
+                      const todayWorkers = Array.from(new Set(
+                        infoModal.data.timeEntries
+                          .filter(t => t.date === today)
+                          .map(t => t.worker)
+                      )).sort();
+                      return todayWorkers.map((worker, i) => (
+                        <div key={i} className="p-4 rounded-xl border dark:border-slate-800 hover:shadow-md transition-shadow">
+                          <div className="flex items-center justify-between">
+                            <div className="font-semibold text-slate-800 dark:text-slate-100">{worker}</div>
+                            <Badge tone="green">✓ Ativo</Badge>
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                )}
+
+                {/* VISÃO MENSAL */}
+                {infoModal.type === 'monthlyOverview' && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 rounded-xl border dark:border-slate-800">
+                        <div className="text-sm text-slate-600 dark:text-slate-400">Dias Registados</div>
+                        <div className="text-3xl font-bold text-slate-800 dark:text-slate-100 mt-2">
+                          {infoModal.data.monthlyStats.registeredDays}
+                        </div>
+                      </div>
+                      <div className="p-4 rounded-xl border dark:border-slate-800">
+                        <div className="text-sm text-slate-600 dark:text-slate-400">Dias Úteis no Período</div>
+                        <div className="text-3xl font-bold text-slate-800 dark:text-slate-100 mt-2">
+                          {infoModal.data.monthlyStats.workingDays}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 rounded-xl" style={{ background: 'linear-gradient(to br, #00677F, #005666)' }}>
+                      <div className="text-white text-sm opacity-90">Taxa de Cobertura</div>
+                      <div className="text-white text-3xl font-bold mt-2">
+                        {Math.round((infoModal.data.monthlyStats.registeredDays / infoModal.data.monthlyStats.workingDays) * 100)}%
+                      </div>
+                      <div className="text-white text-xs opacity-75 mt-1">
+                        Período: dia 21 do mês anterior até dia 20 deste mês
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* HORAS TOTAIS */}
+                {infoModal.type === 'totalHours' && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 rounded-xl" style={{ background: 'linear-gradient(to br, #00A9B8, #008A96)' }}>
+                        <div className="text-white text-sm opacity-90">Horas Normais</div>
+                        <div className="text-white text-3xl font-bold mt-2">{infoModal.data.stats.totalHours}h</div>
+                      </div>
+                      <div className="p-4 rounded-xl" style={{ background: 'linear-gradient(to br, #BE8A3A, #A07430)' }}>
+                        <div className="text-white text-sm opacity-90">Horas Extra</div>
+                        <div className="text-white text-3xl font-bold mt-2">{infoModal.data.stats.totalOvertime}h</div>
+                      </div>
+                    </div>
+                    <div className="p-4 rounded-xl border dark:border-slate-800">
+                      <div className="text-sm text-slate-600 dark:text-slate-400">Total Combinado</div>
+                      <div className="text-4xl font-bold text-slate-800 dark:text-slate-100 mt-2">
+                        {infoModal.data.stats.totalHours + infoModal.data.stats.totalOvertime}h
+                      </div>
+                      <div className="text-xs text-slate-500 mt-2">
+                        {infoModal.data.stats.daysWorked} dias trabalhados em {selectedYear}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* FÉRIAS */}
+                {infoModal.type === 'holidays' && (
+                  <div className="space-y-3">
+                    <div className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                      {infoModal.data.stats.holidayDays} dias de férias em {infoModal.data.stats.holidayEntries.length} períodos
+                    </div>
+                    {infoModal.data.stats.holidayEntries.length === 0 ? (
+                      <div className="text-center text-slate-500 py-8">Sem férias registadas em {selectedYear}</div>
+                    ) : (
+                      infoModal.data.stats.holidayEntries.map((entry, i) => (
+                        <div key={i} className="p-4 rounded-xl border dark:border-slate-800 hover:shadow-md transition-shadow">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="font-semibold text-slate-800 dark:text-slate-100">
+                              {fmtDate(entry.start)} → {fmtDate(entry.end)}
+                            </div>
+                            <Badge tone="blue">{entry.days} {entry.days === 1 ? 'dia' : 'dias'}</Badge>
+                          </div>
+                          {entry.notes && (
+                            <div className="text-sm text-slate-500">{entry.notes}</div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* BAIXAS/FALTAS */}
+                {infoModal.type === 'absences' && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className="p-4 rounded-xl" style={{ background: 'linear-gradient(to br, #DC2626, #B91C1C)' }}>
+                        <div className="text-white text-sm opacity-90">Baixas</div>
+                        <div className="text-white text-3xl font-bold mt-2">{infoModal.data.stats.sickDays}</div>
+                        <div className="text-white text-xs opacity-75 mt-1">{infoModal.data.stats.sickEntries.length} períodos</div>
+                      </div>
+                      <div className="p-4 rounded-xl" style={{ background: 'linear-gradient(to br, #F59E0B, #D97706)' }}>
+                        <div className="text-white text-sm opacity-90">Faltas</div>
+                        <div className="text-white text-3xl font-bold mt-2">{infoModal.data.stats.absenceDays}</div>
+                        <div className="text-white text-xs opacity-75 mt-1">{infoModal.data.stats.absenceEntries.length} dias</div>
+                      </div>
+                    </div>
+
+                    {infoModal.data.stats.sickEntries.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-3">Baixas Médicas</h4>
+                        <div className="space-y-2">
+                          {infoModal.data.stats.sickEntries.map((entry, i) => (
+                            <div key={i} className="p-3 rounded-lg border dark:border-slate-800">
+                              <div className="flex items-center justify-between">
+                                <div className="text-sm font-medium">{fmtDate(entry.start)} → {fmtDate(entry.end)}</div>
+                                <Badge tone="rose">{entry.days} {entry.days === 1 ? 'dia' : 'dias'}</Badge>
+                              </div>
+                              {entry.notes && <div className="text-xs text-slate-500 mt-1">{entry.notes}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {infoModal.data.stats.absenceEntries.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-3">Faltas</h4>
+                        <div className="space-y-2">
+                          {infoModal.data.stats.absenceEntries.map((entry, i) => (
+                            <div key={i} className="p-3 rounded-lg border dark:border-slate-800">
+                              <div className="flex items-center justify-between">
+                                <div className="text-sm font-medium">{fmtDate(entry.date)}</div>
+                                <Badge tone="amber">1 dia</Badge>
+                              </div>
+                              {entry.notes && <div className="text-xs text-slate-500 mt-1">{entry.notes}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </Card>
         </div>
