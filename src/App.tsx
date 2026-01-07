@@ -5088,6 +5088,146 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [timeEntries, selectedMonth]);
 
+  // 🚨 SISTEMA DE ANÁLISE DE ALERTAS E ANOMALIAS
+  const alerts = useMemo(() => {
+    const alertList = [];
+
+    // Estatísticas globais para comparação
+    const avgOvertime = stats.length > 0
+      ? stats.reduce((sum, s) => sum + s.horasExtra, 0) / stats.length
+      : 0;
+    const avgWorkDays = stats.length > 0
+      ? stats.reduce((sum, s) => sum + s.diasTrabalhados, 0) / stats.length
+      : 0;
+
+    stats.forEach(worker => {
+      const workerAlerts = [];
+
+      // 🔴 ALERTA 1: Horas extra muito acima da média (> 150% da média)
+      if (worker.horasExtra > 0 && avgOvertime > 0 && worker.horasExtra > avgOvertime * 1.5) {
+        workerAlerts.push({
+          level: 'warning',
+          type: 'overtime_high',
+          message: `Horas extra elevadas (${Math.round(worker.horasExtra)}h vs média ${Math.round(avgOvertime)}h)`,
+          value: worker.horasExtra
+        });
+      }
+
+      // 🟡 ALERTA 2: Registo único de horas extra (apenas 1 dia)
+      const daysWithOvertime = Array.from(worker.days.values()).filter(d => d.overtime > 0).length;
+      if (daysWithOvertime === 1 && worker.horasExtra > 0) {
+        workerAlerts.push({
+          level: 'info',
+          type: 'overtime_single',
+          message: `Apenas 1 registo de horas extra (${Math.round(worker.horasExtra)}h)`,
+          value: daysWithOvertime
+        });
+      }
+
+      // 🔴 ALERTA 3: Horas extra em FDS/Feriado muito elevadas (> 16h)
+      if (worker.horasFDS + worker.horasFeriado > 16) {
+        workerAlerts.push({
+          level: 'warning',
+          type: 'weekend_high',
+          message: `Muitas horas em FDS/Feriado (${Math.round(worker.horasFDS + worker.horasFeriado)}h)`,
+          value: worker.horasFDS + worker.horasFeriado
+        });
+      }
+
+      // 🟠 ALERTA 4: Presença muito baixa (< 50%)
+      const presenceNum = parseInt(worker.presence) || 0;
+      if (presenceNum < 50 && presenceNum > 0) {
+        workerAlerts.push({
+          level: 'warning',
+          type: 'presence_low',
+          message: `Presença muito baixa (${presenceNum}%)`,
+          value: presenceNum
+        });
+      }
+
+      // 🔵 ALERTA 5: Sem registos no período
+      if (worker.entries.length === 0 && worker.diasFerias === 0 && worker.diasBaixa === 0) {
+        workerAlerts.push({
+          level: 'error',
+          type: 'no_records',
+          message: 'Sem registos no período',
+          value: 0
+        });
+      }
+
+      // 🟡 ALERTA 6: Muitas faltas (> 2)
+      if (worker.faltasSemRemun > 2) {
+        workerAlerts.push({
+          level: 'warning',
+          type: 'absences_high',
+          message: `${worker.faltasSemRemun} faltas registadas`,
+          value: worker.faltasSemRemun
+        });
+      }
+
+      // 🟠 ALERTA 7: Baixa muito longa (> 10 dias)
+      if (worker.diasBaixa > 10) {
+        workerAlerts.push({
+          level: 'info',
+          type: 'sick_long',
+          message: `Baixa longa (${worker.diasBaixa} dias)`,
+          value: worker.diasBaixa
+        });
+      }
+
+      // 🔴 ALERTA 8: Padrão estranho - trabalhou mas presença 0%
+      if (worker.entries.length > 0 && presenceNum === 0) {
+        workerAlerts.push({
+          level: 'error',
+          type: 'pattern_strange',
+          message: 'Tem registos mas presença 0% - possível erro',
+          value: worker.entries.length
+        });
+      }
+
+      // 🟡 ALERTA 9: Só tem deslocações, sem trabalho normal
+      if (worker.deslocDia + worker.deslocExtra > 0 && worker.diasTrabalhados === 0) {
+        workerAlerts.push({
+          level: 'info',
+          type: 'only_displacement',
+          message: 'Apenas registos de deslocação',
+          value: worker.deslocDia + worker.deslocExtra
+        });
+      }
+
+      // 🔴 ALERTA 10: Horas normais = 0 mas tem horas extra (impossível)
+      if (worker.totalHours === 0 && worker.horasExtra > 0) {
+        workerAlerts.push({
+          level: 'error',
+          type: 'impossible_overtime',
+          message: 'Horas extra sem horas normais - verificar registos',
+          value: worker.horasExtra
+        });
+      }
+
+      if (workerAlerts.length > 0) {
+        alertList.push({
+          worker: worker.name,
+          alerts: workerAlerts
+        });
+      }
+    });
+
+    // 🔍 ESTATÍSTICAS GERAIS DO RELATÓRIO
+    const summary = {
+      totalWorkers: stats.length,
+      workersWithRecords: stats.filter(s => s.entries.length > 0).length,
+      workersWithoutRecords: stats.filter(s => s.entries.length === 0 && s.diasFerias === 0 && s.diasBaixa === 0).length,
+      totalOvertime: Math.round(stats.reduce((sum, s) => sum + s.horasExtra, 0)),
+      workersWithHighOvertime: stats.filter(s => s.horasExtra > avgOvertime * 1.5).length,
+      workersWithAbsences: stats.filter(s => s.faltasSemRemun > 0).length,
+      workersWithSickLeave: stats.filter(s => s.diasBaixa > 0).length,
+      totalAlerts: alertList.reduce((sum, a) => sum + a.alerts.length, 0)
+    };
+
+    return { alerts: alertList, summary };
+  }, [stats]);
+
   // 🆕 Lista de todos os colaboradores únicos do sistema
   const allWorkerNames = useMemo(() => {
     const names = new Set();
@@ -5255,6 +5395,51 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
 
   // Exportar CSV
   const exportCSV = () => {
+    // 📊 NOVO: Relatório completo com análise de alertas
+    const lines = [];
+
+    // === CABEÇALHO DO RELATÓRIO ===
+    lines.push(['RELATÓRIO MENSAL DE COLABORADORES']);
+    lines.push(['Período:', monthCycleLabel]);
+    lines.push(['Data de Exportação:', new Date().toLocaleDateString('pt-PT')]);
+    lines.push([]);
+
+    // === RESUMO EXECUTIVO ===
+    lines.push(['RESUMO EXECUTIVO']);
+    lines.push(['Total de Colaboradores:', alerts.summary.totalWorkers]);
+    lines.push(['Colaboradores com Registos:', alerts.summary.workersWithRecords]);
+    lines.push(['Colaboradores sem Registos:', alerts.summary.workersWithoutRecords]);
+    lines.push(['Total Horas Extra:', `${alerts.summary.totalOvertime}h`]);
+    lines.push(['Colaboradores com Horas Extra Elevadas:', alerts.summary.workersWithHighOvertime]);
+    lines.push(['Colaboradores com Faltas:', alerts.summary.workersWithAbsences]);
+    lines.push(['Colaboradores em Baixa:', alerts.summary.workersWithSickLeave]);
+    lines.push(['Total de Alertas:', alerts.summary.totalAlerts]);
+    lines.push([]);
+
+    // === ALERTAS E ANOMALIAS ===
+    if (alerts.alerts.length > 0) {
+      lines.push(['ALERTAS E ANOMALIAS DETECTADAS']);
+      lines.push(['Colaborador', 'Nível', 'Tipo', 'Descrição']);
+
+      alerts.alerts.forEach(item => {
+        item.alerts.forEach(alert => {
+          const levelEmoji = alert.level === 'error' ? '🔴 ERRO'
+                           : alert.level === 'warning' ? '🟠 AVISO'
+                           : '🔵 INFO';
+          lines.push([
+            item.worker,
+            levelEmoji,
+            alert.type,
+            alert.message
+          ]);
+        });
+      });
+      lines.push([]);
+    }
+
+    // === DADOS DETALHADOS POR COLABORADOR ===
+    lines.push(['DADOS DETALHADOS POR COLABORADOR']);
+
     const headers = [
       'Colaborador',
       'Dias Úteis',
@@ -5267,24 +5452,58 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
       'Feriado (h)',
       'Horas Deslocadas (h)',
       'Presença',
+      'Status',
+      'Alertas'
     ];
+    lines.push(headers);
 
-    const rows = stats.map((s) => [
-      s.name,
-      s.workDays,
-      s.daysWorked,
-      s.absences || 0,
-      s.holidays || 0,
-      s.sickLeave || 0,
-      s.totalOvertime || 0,
-      s.totalOvertimeWeekend || 0,
-      s.feriadoHours || 0,
-      s.deslocHours || 0,
-      s.presence,
-    ]);
+    stats.forEach((s) => {
+      const workerAlerts = alerts.alerts.find(a => a.worker === s.name);
+      const hasAlerts = workerAlerts ? workerAlerts.alerts.length : 0;
+      const status = hasAlerts === 0 ? '✅ OK'
+                   : workerAlerts.alerts.some(a => a.level === 'error') ? '❌ CRÍTICO'
+                   : workerAlerts.alerts.some(a => a.level === 'warning') ? '⚠️ ATENÇÃO'
+                   : 'ℹ️ INFO';
 
-    const csv = toCSV(headers, rows);
-    download(`relatorio_mensal_${selectedMonth}.csv`, csv);
+      const alertsText = workerAlerts
+        ? workerAlerts.alerts.map(a => a.message).join(' | ')
+        : '';
+
+      lines.push([
+        s.name,
+        s.workDays,
+        s.daysWorked,
+        s.absences || 0,
+        s.holidays || 0,
+        s.sickLeave || 0,
+        s.totalOvertime || 0,
+        s.totalOvertimeWeekend || 0,
+        s.feriadoHours || 0,
+        s.deslocHours || 0,
+        s.presence,
+        status,
+        alertsText
+      ]);
+    });
+
+    lines.push([]);
+    lines.push(['LEGENDA']);
+    lines.push(['🔴 ERRO', 'Situações críticas que requerem verificação imediata']);
+    lines.push(['🟠 AVISO', 'Situações anormais que merecem atenção']);
+    lines.push(['🔵 INFO', 'Informações relevantes para análise']);
+    lines.push([]);
+    lines.push(['Relatório gerado automaticamente pelo sistema de Gestão de Trabalho']);
+
+    const csv = lines.map(row => row.map(cell => {
+      // Escapar células com vírgulas ou aspas
+      const str = String(cell || '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    }).join(',')).join('\n');
+
+    download(`relatorio_analise_${selectedMonth}.csv`, csv);
   };
 
   return (
@@ -5407,6 +5626,119 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
     </div>
   }
 />
+
+      {/* 🚨 PAINEL DE ALERTAS E ANÁLISE */}
+      {alerts.summary.totalAlerts > 0 && (
+        <Card className="p-4 border-2 border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/20">
+          <div className="space-y-4">
+            {/* Resumo Global */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-white font-bold">
+                  ⚠️
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100">
+                    {alerts.summary.totalAlerts} Alertas Detectados
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Análise automática do período {monthCycleLabel}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                    {alerts.summary.workersWithoutRecords}
+                  </div>
+                  <div className="text-xs text-slate-600 dark:text-slate-400">Sem registos</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                    {alerts.summary.workersWithHighOvertime}
+                  </div>
+                  <div className="text-xs text-slate-600 dark:text-slate-400">Horas extra elevadas</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                    {alerts.summary.totalOvertime}h
+                  </div>
+                  <div className="text-xs text-slate-600 dark:text-slate-400">Total horas extra</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Lista de Alertas */}
+            <div className="space-y-2">
+              {alerts.alerts.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-lg bg-white dark:bg-slate-800 border dark:border-slate-700 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="font-semibold text-slate-800 dark:text-slate-100 mb-1">
+                        {item.worker}
+                      </div>
+                      <div className="space-y-1">
+                        {item.alerts.map((alert, alertIdx) => (
+                          <div key={alertIdx} className="flex items-center gap-2 text-sm">
+                            {alert.level === 'error' && (
+                              <span className="text-red-600 dark:text-red-400 font-bold">🔴</span>
+                            )}
+                            {alert.level === 'warning' && (
+                              <span className="text-orange-600 dark:text-orange-400 font-bold">🟠</span>
+                            )}
+                            {alert.level === 'info' && (
+                              <span className="text-blue-600 dark:text-blue-400 font-bold">🔵</span>
+                            )}
+                            <span className="text-slate-700 dark:text-slate-300">
+                              {alert.message}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-xl">
+                      {item.alerts.some(a => a.level === 'error') && '❌'}
+                      {item.alerts.every(a => a.level === 'warning') && '⚠️'}
+                      {item.alerts.every(a => a.level === 'info') && 'ℹ️'}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Rodapé com ações */}
+            <div className="flex items-center justify-between pt-3 border-t dark:border-slate-700">
+              <div className="text-xs text-slate-600 dark:text-slate-400">
+                💡 Os alertas são gerados automaticamente com base em padrões e anomalias detectadas
+              </div>
+              <button
+                onClick={() => {
+                  // Scroll para o primeiro colaborador com alerta
+                  const firstWorkerWithAlert = alerts.alerts[0]?.worker;
+                  if (firstWorkerWithAlert) {
+                    const rows = document.querySelectorAll('tr');
+                    rows.forEach(row => {
+                      if (row.textContent?.includes(firstWorkerWithAlert)) {
+                        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        row.classList.add('ring-2', 'ring-amber-500');
+                        setTimeout(() => {
+                          row.classList.remove('ring-2', 'ring-amber-500');
+                        }, 2000);
+                      }
+                    });
+                  }
+                }}
+                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium transition-colors"
+              >
+                Ver na Tabela
+              </button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Tabela Principal - NOVO LAYOUT DETALHADO */}
       <Card className="p-4">
