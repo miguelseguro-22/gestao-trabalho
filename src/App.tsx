@@ -6832,15 +6832,19 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
               ) : (
                 <div className="space-y-3">
                   {adminStats.topProjects.map((project, index) => (
-                    <div key={index} className="flex items-center gap-3">
-                      <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white" style={{ background: `linear-gradient(to bottom right, #00677F, #00A9B8)` }}>
+                    <div
+                      key={index}
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer hover:scale-102"
+                      onClick={() => setInfoModal({ type: 'projectDetail', data: { projectName: project.name, timeEntries, people, orders } })}
+                    >
+                      <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white pointer-events-none" style={{ background: `linear-gradient(to bottom right, #00677F, #00A9B8)` }}>
                         {index + 1}
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 pointer-events-none">
                         <div className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{project.name}</div>
-                        <div className="text-xs text-slate-500">{Math.round(project.hours)} horas</div>
+                        <div className="text-xs text-slate-500">{Math.round(project.hours)} horas · 👆 Clique para análise</div>
                       </div>
-                      <div className="flex-shrink-0">
+                      <div className="flex-shrink-0 pointer-events-none">
                         <div className="w-20 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all"
@@ -6867,15 +6871,19 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
               ) : (
                 <div className="space-y-3">
                   {adminStats.topWorkers.map((worker, index) => (
-                    <div key={index} className="flex items-center gap-3">
-                      <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white" style={{ background: `linear-gradient(to bottom right, #BE8A3A, #A07430)` }}>
+                    <div
+                      key={index}
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer hover:scale-102"
+                      onClick={() => setInfoModal({ type: 'workerDetail', data: { workerName: worker.name, timeEntries, people } })}
+                    >
+                      <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white pointer-events-none" style={{ background: `linear-gradient(to bottom right, #BE8A3A, #A07430)` }}>
                         {index + 1}
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 pointer-events-none">
                         <div className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{worker.name}</div>
-                        <div className="text-xs text-slate-500">{Math.round(worker.hours)} horas</div>
+                        <div className="text-xs text-slate-500">{Math.round(worker.hours)} horas · 👆 Clique para análise</div>
                       </div>
-                      <div className="flex-shrink-0">
+                      <div className="flex-shrink-0 pointer-events-none">
                         <div className="w-20 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all"
@@ -7585,6 +7593,8 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                   {infoModal.type === 'totalHours' && '⏰ Distribuição de Horas'}
                   {infoModal.type === 'holidays' && '🏖️ Histórico de Férias'}
                   {infoModal.type === 'absences' && '🤒 Histórico de Baixas e Faltas'}
+                  {infoModal.type === 'projectDetail' && '🏗️ Análise Detalhada da Obra'}
+                  {infoModal.type === 'workerDetail' && '👤 Análise Detalhada do Colaborador'}
                 </h3>
                 <button
                   onClick={() => setInfoModal(null)}
@@ -7909,6 +7919,369 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                     )}
                   </div>
                 )}
+
+                {/* ANÁLISE DETALHADA DA OBRA */}
+                {infoModal.type === 'projectDetail' && (() => {
+                  const { projectName, timeEntries, people, orders } = infoModal.data;
+
+                  // Filtrar registos desta obra
+                  const projectEntries = timeEntries.filter(t => t.project === projectName && (t.type === 'Trabalho' || t.type === 'Extra'));
+
+                  // Calcular horas e custos por colaborador
+                  const workerStats = new Map();
+                  projectEntries.forEach(entry => {
+                    const hours = entry.hours || 0;
+                    const rate = Number(people?.[entry.worker]?.rate || 0);
+                    const cost = hours * rate;
+
+                    if (!workerStats.has(entry.worker)) {
+                      workerStats.set(entry.worker, { hours: 0, cost: 0, rate, entries: 0 });
+                    }
+                    const stats = workerStats.get(entry.worker);
+                    stats.hours += hours;
+                    stats.cost += cost;
+                    stats.entries += 1;
+                  });
+
+                  // Ordenar por horas (desc)
+                  const sortedWorkers = Array.from(workerStats.entries())
+                    .sort((a, b) => b[1].hours - a[1].hours);
+
+                  // Totais
+                  const totalHours = Array.from(workerStats.values()).reduce((sum, s) => sum + s.hours, 0);
+                  const totalLaborCost = Array.from(workerStats.values()).reduce((sum, s) => sum + s.cost, 0);
+
+                  // Pedidos/materiais desta obra
+                  const projectOrders = orders.filter(o => o.project === projectName);
+                  const totalMaterialCost = projectOrders.reduce((sum, order) => {
+                    if (!order.items) return sum;
+                    return sum + order.items.reduce((itemSum, item) => {
+                      return itemSum + ((item.quantity || 0) * (item.unitPrice || 0));
+                    }, 0);
+                  }, 0);
+
+                  const totalProjectCost = totalLaborCost + totalMaterialCost;
+
+                  return (
+                    <div className="space-y-6">
+                      {/* Obra Info */}
+                      <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-slate-800 dark:to-slate-700">
+                        <div className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">
+                          {projectName}
+                        </div>
+                        <div className="text-sm text-slate-600 dark:text-slate-300">
+                          {sortedWorkers.length} colaboradores · {projectEntries.length} registos · {Math.round(totalHours)}h trabalhadas
+                        </div>
+                      </div>
+
+                      {/* KPIs de Custo */}
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="p-4 rounded-xl" style={{ background: 'linear-gradient(to br, #00A9B8, #008A96)' }}>
+                          <div className="text-white text-xs opacity-90">Mão de Obra</div>
+                          <div className="text-white text-2xl font-bold mt-1">€{totalLaborCost.toFixed(2)}</div>
+                          <div className="text-white text-xs opacity-75 mt-1">{Math.round(totalHours)}h</div>
+                        </div>
+                        <div className="p-4 rounded-xl" style={{ background: 'linear-gradient(to br, #BE8A3A, #A07430)' }}>
+                          <div className="text-white text-xs opacity-90">Materiais</div>
+                          <div className="text-white text-2xl font-bold mt-1">€{totalMaterialCost.toFixed(2)}</div>
+                          <div className="text-white text-xs opacity-75 mt-1">{projectOrders.length} pedidos</div>
+                        </div>
+                        <div className="p-4 rounded-xl" style={{ background: 'linear-gradient(to br, #00677F, #005666)' }}>
+                          <div className="text-white text-xs opacity-90">Custo Total</div>
+                          <div className="text-white text-2xl font-bold mt-1">€{totalProjectCost.toFixed(2)}</div>
+                          <div className="text-white text-xs opacity-75 mt-1">
+                            {totalLaborCost > 0 ? Math.round((totalMaterialCost / totalProjectCost) * 100) : 0}% materiais
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Distribuição de Custos */}
+                      <div className="p-4 rounded-xl border dark:border-slate-700">
+                        <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-3">📊 Distribuição de Custos</h4>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-slate-600 dark:text-slate-400">Mão de Obra</span>
+                            <span className="font-semibold">
+                              {totalProjectCost > 0 ? Math.round((totalLaborCost / totalProjectCost) * 100) : 0}%
+                            </span>
+                          </div>
+                          <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${totalProjectCost > 0 ? (totalLaborCost / totalProjectCost) * 100 : 0}%`,
+                                background: 'linear-gradient(to right, #00A9B8, #008A96)'
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Colaboradores */}
+                      <div>
+                        <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-3">
+                          👥 Colaboradores ({sortedWorkers.length})
+                        </h4>
+                        <div className="space-y-2">
+                          {sortedWorkers.map(([worker, stats], idx) => (
+                            <div key={worker} className="p-4 rounded-xl border dark:border-slate-800 hover:shadow-md transition-shadow">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-400 flex items-center justify-center text-white font-bold text-sm">
+                                    #{idx + 1}
+                                  </div>
+                                  <div>
+                                    <div className="font-semibold text-slate-800 dark:text-slate-100">{worker}</div>
+                                    <div className="text-xs text-slate-500">
+                                      Taxa: €{stats.rate}/h · {stats.entries} registos
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-lg font-bold" style={{ color: '#00A9B8' }}>
+                                    €{stats.cost.toFixed(2)}
+                                  </div>
+                                  <div className="text-xs text-slate-500">{Math.round(stats.hours)}h</div>
+                                </div>
+                              </div>
+                              <div className="mt-2">
+                                <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full bg-gradient-to-r from-blue-400 to-cyan-400"
+                                    style={{ width: `${totalHours > 0 ? (stats.hours / totalHours) * 100 : 0}%` }}
+                                  />
+                                </div>
+                                <div className="text-xs text-slate-500 mt-1">
+                                  {totalHours > 0 ? ((stats.hours / totalHours) * 100).toFixed(1) : 0}% do total de horas
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Pedidos de Material */}
+                      {projectOrders.length > 0 && (
+                        <div>
+                          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-3">
+                            📦 Pedidos de Material ({projectOrders.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {projectOrders.map((order, idx) => {
+                              const orderCost = (order.items || []).reduce((sum, item) =>
+                                sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0
+                              );
+                              return (
+                                <div key={idx} className="p-4 rounded-xl border dark:border-slate-800 hover:shadow-md transition-shadow">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div>
+                                      <div className="font-medium text-slate-800 dark:text-slate-100">
+                                        {order.items?.length || 0} itens
+                                      </div>
+                                      <div className="text-xs text-slate-500">
+                                        Por {order.requestedBy || 'N/A'} · {order.status}
+                                      </div>
+                                    </div>
+                                    <div className="text-lg font-bold" style={{ color: '#BE8A3A' }}>
+                                      €{orderCost.toFixed(2)}
+                                    </div>
+                                  </div>
+                                  {order.items && order.items.length > 0 && (
+                                    <div className="mt-2 space-y-1">
+                                      {order.items.slice(0, 3).map((item, itemIdx) => (
+                                        <div key={itemIdx} className="text-xs text-slate-600 dark:text-slate-400 flex items-center justify-between">
+                                          <span>{item.name}</span>
+                                          <span>{item.quantity} × €{item.unitPrice || 0}</span>
+                                        </div>
+                                      ))}
+                                      {order.items.length > 3 && (
+                                        <div className="text-xs text-slate-500 italic">
+                                          ... e mais {order.items.length - 3} itens
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* ANÁLISE DETALHADA DO COLABORADOR */}
+                {infoModal.type === 'workerDetail' && (() => {
+                  const { workerName, timeEntries, people } = infoModal.data;
+
+                  // Filtrar registos deste colaborador
+                  const workerEntries = timeEntries.filter(t => t.worker === workerName && (t.type === 'Trabalho' || t.type === 'Extra'));
+
+                  // Taxa do colaborador
+                  const workerRate = Number(people?.[workerName]?.rate || 0);
+                  const isMaintenance = people?.[workerName]?.isMaintenance || false;
+
+                  // Calcular horas e custos por obra
+                  const projectStats = new Map();
+                  workerEntries.forEach(entry => {
+                    const hours = entry.hours || 0;
+                    const cost = hours * workerRate;
+
+                    if (!projectStats.has(entry.project)) {
+                      projectStats.set(entry.project, { hours: 0, cost: 0, entries: 0 });
+                    }
+                    const stats = projectStats.get(entry.project);
+                    stats.hours += hours;
+                    stats.cost += cost;
+                    stats.entries += 1;
+                  });
+
+                  // Ordenar por horas (desc)
+                  const sortedProjects = Array.from(projectStats.entries())
+                    .sort((a, b) => b[1].hours - a[1].hours);
+
+                  // Totais
+                  const totalHours = Array.from(projectStats.values()).reduce((sum, s) => sum + s.hours, 0);
+                  const totalCostGenerated = Array.from(projectStats.values()).reduce((sum, s) => sum + s.cost, 0);
+
+                  // Métricas
+                  const avgHoursPerProject = sortedProjects.length > 0 ? totalHours / sortedProjects.length : 0;
+                  const mostWorkedProject = sortedProjects.length > 0 ? sortedProjects[0] : null;
+
+                  return (
+                    <div className="space-y-6">
+                      {/* Colaborador Info */}
+                      <div className="p-4 rounded-xl bg-gradient-to-br from-purple-50 to-pink-50 dark:from-slate-800 dark:to-slate-700">
+                        <div className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">
+                          {workerName}
+                        </div>
+                        <div className="text-sm text-slate-600 dark:text-slate-300">
+                          Taxa: €{workerRate}/h · {sortedProjects.length} obras · {workerEntries.length} registos
+                          {isMaintenance && ' · 🔧 Manutenção'}
+                        </div>
+                      </div>
+
+                      {/* KPIs */}
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="p-4 rounded-xl" style={{ background: 'linear-gradient(to br, #00A9B8, #008A96)' }}>
+                          <div className="text-white text-xs opacity-90">Horas Totais</div>
+                          <div className="text-white text-2xl font-bold mt-1">{Math.round(totalHours)}h</div>
+                          <div className="text-white text-xs opacity-75 mt-1">{workerEntries.length} registos</div>
+                        </div>
+                        <div className="p-4 rounded-xl" style={{ background: 'linear-gradient(to br, #BE8A3A, #A07430)' }}>
+                          <div className="text-white text-xs opacity-90">Custo Gerado</div>
+                          <div className="text-white text-2xl font-bold mt-1">€{totalCostGenerated.toFixed(2)}</div>
+                          <div className="text-white text-xs opacity-75 mt-1">€{workerRate}/h</div>
+                        </div>
+                        <div className="p-4 rounded-xl" style={{ background: 'linear-gradient(to br, #00677F, #005666)' }}>
+                          <div className="text-white text-xs opacity-90">Média por Obra</div>
+                          <div className="text-white text-2xl font-bold mt-1">{Math.round(avgHoursPerProject)}h</div>
+                          <div className="text-white text-xs opacity-75 mt-1">{sortedProjects.length} obras</div>
+                        </div>
+                      </div>
+
+                      {/* Obra mais trabalhada */}
+                      {mostWorkedProject && (
+                        <div className="p-4 rounded-xl border-2 border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-slate-800">
+                          <div className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-2">
+                            🏆 Obra Mais Trabalhada
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-bold text-slate-800 dark:text-slate-100">{mostWorkedProject[0]}</div>
+                              <div className="text-sm text-slate-600 dark:text-slate-400">
+                                {mostWorkedProject[1].entries} registos
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-2xl font-bold" style={{ color: '#00A9B8' }}>
+                                {Math.round(mostWorkedProject[1].hours)}h
+                              </div>
+                              <div className="text-sm text-slate-600 dark:text-slate-400">
+                                €{mostWorkedProject[1].cost.toFixed(2)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Distribuição por Obras */}
+                      <div>
+                        <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-3">
+                          🏗️ Distribuição por Obras ({sortedProjects.length})
+                        </h4>
+                        <div className="space-y-2">
+                          {sortedProjects.map(([project, stats], idx) => (
+                            <div key={project} className="p-4 rounded-xl border dark:border-slate-800 hover:shadow-md transition-shadow">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-sm">
+                                    #{idx + 1}
+                                  </div>
+                                  <div>
+                                    <div className="font-semibold text-slate-800 dark:text-slate-100">{project}</div>
+                                    <div className="text-xs text-slate-500">{stats.entries} registos</div>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-lg font-bold" style={{ color: '#00A9B8' }}>
+                                    {Math.round(stats.hours)}h
+                                  </div>
+                                  <div className="text-xs" style={{ color: '#BE8A3A' }}>
+                                    €{stats.cost.toFixed(2)}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="mt-2">
+                                <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full bg-gradient-to-r from-purple-400 to-pink-400"
+                                    style={{ width: `${totalHours > 0 ? (stats.hours / totalHours) * 100 : 0}%` }}
+                                  />
+                                </div>
+                                <div className="text-xs text-slate-500 mt-1">
+                                  {totalHours > 0 ? ((stats.hours / totalHours) * 100).toFixed(1) : 0}% do tempo total
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Eficiência */}
+                      <div className="p-4 rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 dark:from-slate-800 dark:to-slate-700">
+                        <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-3">📈 Métricas de Eficiência</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <div className="text-xs text-slate-600 dark:text-slate-400">Horas/Registo</div>
+                            <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+                              {workerEntries.length > 0 ? (totalHours / workerEntries.length).toFixed(1) : 0}h
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-slate-600 dark:text-slate-400">Custo/Registo</div>
+                            <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+                              €{workerEntries.length > 0 ? (totalCostGenerated / workerEntries.length).toFixed(2) : 0}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-slate-600 dark:text-slate-400">Obras Ativas</div>
+                            <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+                              {sortedProjects.length}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-slate-600 dark:text-slate-400">Tipo</div>
+                            <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+                              {isMaintenance ? '🔧 Manutenção' : '🏗️ Obras'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </Card>
