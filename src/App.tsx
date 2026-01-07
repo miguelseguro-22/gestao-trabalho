@@ -6265,9 +6265,10 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
 // ============================================================
 // 👤 PERFIL DO COLABORADOR (TÉCNICO/ENCARREGADO/DIRETOR)
 // ============================================================
-const ProfileView = ({ timeEntries, auth, people }) => {
+const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], vehicles = [], catalog = [] }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [detailModal, setDetailModal] = useState(null);
+  const [showAdminDashboard, setShowAdminDashboard] = useState(auth?.role === 'admin');
 
   // 🔐 Estados para mudança de password
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -6568,28 +6569,347 @@ const ProfileView = ({ timeEntries, auth, people }) => {
   const total = stats.projects.reduce((sum, p) => sum + p.hours, 0);
   let currentAngle = 0;
 
+  // 📊 ADMIN DASHBOARD - Estatísticas do Sistema Completo
+  const adminStats = useMemo(() => {
+    if (auth?.role !== 'admin') return null;
+
+    const totalWorkers = Object.keys(people || {}).length;
+    const totalProjects = projects.length;
+    const totalVehicles = vehicles.length;
+    const totalOrders = orders.length;
+    const totalCatalogItems = catalog.length;
+    const totalTimeEntries = timeEntries.length;
+
+    // Estatísticas de hoje
+    const today = new Date().toISOString().slice(0, 10);
+    const todayEntries = timeEntries.filter(t => t.date === today);
+    const workersToday = new Set(todayEntries.map(t => t.worker)).size;
+
+    // Estatísticas desta semana
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    const dayOffset = now.getDay() === 0 ? -6 : 1 - now.getDay();
+    startOfWeek.setDate(now.getDate() + dayOffset);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const weekEntries = timeEntries.filter(t => {
+      const entryDate = new Date(t.date || t.periodStart);
+      return entryDate >= startOfWeek;
+    });
+    const hoursThisWeek = weekEntries.reduce((sum, t) => sum + (Number(t.hours) || 0) + (Number(t.overtime) || 0), 0);
+
+    // Estatísticas deste mês
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEntries = timeEntries.filter(t => {
+      const entryDate = new Date(t.date || t.periodStart);
+      return entryDate >= firstDayOfMonth;
+    });
+    const hoursThisMonth = monthEntries.reduce((sum, t) => sum + (Number(t.hours) || 0) + (Number(t.overtime) || 0), 0);
+
+    // Top 5 obras com mais horas
+    const projectHours = new Map();
+    timeEntries.forEach(t => {
+      if (t.project && isNormalWork(t.template)) {
+        const hours = (Number(t.hours) || 0) + (Number(t.overtime) || 0);
+        projectHours.set(t.project, (projectHours.get(t.project) || 0) + hours);
+      }
+    });
+    const topProjects = Array.from(projectHours.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, hours]) => ({ name, hours }));
+
+    // Top 5 colaboradores com mais horas
+    const workerHours = new Map();
+    timeEntries.forEach(t => {
+      if (t.worker && isNormalWork(t.template)) {
+        const hours = (Number(t.hours) || 0) + (Number(t.overtime) || 0);
+        workerHours.set(t.worker, (workerHours.get(t.worker) || 0) + hours);
+      }
+    });
+    const topWorkers = Array.from(workerHours.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, hours]) => ({ name, hours }));
+
+    // Pedidos de material pendentes
+    const pendingOrders = orders.filter(o => o.status === 'Pendente' || o.status === 'Aprovado').length;
+
+    // Estatísticas de veículos
+    const vehiclesInUse = vehicles.filter(v => v.currentDriver).length;
+
+    return {
+      totalWorkers,
+      totalProjects,
+      totalVehicles,
+      totalOrders,
+      totalCatalogItems,
+      totalTimeEntries,
+      workersToday,
+      hoursThisWeek,
+      hoursThisMonth,
+      topProjects,
+      topWorkers,
+      pendingOrders,
+      vehiclesInUse
+    };
+  }, [auth, people, projects, vehicles, orders, catalog, timeEntries]);
+
   return (
     <section className="space-y-4">
       <PageHeader
         icon="user"
         title={`Perfil de ${auth?.name || 'Colaborador'}`}
-        subtitle="Estatísticas pessoais e análise de desempenho"
+        subtitle={auth?.role === 'admin' ? 'Dashboard de Administração e Visão Geral do Sistema' : 'Estatísticas pessoais e análise de desempenho'}
         actions={
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="rounded-xl border p-2 text-sm dark:bg-slate-900 dark:border-slate-700"
-          >
-            {[2025, 2024, 2023].map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-3">
+            {auth?.role === 'admin' && (
+              <button
+                onClick={() => setShowAdminDashboard(!showAdminDashboard)}
+                className="px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+                style={{
+                  background: showAdminDashboard ? 'linear-gradient(to right, #00677F, #00A9B8)' : '#E5ECEF',
+                  color: showAdminDashboard ? 'white' : '#2C3134'
+                }}
+              >
+                {showAdminDashboard ? '👤 Ver Meu Perfil' : '📊 Dashboard Admin'}
+              </button>
+            )}
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="rounded-xl border p-2 text-sm dark:bg-slate-900 dark:border-slate-700"
+            >
+              {[2026, 2025, 2024, 2023].map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
         }
       />
 
-      {/* KPIs Principais */}
+      {/* 📊 ADMIN DASHBOARD */}
+      {auth?.role === 'admin' && showAdminDashboard && adminStats && (
+        <>
+          {/* KPIs Principais do Sistema */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #00677F, #005666)' }}>
+              <div className="text-sm opacity-90">Total de Colaboradores</div>
+              <div className="text-4xl font-bold mt-2">{adminStats.totalWorkers}</div>
+              <div className="text-sm opacity-80 mt-1">{adminStats.workersToday} ativos hoje</div>
+            </Card>
+
+            <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #00A9B8, #008A96)' }}>
+              <div className="text-sm opacity-90">Obras Ativas</div>
+              <div className="text-4xl font-bold mt-2">{adminStats.totalProjects}</div>
+              <div className="text-sm opacity-80 mt-1">{adminStats.topProjects.length} com registos</div>
+            </Card>
+
+            <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #BE8A3A, #A07430)' }}>
+              <div className="text-sm opacity-90">Horas Este Mês</div>
+              <div className="text-4xl font-bold mt-2">{Math.round(adminStats.hoursThisMonth)}h</div>
+              <div className="text-sm opacity-80 mt-1">{Math.round(adminStats.hoursThisWeek)}h esta semana</div>
+            </Card>
+
+            <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #2C3134, #1A1D1F)' }}>
+              <div className="text-sm opacity-90">Registos Totais</div>
+              <div className="text-4xl font-bold mt-2">{adminStats.totalTimeEntries}</div>
+              <div className="text-sm opacity-80 mt-1">no sistema</div>
+            </Card>
+          </div>
+
+          {/* Estatísticas Secundárias */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="p-4 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{adminStats.totalVehicles}</div>
+                  <div className="text-sm text-slate-600 dark:text-slate-400">Viaturas</div>
+                </div>
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(0, 103, 127, 0.1)' }}>
+                  <span className="text-2xl">🚗</span>
+                </div>
+              </div>
+              <div className="text-xs text-slate-500 mt-2">{adminStats.vehiclesInUse} em uso</div>
+            </Card>
+
+            <Card className="p-4 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{adminStats.totalOrders}</div>
+                  <div className="text-sm text-slate-600 dark:text-slate-400">Pedidos</div>
+                </div>
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(0, 169, 184, 0.1)' }}>
+                  <span className="text-2xl">📦</span>
+                </div>
+              </div>
+              <div className="text-xs text-slate-500 mt-2">{adminStats.pendingOrders} pendentes</div>
+            </Card>
+
+            <Card className="p-4 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{adminStats.totalCatalogItems}</div>
+                  <div className="text-sm text-slate-600 dark:text-slate-400">Itens Catálogo</div>
+                </div>
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(190, 138, 58, 0.1)' }}>
+                  <span className="text-2xl">📋</span>
+                </div>
+              </div>
+              <div className="text-xs text-slate-500 mt-2">disponíveis</div>
+            </Card>
+
+            <Card className="p-4 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{adminStats.workersToday}</div>
+                  <div className="text-sm text-slate-600 dark:text-slate-400">Ativos Hoje</div>
+                </div>
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(44, 49, 52, 0.1)' }}>
+                  <span className="text-2xl">👷</span>
+                </div>
+              </div>
+              <div className="text-xs text-slate-500 mt-2">colaboradores</div>
+            </Card>
+          </div>
+
+          {/* Top 5 Obras e Colaboradores */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Top 5 Obras */}
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">
+                🏗️ Top 5 Obras (Horas Trabalhadas)
+              </h3>
+              {adminStats.topProjects.length === 0 ? (
+                <div className="text-center text-slate-500 py-8">Sem dados de obras</div>
+              ) : (
+                <div className="space-y-3">
+                  {adminStats.topProjects.map((project, index) => (
+                    <div key={index} className="flex items-center gap-3">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white" style={{ background: `linear-gradient(to bottom right, #00677F, #00A9B8)` }}>
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{project.name}</div>
+                        <div className="text-xs text-slate-500">{Math.round(project.hours)} horas</div>
+                      </div>
+                      <div className="flex-shrink-0">
+                        <div className="w-20 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${(project.hours / adminStats.topProjects[0].hours) * 100}%`,
+                              background: 'linear-gradient(to right, #00A9B8, #00677F)'
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            {/* Top 5 Colaboradores */}
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">
+                👷 Top 5 Colaboradores (Horas Trabalhadas)
+              </h3>
+              {adminStats.topWorkers.length === 0 ? (
+                <div className="text-center text-slate-500 py-8">Sem dados de colaboradores</div>
+              ) : (
+                <div className="space-y-3">
+                  {adminStats.topWorkers.map((worker, index) => (
+                    <div key={index} className="flex items-center gap-3">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white" style={{ background: `linear-gradient(to bottom right, #BE8A3A, #A07430)` }}>
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{worker.name}</div>
+                        <div className="text-xs text-slate-500">{Math.round(worker.hours)} horas</div>
+                      </div>
+                      <div className="flex-shrink-0">
+                        <div className="w-20 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${(worker.hours / adminStats.topWorkers[0].hours) * 100}%`,
+                              background: 'linear-gradient(to right, #BE8A3A, #A07430)'
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </div>
+
+          {/* Atalhos Rápidos para Funcionalidades */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">
+              ⚡ Atalhos Rápidos
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=timesheets'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+                <div className="text-3xl mb-2">📅</div>
+                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Registos</div>
+                <div className="text-xs text-slate-500">Timesheets</div>
+              </a>
+
+              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=obras'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+                <div className="text-3xl mb-2">🏗️</div>
+                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Obras</div>
+                <div className="text-xs text-slate-500">Projetos</div>
+              </a>
+
+              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=people'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+                <div className="text-3xl mb-2">👥</div>
+                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Colaboradores</div>
+                <div className="text-xs text-slate-500">Gestão</div>
+              </a>
+
+              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=materials'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+                <div className="text-3xl mb-2">📦</div>
+                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Materiais</div>
+                <div className="text-xs text-slate-500">Pedidos</div>
+              </a>
+
+              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=vehicles'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+                <div className="text-3xl mb-2">🚗</div>
+                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Viaturas</div>
+                <div className="text-xs text-slate-500">Frota</div>
+              </a>
+
+              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=cost-reports'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+                <div className="text-3xl mb-2">💰</div>
+                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Custos</div>
+                <div className="text-xs text-slate-500">Relatórios</div>
+              </a>
+
+              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=monthly-report'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+                <div className="text-3xl mb-2">📊</div>
+                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Relatório Mensal</div>
+                <div className="text-xs text-slate-500">Análises</div>
+              </a>
+
+              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=agenda'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+                <div className="text-3xl mb-2">📆</div>
+                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Agenda</div>
+                <div className="text-xs text-slate-500">Planeamento</div>
+              </a>
+            </div>
+          </Card>
+        </>
+      )}
+
+      {/* Perfil Normal (ou Admin quando showAdminDashboard = false) */}
+      {(!auth?.role || auth?.role !== 'admin' || !showAdminDashboard) && (
+        <>
+          {/* KPIs Principais */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-5 text-white" style={{ background: 'linear-gradient(to bottom right, #00677F, #005666)' }}>
           <div className="text-sm opacity-90">Visão Geral do Mês</div>
@@ -7172,6 +7492,8 @@ const ProfileView = ({ timeEntries, auth, people }) => {
             </div>
           </Card>
         </div>
+      )}
+        </>
       )}
     </section>
   );
@@ -13379,7 +13701,15 @@ function TableMaterials() {
           {/* ROUTER INTERNO */}
           {view === "dashboard" && <DashboardView />}
           {view === "profile" && (
-            <ProfileView timeEntries={filteredTimeEntries} auth={auth} people={people} />
+            <ProfileView
+              timeEntries={filteredTimeEntries}
+              auth={auth}
+              people={people}
+              orders={orders}
+              projects={projects}
+              vehicles={vehicles}
+              catalog={catalog}
+            />
           )}
 
           {view === "monthly-report" && auth?.role === "admin" && (
