@@ -9003,6 +9003,7 @@ const ROLE_LABELS = {
 
 const CAN = {
   dashboard: new Set(["admin"]),
+  profile: new Set(["tecnico", "encarregado", "diretor", "logistica", "admin"]), // 🔧 Todos podem ver seu perfil
   timesheets: new Set(["tecnico", "encarregado", "admin"]),
   materials: new Set(["encarregado", "diretor", "admin"]),
   obras: new Set(["diretor", "admin"]),
@@ -9016,6 +9017,7 @@ const CAN = {
   teamDashboard: new Set(["diretor", "admin"]),
   cloudDiagnostic: new Set(["admin"]), // 🔧 Diagnóstico Cloud - apenas admin
   "cost-reports": new Set(["diretor", "admin"]), // 🔧 Relatórios de custos por obra
+  "monthly-report": new Set(["admin"]), // 🔧 Relatório mensal - apenas admin
 };
 
 
