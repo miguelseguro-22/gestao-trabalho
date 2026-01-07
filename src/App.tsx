@@ -2059,6 +2059,10 @@ const handleCatalog = (file) => {
       });
     }
 
+    // 🔧 AUTO-CLASSIFICAÇÃO: Verificar se o colaborador é técnico de manutenção
+    const workerData = people?.[worker];
+    const autoWorkType = workerData?.isMaintenance ? 'maintenance' : 'project';
+
     return {
       id: uid(),
       template,
@@ -2072,6 +2076,7 @@ const handleCatalog = (file) => {
       periodEnd,
       sickDays,
       displacement, // 🆕 Campo de deslocação
+      workType: autoWorkType, // 🆕 Campo de tipo de trabalho (auto-classificado)
       notes: val('notes')
     };
   }
@@ -3121,7 +3126,7 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
     };
   };
 
-  const empty = { name:'', normalRate: 12.5, employeeNumber: '', email:'', phone:'' };
+  const empty = { name:'', normalRate: 12.5, employeeNumber: '', email:'', phone:'', isMaintenance: false };
   const [form, setForm] = useState(empty);
   const [editing, setEditing] = useState(null);
 
@@ -3190,7 +3195,8 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
         rates,
         employeeNumber: form.employeeNumber || '',
         email: form.email || '',
-        phone: form.phone || ''
+        phone: form.phone || '',
+        isMaintenance: form.isMaintenance || false
       };
       return next;
     });
@@ -3206,7 +3212,8 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
       normalRate: person.rates?.normal || 12.5,
       employeeNumber: person.employeeNumber || '',
       email: person.email || '',
-      phone: person.phone || ''
+      phone: person.phone || '',
+      isMaintenance: person.isMaintenance || false
     });
   };
 
@@ -3270,6 +3277,24 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
               value={form.phone||''}
               onChange={e => setForm({...form, phone: e.target.value})}
             />
+          </label>
+        </div>
+
+        {/* Checkbox para marcar como Técnico de Manutenção */}
+        <div className="mt-3">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.isMaintenance}
+              onChange={e => setForm({...form, isMaintenance: e.target.checked})}
+              className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span>
+              🔧 Técnico de Manutenção
+              <span className="ml-2 text-xs text-slate-500">
+                (os registos deste colaborador são automaticamente marcados como manutenção)
+              </span>
+            </span>
           </label>
         </div>
 
@@ -3339,6 +3364,7 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
               <tr>
                 <th className="px-3 py-2 text-left">Nº</th>
                 <th className="px-3 py-2 text-left">Colaborador</th>
+                <th className="px-3 py-2 text-center">Tipo</th>
                 <th className="px-3 py-2 text-right">Normal</th>
                 <th className="px-3 py-2 text-right">Extra</th>
                 <th className="px-3 py-2 text-right">Sábado</th>
@@ -3353,7 +3379,7 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
             <tbody>
               {list.length === 0 && (
                 <tr>
-                  <td colSpan="11" className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan="12" className="px-3 py-8 text-center text-slate-500">
                     Sem colaboradores
                   </td>
                 </tr>
@@ -3376,6 +3402,17 @@ const PeopleView = ({ people, setPeople, timeEntries }) => {
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {person.isMaintenance ? (
+                        <span className="text-xs px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded">
+                          🔧 Manutenção
+                        </span>
+                      ) : (
+                        <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded">
+                          🏗️ Obras
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right font-semibold">{currency(r.normal)}</td>
                     <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-400">{currency(r.extra)}</td>
@@ -8776,6 +8813,7 @@ function App() {
   // localStorage é apenas cache offline, Supabase é a fonte da verdade
   const [cloudStamp, setCloudStamp] = useState<string | null>(null)
   const [cloudReady, setCloudReady] = useState(false)
+  const [hasLoadedFromCloud, setHasLoadedFromCloud] = useState(false) // 🛡️ PROTEÇÃO 3: Previne sync antes de load inicial
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [isSyncing, setIsSyncing] = useState(false)
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null)
@@ -9008,8 +9046,10 @@ function App() {
           console.log('✅ Aplicando dados da cloud')
           applySnapshot({ ...cloud.payload, updatedAt: cloud.updatedAt })
           setLastSyncTime(new Date().toISOString())
+          setHasLoadedFromCloud(true) // 🛡️ PROTEÇÃO 3: Marca que já carregou
         } else {
           console.log('⚠️ Sem dados na cloud - usando defaults')
+          setHasLoadedFromCloud(true) // 🛡️ Marca como carregado mesmo sem dados
         }
 
         setCloudReady(true)
@@ -9017,6 +9057,7 @@ function App() {
       } catch (error) {
         console.error('❌ Erro ao carregar dados da cloud:', error)
         // ✅ Mesmo com erro, marca como pronto para permitir uso offline
+        setHasLoadedFromCloud(true) // 🛡️ Marca como carregado mesmo com erro
         setCloudReady(true)
         setIsSyncing(false)
       }
@@ -9154,6 +9195,12 @@ useEffect(() => {
     // Só sincroniza com cloud se estiver pronto E ativo
     if (!cloudReady || !supabaseActive) return
 
+    // 🛡️ PROTEÇÃO 3: NÃO sincronizar antes de carregar dados da cloud
+    if (!hasLoadedFromCloud) {
+      console.log('⚠️ SYNC BLOQUEADO: Aguardando load inicial da cloud')
+      return
+    }
+
     const updatedAt = new Date().toISOString()
     const snapshot = {
       // ✅ INCLUIR timeEntries no sync automático (FIX)
@@ -9173,11 +9220,29 @@ useEffect(() => {
       updatedAt,
     }
 
+    // 🛡️ PROTEÇÃO 1: NÃO sincronizar se snapshot parece suspeito (tudo vazio)
+    const hasAnyData =
+      timeEntries.length > 0 ||
+      orders.length > 0 ||
+      projects.length > 0 ||
+      Object.keys(people || {}).length > 0 ||
+      catalog.length > 0;
+
     // Debounce cloud sync para evitar muitas chamadas
     if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current)
     cloudSaveTimer.current = setTimeout(async () => {
       try {
-        console.log('☁️ Sincronizando para cloud...')
+        // 🛡️ PROTEÇÃO 2: Verificar novamente antes de sincronizar
+        if (!hasAnyData) {
+          console.log('⚠️ SYNC BLOQUEADO: Snapshot está vazio, não vai sobrescrever cloud')
+          return
+        }
+
+        console.log('☁️ Sincronizando para cloud...', {
+          timeEntries: timeEntries.length,
+          orders: orders.length,
+          projects: projects.length
+        })
         setIsSyncing(true)
         const result = await saveCloudState(snapshot, cloudKey)
 
@@ -9229,6 +9294,7 @@ useEffect(() => {
     suppliers,
     notifications,
     cloudReady,
+    hasLoadedFromCloud, // 🛡️ PROTEÇÃO 3
     supabaseActive,
     cloudKey,
   ]);
@@ -9558,10 +9624,17 @@ const visibleTimeEntries = useMemo(() => {
 // ---------------------------------------------------------------
 const addTimeEntry = (entry: any) => {
   // ⬇️ GARANTIR QUE WORKER É SEMPRE PREENCHIDO
+  const workerName = entry.worker || auth?.name || 'Desconhecido';
+
+  // 🔧 AUTO-CLASSIFICAÇÃO: Se o colaborador for técnico de manutenção, marcar automaticamente
+  const worker = people?.[workerName];
+  const autoWorkType = worker?.isMaintenance ? 'maintenance' : 'project';
+
   const completeEntry = {
     ...entry,
     id: entry.id || uid(),
-    worker: entry.worker || auth?.name || 'Desconhecido',
+    worker: workerName,
+    workType: entry.workType || autoWorkType, // Usar workType fornecido ou auto-classificar
   };
 
   console.log('✅ Timesheet criado:', {
@@ -9569,6 +9642,7 @@ const addTimeEntry = (entry: any) => {
     worker: completeEntry.worker,
     date: completeEntry.date,
     template: completeEntry.template,
+    workType: completeEntry.workType,
   });
 
   setTimeEntries((prev) => [completeEntry, ...prev]);
@@ -9576,6 +9650,13 @@ const addTimeEntry = (entry: any) => {
 };
 
 const updateTimeEntry = (entry: any) => {
+  // 🔧 Se não tem workType definido, aplicar auto-classificação
+  if (!entry.workType) {
+    const workerName = entry.worker || 'Desconhecido';
+    const worker = people?.[workerName];
+    entry.workType = worker?.isMaintenance ? 'maintenance' : 'project';
+  }
+
   setTimeEntries((prev) => prev.map((t) => (t.id === entry.id ? entry : t)));
   addToast("Timesheet atualizado");
 };
@@ -9984,6 +10065,24 @@ const Sparkline = ({ values, width = 60, height = 20, color = '#00A9B8' }) => {
 
 // 📊 VIEW: RELATÓRIOS DE CUSTOS POR OBRA (ADVANCED)
 const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicles }) => {
+  // 🆕 Função para calcular dias úteis (excluindo fins de semana)
+  const calculateBusinessDays = (startDate, endDate) => {
+    let count = 0;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    while (start <= end) {
+      const dayOfWeek = start.getDay();
+      // Se não for sábado (6) nem domingo (0)
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        count++;
+      }
+      start.setDate(start.getDate() + 1);
+    }
+
+    return count;
+  };
+
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [selectedProject, setSelectedProject] = useState('all');
   const [startDate, setStartDate] = useState(() => {
@@ -10003,6 +10102,13 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
   const [showConsolidateModal, setShowConsolidateModal] = useState(false);
   const [selectedProjects, setSelectedProjects] = useState([]);
   const [consolidatedName, setConsolidatedName] = useState('');
+
+  // 🆕 Estado para classificação de obras (Manutenção vs Obras)
+  const [showClassifyModal, setShowClassifyModal] = useState(false);
+  const [projectClassifications, setProjectClassifications] = useState({});
+
+  // 🆕 Estado para filtro de tipo de trabalho (Manutenção vs Obras)
+  const [workTypeFilter, setWorkTypeFilter] = useState('all');
 
   const projectNames = useMemo(() => {
     const allProjects = new Set();
@@ -10091,6 +10197,8 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
         if (!isNormalWork(t.template)) return false;
         if (t.date < startDate || t.date > endDate) return false;
         if (selectedProject !== 'all' && t.project !== selectedProject) return false;
+        // 🆕 Filtro por tipo de trabalho (Manutenção vs Obras)
+        if (workTypeFilter !== 'all' && t.workType !== workTypeFilter) return false;
         return true;
       });
 
@@ -10230,6 +10338,19 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
         }); // Fechar projects.forEach
       }); // Fechar filtered.forEach
 
+      // 🆕 Calcular Taxa de Esforço para cada colaborador por projeto
+      const businessDays = calculateBusinessDays(startDate, endDate);
+      const availableHours = businessDays * 8; // Dias úteis × 8 horas
+
+      byProject.forEach((projectData) => {
+        projectData.workers.forEach((workerData) => {
+          // Taxa de Esforço = (horas trabalhadas / horas disponíveis) × 100%
+          workerData.effortRate = availableHours > 0
+            ? (workerData.totalHoras / availableHours) * 100
+            : 0;
+        });
+      });
+
       // Calcular KPIs por projeto
       byProject.forEach((projectData, projectName) => {
         // Cost Variance (CV) = Budget - Actual Cost
@@ -10264,7 +10385,7 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
       console.error('❌ Erro ao calcular custos:', error);
       return new Map();
     }
-  }, [timeEntries, people, startDate, endDate, selectedProject, projectBudgets]);
+  }, [timeEntries, people, startDate, endDate, selectedProject, projectBudgets, workTypeFilter]);
 
   // Métricas gerais e insights
   const analytics = useMemo(() => {
@@ -10372,6 +10493,53 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
         ? prev.filter(p => p !== projectName)
         : [...prev, projectName]
     );
+  };
+
+  // 🆕 Função para salvar classificações de obras (Manutenção vs Obras)
+  const handleSaveClassifications = () => {
+    let changesCount = 0;
+
+    const updatedEntries = timeEntries.map(entry => {
+      // Apenas atualizar registos que têm a obra no período selecionado
+      if (!entry.project || entry.date < startDate || entry.date > endDate) {
+        return entry;
+      }
+
+      const classification = projectClassifications[entry.project];
+      if (classification && classification !== entry.workType) {
+        changesCount++;
+        return { ...entry, workType: classification };
+      }
+      return entry;
+    });
+
+    setTimeEntries(updatedEntries);
+    setShowClassifyModal(false);
+    setProjectClassifications({});
+
+    alert(`✅ ${changesCount} registos atualizados com sucesso!`);
+  };
+
+  // 🆕 Inicializar classificações ao abrir modal
+  const initializeClassifications = () => {
+    const classifications = {};
+
+    projectNames.forEach(projectName => {
+      // Buscar classificação mais comum para esta obra
+      const projectEntries = timeEntries.filter(e =>
+        e.project === projectName &&
+        e.date >= startDate &&
+        e.date <= endDate
+      );
+
+      const maintenanceCount = projectEntries.filter(e => e.workType === 'maintenance').length;
+      const projectCount = projectEntries.filter(e => e.workType === 'project').length;
+
+      // Usar a classificação mais comum como sugestão
+      classifications[projectName] = maintenanceCount > projectCount ? 'maintenance' : 'project';
+    });
+
+    setProjectClassifications(classifications);
   };
 
   const exportProjectPDF = (projectName, projectData) => {
@@ -11452,17 +11620,42 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
           </div>
         </div>
 
-        {/* 🆕 Botão Consolidar Obras */}
-        {projectNames.length > 1 && (
-          <div className="mt-4 flex justify-end">
+        {/* 🆕 Filtro de Tipo de Trabalho */}
+        <div className="mt-4">
+          <label className="block text-sm font-medium mb-2">Tipo de Trabalho</label>
+          <select
+            value={workTypeFilter}
+            onChange={(e) => setWorkTypeFilter(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+          >
+            <option value="all">Todos (Obras + Manutenção)</option>
+            <option value="project">🏗️ Apenas Obras</option>
+            <option value="maintenance">🔧 Apenas Manutenção</option>
+          </select>
+        </div>
+
+        {/* 🆕 Botões de Ação */}
+        {projectNames.length > 0 && (
+          <div className="mt-4 flex justify-end gap-2">
             <Button
               variant="secondary"
-              onClick={() => setShowConsolidateModal(true)}
+              onClick={() => {
+                initializeClassifications();
+                setShowClassifyModal(true);
+              }}
               className="flex items-center gap-2"
             >
-              <Icon name="git-merge" />
-              Consolidar Obras ({projectNames.length} obras encontradas)
+              🔧 Classificar Obras ({projectNames.length})
             </Button>
+            {projectNames.length > 1 && (
+              <Button
+                variant="secondary"
+                onClick={() => setShowConsolidateModal(true)}
+                className="flex items-center gap-2"
+              >
+                Consolidar Obras
+              </Button>
+            )}
           </div>
         )}
       </Card>
@@ -11698,6 +11891,7 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
                     <th className="px-3 py-2 text-right">Custo</th>
                     <th className="px-3 py-2 text-right">H. Feriado</th>
                     <th className="px-3 py-2 text-right">Custo</th>
+                    <th className="px-3 py-2 text-right">Tx Esforço</th>
                     <th className="px-3 py-2 text-right font-bold">Total</th>
                   </tr>
                 </thead>
@@ -11715,6 +11909,15 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
                         <td className="px-3 py-2 text-right">{currency(worker.custoFDS)}</td>
                         <td className="px-3 py-2 text-right">{worker.horasFeriado.toFixed(1)}h</td>
                         <td className="px-3 py-2 text-right">{currency(worker.custoFeriado)}</td>
+                        <td className="px-3 py-2 text-right">
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                            worker.effortRate >= 75 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
+                            worker.effortRate >= 50 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
+                            'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                          }`}>
+                            {worker.effortRate.toFixed(1)}%
+                          </span>
+                        </td>
                         <td className="px-3 py-2 text-right font-bold" style={{ color: '#00A9B8' }}>
                           {currency(worker.custoTotal)}
                         </td>
@@ -11760,6 +11963,125 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
             Ajusta os filtros para ver os relatórios de custos
           </div>
         </Card>
+      )}
+
+      {/* 🆕 Modal de Classificação de Obras (Manutenção vs Obras) */}
+      {showClassifyModal && (
+        <Modal
+          open={showClassifyModal}
+          onClose={() => {
+            setShowClassifyModal(false);
+            setProjectClassifications({});
+          }}
+          title="Classificar Obras - Manutenção vs Obras Normais"
+          wide
+        >
+          <div className="space-y-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">ℹ️</span>
+                <div className="text-sm text-blue-900 dark:text-blue-100">
+                  <p className="font-medium mb-1">Como funciona:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-blue-800 dark:text-blue-200">
+                    <li>Reveja a classificação sugerida automaticamente para cada obra</li>
+                    <li>Altere a classificação conforme necessário (🏗️ Obras ou 🔧 Manutenção)</li>
+                    <li>Clique em "Guardar Classificações" para aplicar as alterações</li>
+                  </ol>
+                  <p className="mt-2 text-xs">
+                    💡 <strong>Dica:</strong> Os registos dos técnicos de manutenção são automaticamente classificados como Manutenção
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Lista de obras para classificar */}
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Obras encontradas no período ({projectNames.length})
+              </label>
+
+              <div className="border dark:border-slate-700 rounded-lg max-h-96 overflow-y-auto">
+                {projectNames.map((projectName, index) => {
+                  const classification = projectClassifications[projectName] || 'project';
+
+                  // Contar registos por classificação
+                  const projectEntries = timeEntries.filter(e =>
+                    e.project === projectName &&
+                    e.date >= startDate &&
+                    e.date <= endDate
+                  );
+                  const totalEntries = projectEntries.length;
+                  const maintenanceEntries = projectEntries.filter(e => e.workType === 'maintenance').length;
+
+                  return (
+                    <div
+                      key={index}
+                      className="p-4 border-b dark:border-slate-700 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="font-medium mb-1">{projectName}</div>
+                          <div className="text-xs text-slate-500">
+                            {totalEntries} registo{totalEntries !== 1 ? 's' : ''} no período
+                            {maintenanceEntries > 0 && ` (${maintenanceEntries} já marcado${maintenanceEntries !== 1 ? 's' : ''} como manutenção)`}
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setProjectClassifications({
+                              ...projectClassifications,
+                              [projectName]: 'project'
+                            })}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                              classification === 'project'
+                                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-2 border-blue-500'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600'
+                            }`}
+                          >
+                            🏗️ Obras
+                          </button>
+                          <button
+                            onClick={() => setProjectClassifications({
+                              ...projectClassifications,
+                              [projectName]: 'maintenance'
+                            })}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                              classification === 'maintenance'
+                                ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-2 border-orange-500'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600'
+                            }`}
+                          >
+                            🔧 Manutenção
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Ações */}
+            <div className="flex gap-2 justify-end pt-4 border-t dark:border-slate-700">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowClassifyModal(false);
+                  setProjectClassifications({});
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleSaveClassifications}
+              >
+                Guardar Classificações
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* 🆕 Modal de Consolidação de Obras */}
