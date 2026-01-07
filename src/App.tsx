@@ -7926,13 +7926,13 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                 {infoModal.type === 'projectDetail' && (() => {
                   const { projectName, timeEntries, people, orders } = infoModal.data;
 
-                  // Filtrar registos desta obra
-                  const projectEntries = timeEntries.filter(t => t.project === projectName && (t.type === 'Trabalho' || t.type === 'Extra'));
+                  // Filtrar registos desta obra (mesmo critério do Top 5)
+                  const projectEntries = timeEntries.filter(t => t.project === projectName && isNormalWork(t.template));
 
                   // Calcular horas e custos por colaborador
                   const workerStats = new Map();
                   projectEntries.forEach(entry => {
-                    const hours = entry.hours || 0;
+                    const hours = (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
                     const rate = Number(people?.[entry.worker]?.rate || 0);
                     const cost = hours * rate;
 
@@ -8117,8 +8117,8 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                 {infoModal.type === 'workerDetail' && (() => {
                   const { workerName, timeEntries, people } = infoModal.data;
 
-                  // Filtrar registos deste colaborador
-                  const workerEntries = timeEntries.filter(t => t.worker === workerName && (t.type === 'Trabalho' || t.type === 'Extra'));
+                  // Filtrar registos deste colaborador (mesmo critério do Top 5)
+                  const workerEntries = timeEntries.filter(t => t.worker === workerName && isNormalWork(t.template));
 
                   // Taxa do colaborador
                   const workerRate = Number(people?.[workerName]?.rate || 0);
@@ -8127,7 +8127,7 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                   // Calcular horas e custos por obra
                   const projectStats = new Map();
                   workerEntries.forEach(entry => {
-                    const hours = entry.hours || 0;
+                    const hours = (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
                     const cost = hours * workerRate;
 
                     if (!projectStats.has(entry.project)) {
