@@ -4509,102 +4509,336 @@ const VehiclesView = ({ vehicles, setVehicles, peopleNames }) => {
 
 
 const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
-  const empty = { id:null, date:todayISO(), time:'08:00', worker:'', project:'', jobType:'Instalação', notes:'' };
+  const empty = { id:null, date:todayISO(), time:'08:00', worker:'', project:'', jobType:'Instalação', notes:'', completed: false };
   const [form,setForm]=useState(empty);
   const [editing,setEditing]=useState(false);
+  const [viewMode, setViewMode] = useState('calendar'); // 'calendar' ou 'list'
+  const [selectedDate, setSelectedDate] = useState(null);
 
   const save=()=>{
     if(!form.date || !form.worker) return;
     if(editing){
       setAgenda(list=>list.map(a=>a.id===form.id?{...form}:a));
     }else{
-      setAgenda(list=>[{...form,id:uid()}, ...list]);
+      setAgenda(list=>[{...form,id:uid(), completed: false}, ...list]);
     }
-    setForm(empty); setEditing(false);
+    setForm(empty); setEditing(false); setSelectedDate(null);
   };
   const edit=(a)=>{ setForm({ ...empty, ...a }); setEditing(true); };
   const remove=(id)=> setAgenda(list=>list.filter(a=>a.id!==id));
+  const toggleComplete=(id)=> {
+    setAgenda(list=>list.map(a=>a.id===id?{...a, completed: !a.completed}:a));
+  };
 
   const grouped = agenda.slice().sort((a,b)=>(`${a.date} ${a.time||''}`).localeCompare(`${b.date} ${b.time||''}`));
 
+  // 📅 NOVO: Lógica do calendário
+  const today = new Date();
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
+  const [currentYear, setCurrentYear] = useState(today.getFullYear());
+
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
+
+  // Criar array de dias do mês
+  const calendarDays = [];
+  // Dias do mês anterior (para preencher semana)
+  const prevMonthDays = new Date(currentYear, currentMonth, 0).getDate();
+  for (let i = firstDayOfMonth - 1; i >= 0; i--) {
+    calendarDays.push({
+      day: prevMonthDays - i,
+      isCurrentMonth: false,
+      date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(prevMonthDays - i).padStart(2, '0')}`
+    });
+  }
+  // Dias do mês atual
+  for (let day = 1; day <= daysInMonth; day++) {
+    calendarDays.push({
+      day,
+      isCurrentMonth: true,
+      date: `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    });
+  }
+  // Dias do próximo mês (para completar semana)
+  const remainingDays = 42 - calendarDays.length; // 6 semanas × 7 dias
+  for (let day = 1; day <= remainingDays; day++) {
+    calendarDays.push({
+      day,
+      isCurrentMonth: false,
+      date: `${currentYear}-${String(currentMonth + 2).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    });
+  }
+
+  // Agrupar tarefas por data
+  const tasksByDate = agenda.reduce((acc, task) => {
+    if (!acc[task.date]) acc[task.date] = [];
+    acc[task.date].push(task);
+    return acc;
+  }, {});
+
+  const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+  const goToPreviousMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear(currentYear - 1);
+    } else {
+      setCurrentMonth(currentMonth - 1);
+    }
+  };
+
+  const goToNextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear(currentYear + 1);
+    } else {
+      setCurrentMonth(currentMonth + 1);
+    }
+  };
+
+  const goToToday = () => {
+    setCurrentMonth(today.getMonth());
+    setCurrentYear(today.getFullYear());
+  };
+
+  const todayISO = today.toISOString().slice(0, 10);
+
   return (
     <section className="space-y-4">
-      <PageHeader icon="calendar" title="Agenda" subtitle={`${agenda.length} marcações`} />
-      <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          <label className="text-sm">Data
-            <input type="date" className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                   value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/>
-          </label>
-          <label className="text-sm">Hora
-            <input type="time" className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                   value={form.time||''} onChange={e=>setForm({...form,time:e.target.value})}/>
-          </label>
-          <label className="text-sm">Colaborador
-            <input list="people-suggest" className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                   value={form.worker} onChange={e=>setForm({...form,worker:e.target.value})}/>
-            <datalist id="people-suggest">
-              {peopleNames?.map(n => <option key={n} value={n} />)}
-            </datalist>
-          </label>
-          <label className="text-sm">Obra
-            <input list="projects-suggest" className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                   value={form.project} onChange={e=>setForm({...form,project:e.target.value})}/>
-            <datalist id="projects-suggest">
-              {projectNames?.map(n => <option key={n} value={n} />)}
-            </datalist>
-          </label>
-          <label className="text-sm">Tipo
-            <select className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                    value={form.jobType||'Instalação'} onChange={e=>setForm({...form,jobType:e.target.value})}>
-              {JOB_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </label>
-          <label className="text-sm md:col-span-5">Notas
-            <input className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                   value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/>
-          </label>
-        </div>
-        <div className="mt-3 flex gap-2 justify-end">
-          {editing && <Button variant="secondary" onClick={()=>{setEditing(false);setForm(empty);}}>Cancelar</Button>}
-          <Button onClick={save}>{editing?'Guardar':'Adicionar'}</Button>
-        </div>
-      </Card>
+      <PageHeader
+        icon="calendar"
+        title="Agenda"
+        subtitle={`${agenda.filter(a => !a.completed).length} tarefas ativas · ${agenda.filter(a => a.completed).length} concluídas`}
+        actions={
+          <div className="flex gap-2">
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`px-4 py-2 rounded-xl transition-all ${
+                viewMode === 'calendar'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              📅 Calendário
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-4 py-2 rounded-xl transition-all ${
+                viewMode === 'list'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              📋 Lista
+            </button>
+          </div>
+        }
+      />
 
-      <Card className="p-4">
-        <div className="overflow-auto rounded-xl border dark:border-slate-800">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900/50">
-              <tr>
-                <th className="px-3 py-2 text-left">Data</th>
-                <th className="px-3 py-2 text-left">Hora</th>
-                <th className="px-3 py-2 text-left">Colaborador</th>
-                <th className="px-3 py-2 text-left">Obra</th>
-                <th className="px-3 py-2 text-left">Tipo</th>
-                <th className="px-3 py-2 text-left">Notas</th>
-                <th className="px-3 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {grouped.length===0 && <tr><td colSpan="7" className="px-3 py-8 text-center text-slate-500">Sem marcações</td></tr>}
-              {grouped.map(a=>(
-                <tr key={a.id} className="border-t dark:border-slate-800">
-                  <td className="px-3 py-2">{a.date}</td>
-                  <td className="px-3 py-2">{a.time || '—'}</td>
-                  <td className="px-3 py-2">{a.worker}</td>
-                  <td className="px-3 py-2">{a.project || '—'}</td>
-                  <td className="px-3 py-2">{a.jobType || '—'}</td>
-                  <td className="px-3 py-2">{a.notes || '—'}</td>
-                  <td className="px-3 py-2 text-right">
-                    <Button variant="secondary" size="sm" onClick={()=>edit(a)}>Editar</Button>{' '}
-                    <Button variant="danger" size="sm" onClick={()=>remove(a.id)}>Apagar</Button>
-                  </td>
-                </tr>
+      {/* Formulário de Adicionar/Editar */}
+      {(editing || selectedDate) && (
+        <Card className="p-4">
+          <h3 className="font-semibold text-lg mb-3">
+            {editing ? 'Editar Tarefa' : 'Nova Tarefa'}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <label className="text-sm">Data
+              <input type="date" className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+                     value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/>
+            </label>
+            <label className="text-sm">Hora
+              <input type="time" className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+                     value={form.time||''} onChange={e=>setForm({...form,time:e.target.value})}/>
+            </label>
+            <label className="text-sm">Colaborador
+              <input list="people-suggest" className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+                     value={form.worker} onChange={e=>setForm({...form,worker:e.target.value})}/>
+              <datalist id="people-suggest">
+                {peopleNames?.map(n => <option key={n} value={n} />)}
+              </datalist>
+            </label>
+            <label className="text-sm">Obra
+              <input list="projects-suggest" className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+                     value={form.project} onChange={e=>setForm({...form,project:e.target.value})}/>
+              <datalist id="projects-suggest">
+                {projectNames?.map(n => <option key={n} value={n} />)}
+              </datalist>
+            </label>
+            <label className="text-sm">Tipo
+              <select className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+                      value={form.jobType||'Instalação'} onChange={e=>setForm({...form,jobType:e.target.value})}>
+                {JOB_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </label>
+            <label className="text-sm md:col-span-5">Notas
+              <input className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+                     value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/>
+            </label>
+          </div>
+          <div className="mt-3 flex gap-2 justify-end">
+            <Button variant="secondary" onClick={()=>{setEditing(false);setForm(empty);setSelectedDate(null);}}>Cancelar</Button>
+            <Button onClick={save}>{editing?'Guardar':'Adicionar'}</Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Vista de Calendário */}
+      {viewMode === 'calendar' && (
+        <Card className="p-4">
+          {/* Navegação do Mês */}
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={goToPreviousMonth} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+              ◀️
+            </button>
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-bold">
+                {monthNames[currentMonth]} {currentYear}
+              </h2>
+              <button onClick={goToToday} className="px-3 py-1 text-sm rounded-lg bg-blue-500 text-white hover:bg-blue-600">
+                Hoje
+              </button>
+            </div>
+            <button onClick={goToNextMonth} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+              ▶️
+            </button>
+          </div>
+
+          {/* Dias da Semana */}
+          <div className="grid grid-cols-7 gap-2 mb-2">
+            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => (
+              <div key={day} className="text-center text-sm font-semibold text-slate-600 dark:text-slate-400 py-2">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          {/* Calendário */}
+          <div className="grid grid-cols-7 gap-2">
+            {calendarDays.map((dayData, index) => {
+              const tasks = tasksByDate[dayData.date] || [];
+              const activeTasks = tasks.filter(t => !t.completed);
+              const isToday = dayData.date === todayISO;
+
+              return (
+                <div
+                  key={index}
+                  onClick={() => {
+                    if (dayData.isCurrentMonth) {
+                      setSelectedDate(dayData.date);
+                      setForm({...empty, date: dayData.date});
+                    }
+                  }}
+                  className={`min-h-[100px] p-2 rounded-lg border-2 transition-all cursor-pointer ${
+                    dayData.isCurrentMonth
+                      ? isToday
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500'
+                        : activeTasks.length > 0
+                        ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-blue-300'
+                      : 'bg-slate-50 dark:bg-slate-900/50 border-slate-100 dark:border-slate-800 opacity-40'
+                  }`}
+                >
+                  <div className={`text-sm font-semibold mb-1 ${
+                    isToday ? 'text-blue-600 dark:text-blue-400' : ''
+                  }`}>
+                    {dayData.day}
+                  </div>
+                  {dayData.isCurrentMonth && activeTasks.length > 0 && (
+                    <div className="space-y-1">
+                      {activeTasks.slice(0, 2).map((task, idx) => (
+                        <div
+                          key={idx}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            edit(task);
+                          }}
+                          className="text-xs p-1 rounded bg-orange-500 text-white truncate hover:bg-orange-600"
+                        >
+                          {task.time} {task.worker}
+                        </div>
+                      ))}
+                      {activeTasks.length > 2 && (
+                        <div className="text-xs text-slate-600 dark:text-slate-400">
+                          +{activeTasks.length - 2} mais
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* Vista de Lista */}
+      {viewMode === 'list' && (
+        <>
+          {!editing && !selectedDate && (
+            <button
+              onClick={() => setSelectedDate(todayISO)}
+              className="w-full p-4 rounded-xl border-2 border-dashed border-blue-300 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-blue-600 dark:text-blue-400 font-medium"
+            >
+              ➕ Adicionar Nova Tarefa
+            </button>
+          )}
+
+          <Card className="p-4">
+            <div className="space-y-3">
+              {grouped.length === 0 && (
+                <div className="text-center py-8 text-slate-500">Sem tarefas agendadas</div>
+              )}
+              {grouped.map(task => (
+                <div
+                  key={task.id}
+                  className={`p-4 rounded-xl border transition-all ${
+                    task.completed
+                      ? 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 opacity-60'
+                      : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {/* Checkbox */}
+                    <input
+                      type="checkbox"
+                      checked={task.completed || false}
+                      onChange={() => toggleComplete(task.id)}
+                      className="mt-1 w-5 h-5 rounded cursor-pointer"
+                    />
+
+                    {/* Conteúdo */}
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          <span className={`font-semibold ${task.completed ? 'line-through' : ''}`}>
+                            📅 {task.date} {task.time && `· ⏰ ${task.time}`}
+                          </span>
+                          {task.date === todayISO && !task.completed && (
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-orange-500 text-white font-bold">
+                              HOJE
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="secondary" size="sm" onClick={() => edit(task)}>Editar</Button>
+                          <Button variant="danger" size="sm" onClick={() => remove(task.id)}>Apagar</Button>
+                        </div>
+                      </div>
+                      <div className="text-sm space-y-1">
+                        <div>👤 <strong>{task.worker}</strong></div>
+                        {task.project && <div>🏗️ {task.project}</div>}
+                        <div>🔧 {task.jobType}</div>
+                        {task.notes && <div className="text-slate-600 dark:text-slate-400">💬 {task.notes}</div>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+            </div>
+          </Card>
+        </>
+      )}
     </section>
   );
 };
@@ -6984,11 +7218,19 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
 // ============================================================
 // 👤 PERFIL DO COLABORADOR (TÉCNICO/ENCARREGADO/DIRETOR)
 // ============================================================
-const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects = [], vehicles = [], catalog = [], setView }) => {
+const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects = [], vehicles = [], catalog = [], setView, agenda = [] }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [detailModal, setDetailModal] = useState(null);
   const [showAdminDashboard, setShowAdminDashboard] = useState(auth?.role === 'admin');
   const [infoModal, setInfoModal] = useState(null); // 📊 Modal para detalhes dos cards clicáveis
+
+  // 🔔 ALERTAS DE TAREFAS DA AGENDA
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const myTodayTasks = agenda.filter(task =>
+    task.date === todayISO &&
+    !task.completed &&
+    (auth?.role === 'admin' || task.worker === auth?.name)
+  );
 
   // 🔐 Estados para mudança de password
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -7681,6 +7923,52 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       {/* Perfil Normal (ou Admin quando showAdminDashboard = false) */}
       {(!auth?.role || auth?.role !== 'admin' || !showAdminDashboard) && (
         <>
+          {/* 🔔 ALERTAS DE TAREFAS DO DIA */}
+          {myTodayTasks.length > 0 && (
+            <Card className="p-4 mb-4 border-2 border-orange-500 bg-orange-50 dark:bg-orange-900/20">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="text-3xl">📋</div>
+                  <div>
+                    <h3 className="font-bold text-lg text-orange-800 dark:text-orange-300">
+                      Tarefas para Hoje
+                    </h3>
+                    <p className="text-sm text-orange-600 dark:text-orange-400">
+                      Tens {myTodayTasks.length} {myTodayTasks.length === 1 ? 'tarefa agendada' : 'tarefas agendadas'} para hoje
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setView('agenda')}
+                  className="px-3 py-1 text-sm rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-all"
+                >
+                  Ver Agenda
+                </button>
+              </div>
+              <div className="space-y-2">
+                {myTodayTasks.map((task, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-orange-200 dark:border-orange-700"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="font-semibold text-slate-800 dark:text-slate-100">
+                          ⏰ {task.time} - {task.jobType}
+                        </div>
+                        <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                          {task.project && `🏗️ ${task.project}`}
+                          {task.notes && ` · 💬 ${task.notes}`}
+                        </div>
+                      </div>
+                      <div className="text-orange-500 text-xl">⚠️</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
           {/* KPIs Principais */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card
@@ -15289,6 +15577,7 @@ function TableMaterials() {
               vehicles={vehicles}
               catalog={catalog}
               setView={setView}
+              agenda={agenda}
             />
           )}
 
