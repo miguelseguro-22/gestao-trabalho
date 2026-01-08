@@ -11052,6 +11052,7 @@ function App() {
   const [people, setPeople] = useState({});
   const [vehicles, setVehicles] = useState([]);
   const [agenda, setAgenda] = useState([]);
+  const [vacations, setVacations] = useState([]); // 🏖️ Gestão de férias
   const [suppliers, setSuppliers] = useState({});
   const [prefs, setPrefs] = useState({
     defaultRate: DEFAULT_HOURLY_RATE,
@@ -11162,6 +11163,7 @@ function App() {
     )
     setVehicles(snap.vehicles || [])
     setAgenda(snap.agenda || [])
+    setVacations(snap.vacations || [])
     setSuppliers(snap.suppliers || {})
     setNotifications(snap.notifications || []) // 🆕
     setCloudStamp(snap.updatedAt || new Date().toISOString())
@@ -11353,6 +11355,7 @@ useEffect(() => {
       prefs,
       vehicles,
       agenda,
+      vacations,
       suppliers,
       notifications,
       updatedAt,
@@ -11373,6 +11376,7 @@ useEffect(() => {
     prefs,
     vehicles,
     agenda,
+    vacations,
     suppliers,
     notifications, // 🆕
   ])
@@ -11404,6 +11408,7 @@ useEffect(() => {
       prefs,
       vehicles,
       agenda,
+      vacations,
       suppliers,
       notifications,
       updatedAt,
@@ -11480,6 +11485,7 @@ useEffect(() => {
     prefs,
     vehicles,
     agenda,
+    vacations,
     suppliers,
     notifications,
     cloudReady,
@@ -11510,6 +11516,7 @@ useEffect(() => {
         prefs,
         vehicles,
         agenda,
+        vacations,
         suppliers,
         notifications,
         updatedAt,
@@ -11556,6 +11563,7 @@ useEffect(() => {
         prefs,
         vehicles,
         agenda,
+        vacations,
         suppliers,
         notifications,
         updatedAt,
@@ -15312,6 +15320,7 @@ const setters = {
   setPrefs,
   setVehicles,
   setAgenda,
+  setVacations,
   setSuppliers,
   setNotifications, // 🆕
   setAll: (data: any) => {
@@ -15324,6 +15333,7 @@ const setters = {
     setPrefs(data.prefs || { defaultRate: DEFAULT_HOURLY_RATE, otMultiplier: DEFAULT_OT_MULTIPLIER });
     setVehicles(data.vehicles || []);
     setAgenda(data.agenda || []);
+    setVacations(data.vacations || []);
     setSuppliers(data.suppliers || {});
     setNotifications(data.notifications || []); // 🆕
   },
@@ -15337,6 +15347,7 @@ const setters = {
     prefs,
     vehicles,
     agenda,
+    vacations,
     suppliers,
     notifications, // 🆕
     theme,
