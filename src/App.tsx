@@ -4509,11 +4509,17 @@ const VehiclesView = ({ vehicles, setVehicles, peopleNames }) => {
 
 
 const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
-  const empty = () => ({ id:null, date:todayISO(), time:'08:00', worker:'', project:'', jobType:'Instalação', notes:'', completed: false });
-  const [form,setForm]=useState(empty);
+  const [form,setForm]=useState(() => ({ id:null, date:todayISO(), time:'08:00', worker:'', project:'', jobType:'Instalação', notes:'', completed: false }));
   const [editing,setEditing]=useState(false);
   const [viewMode, setViewMode] = useState('calendar'); // 'calendar' ou 'list'
   const [selectedDate, setSelectedDate] = useState(null);
+
+  // 📅 Lógica do calendário
+  const today = new Date();
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
+  const [currentYear, setCurrentYear] = useState(today.getFullYear());
+
+  const empty = () => ({ id:null, date:todayISO(), time:'08:00', worker:'', project:'', jobType:'Instalação', notes:'', completed: false });
 
   const save=()=>{
     if(!form.date || !form.worker) return;
@@ -4531,11 +4537,6 @@ const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
   };
 
   const grouped = agenda.slice().sort((a,b)=>(`${a.date} ${a.time||''}`).localeCompare(`${b.date} ${b.time||''}`));
-
-  // 📅 NOVO: Lógica do calendário
-  const today = new Date();
-  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
-  const [currentYear, setCurrentYear] = useState(today.getFullYear());
 
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
