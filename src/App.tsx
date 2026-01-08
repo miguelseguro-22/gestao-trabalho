@@ -890,12 +890,24 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
           const ringToday = isToday(d) ? 'ring-2' : '';
           const ringStyle = isToday(d) ? { borderColor: '#00A9B8', borderWidth: '2px' } : {};
 
-          // 🆕 Destacar fins de semana com cor diferente
+          // 🆕 Destacar fins de semana com padrão tracejado
           const dow = d.getDay(); // 0=Domingo, 6=Sábado
           const isWeekend = dow === 0 || dow === 6;
-          const weekendBgClass = isWeekend && inCycle && !has
-            ? 'bg-slate-50 dark:bg-slate-800/40'
-            : '';
+
+          // Estilo para fins de semana com padrão de linhas diagonais
+          const weekendStyle = isWeekend && inCycle && !has ? {
+            backgroundImage: `repeating-linear-gradient(
+              45deg,
+              #e2e8f0 0px,
+              #e2e8f0 2px,
+              #f8fafc 2px,
+              #f8fafc 6px
+            )`,
+            ...ringStyle
+          } : (has && inCycle ? { backgroundColor: fillColor, ...ringStyle } : ringStyle);
+
+          // Classes base para fins de semana
+          const weekendClass = isWeekend && inCycle && !has ? 'border border-slate-300 dark:border-slate-600' : '';
 
           return (
             <button
@@ -907,11 +919,11 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
                 'text-left rounded-2xl p-2 min-h-[72px] w-full transition ring-focus',
                 inCycle
                   ? (has ? 'text-white hover:brightness-110 border-0'
-                         : weekendBgClass || 'bg-white border hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800')
+                         : weekendClass || 'bg-white border hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800')
                   : 'bg-slate-100 dark:bg-slate-800/60 text-slate-400 cursor-not-allowed',
                 ringToday
               ].join(' ')}
-              style={has && inCycle ? { backgroundColor: fillColor, ...ringStyle } : ringStyle}
+              style={weekendStyle}
             >
               <div className="flex items-start justify-between">
                 <div className={`text-xs ${has ? 'text-white' : ''}`}>{d.getDate()}</div>
@@ -6972,7 +6984,7 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
 // ============================================================
 // 👤 PERFIL DO COLABORADOR (TÉCNICO/ENCARREGADO/DIRETOR)
 // ============================================================
-const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects = [], vehicles = [], catalog = [] }) => {
+const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects = [], vehicles = [], catalog = [], setView }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [detailModal, setDetailModal] = useState(null);
   const [showAdminDashboard, setShowAdminDashboard] = useState(auth?.role === 'admin');
@@ -7614,53 +7626,53 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
               ⚡ Atalhos Rápidos
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=timesheets'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+              <button onClick={() => setView('timesheets')} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group text-left">
                 <div className="text-3xl mb-2">📅</div>
                 <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Registos</div>
                 <div className="text-xs text-slate-500">Timesheets</div>
-              </a>
+              </button>
 
-              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=obras'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+              <button onClick={() => setView('obras')} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group text-left">
                 <div className="text-3xl mb-2">🏗️</div>
                 <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Obras</div>
                 <div className="text-xs text-slate-500">Projetos</div>
-              </a>
+              </button>
 
-              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=people'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+              <button onClick={() => setView('people')} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group text-left">
                 <div className="text-3xl mb-2">👥</div>
                 <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Colaboradores</div>
                 <div className="text-xs text-slate-500">Gestão</div>
-              </a>
+              </button>
 
-              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=materials'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+              <button onClick={() => setView('materials')} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group text-left">
                 <div className="text-3xl mb-2">📦</div>
                 <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Materiais</div>
                 <div className="text-xs text-slate-500">Pedidos</div>
-              </a>
+              </button>
 
-              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=vehicles'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+              <button onClick={() => setView('vehicles')} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group text-left">
                 <div className="text-3xl mb-2">🚗</div>
                 <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Viaturas</div>
                 <div className="text-xs text-slate-500">Frota</div>
-              </a>
+              </button>
 
-              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=cost-reports'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+              <button onClick={() => setView('cost-reports')} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group text-left">
                 <div className="text-3xl mb-2">💰</div>
                 <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Custos</div>
                 <div className="text-xs text-slate-500">Relatórios</div>
-              </a>
+              </button>
 
-              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=monthly-report'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+              <button onClick={() => setView('monthly-report')} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group text-left">
                 <div className="text-3xl mb-2">📊</div>
                 <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Relatório Mensal</div>
                 <div className="text-xs text-slate-500">Análises</div>
-              </a>
+              </button>
 
-              <a href="#" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '?view=agenda'); window.location.reload(); }} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group">
+              <button onClick={() => setView('agenda')} className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all group text-left">
                 <div className="text-3xl mb-2">📆</div>
                 <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Agenda</div>
                 <div className="text-xs text-slate-500">Planeamento</div>
-              </a>
+              </button>
             </div>
           </Card>
         </>
@@ -8826,7 +8838,10 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
 
                 {/* ANÁLISE DETALHADA DO COLABORADOR */}
                 {infoModal.type === 'workerDetail' && (() => {
-                  const { workerName, timeEntries, people, prefs } = infoModal.data;
+                  const { workerName, timeEntries, people, prefs: prefsData } = infoModal.data;
+
+                  // 🔧 FIX: Garantir que prefs tem um valor default
+                  const prefs = prefsData || { defaultRate: 15, otMultiplier: 1.5 };
 
                   // Filtrar registos deste colaborador (mesmo critério do Top 5)
                   const workerEntries = timeEntries.filter(t => t.worker === workerName && isNormalWork(t.template));
@@ -15273,6 +15288,7 @@ function TableMaterials() {
               projects={projects}
               vehicles={vehicles}
               catalog={catalog}
+              setView={setView}
             />
           )}
 
