@@ -5092,118 +5092,102 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
   const alerts = useMemo(() => {
     const alertList = [];
 
-    // Estatísticas globais para comparação
-    const avgOvertime = stats.length > 0
-      ? stats.reduce((sum, s) => sum + s.horasExtra, 0) / stats.length
-      : 0;
-    const avgWorkDays = stats.length > 0
-      ? stats.reduce((sum, s) => sum + s.diasTrabalhados, 0) / stats.length
+    // Estatísticas globais para análise de horas extra
+    const workersWithOvertime = stats.filter(s => s.horasExtra > 0);
+    const totalOvertime = stats.reduce((sum, s) => sum + s.horasExtra, 0);
+    const avgOvertime = workersWithOvertime.length > 0
+      ? totalOvertime / workersWithOvertime.length
       : 0;
 
     stats.forEach(worker => {
       const workerAlerts = [];
 
-      // 🔴 ALERTA 1: Horas extra muito acima da média (> 150% da média)
-      if (worker.horasExtra > 0 && avgOvertime > 0 && worker.horasExtra > avgOvertime * 1.5) {
+      // 🔴 ALERTA CRÍTICO 1: FALTA DE REGISTOS
+      // Verificar se: Dias Trabalhados + Férias + Baixa + Faltas = Dias Úteis
+      const totalDaysAccounted = worker.diasTrabalhados + worker.diasFerias + worker.diasBaixa + worker.faltasSemRemun;
+      const missingDays = worker.workDays - totalDaysAccounted;
+
+      if (missingDays > 0) {
+        workerAlerts.push({
+          level: 'error',
+          type: 'missing_records',
+          message: `Faltam ${missingDays} ${missingDays === 1 ? 'dia' : 'dias'} de registo (${totalDaysAccounted}/${worker.workDays} dias preenchidos)`,
+          value: missingDays,
+          priority: 1  // Máxima prioridade
+        });
+      }
+
+      // 🔴 ALERTA CRÍTICO 2: ÚNICO COM HORAS EXTRA (SUSPEITO)
+      if (worker.horasExtra > 0 && workersWithOvertime.length === 1) {
+        workerAlerts.push({
+          level: 'error',
+          type: 'only_overtime',
+          message: `Único colaborador com horas extra (${Math.round(worker.horasExtra)}h) - verificar`,
+          value: worker.horasExtra,
+          priority: 1
+        });
+      }
+
+      // 🟠 ALERTA ATENÇÃO 1: HORAS EXTRA ELEVADAS
+      // Critério: > 20h OU > 150% da média (o que for menor)
+      const overtimeThreshold = Math.min(20, avgOvertime * 1.5);
+      if (worker.horasExtra > overtimeThreshold && workersWithOvertime.length > 1) {
         workerAlerts.push({
           level: 'warning',
           type: 'overtime_high',
-          message: `Horas extra elevadas (${Math.round(worker.horasExtra)}h vs média ${Math.round(avgOvertime)}h)`,
-          value: worker.horasExtra
+          message: `Horas extra elevadas (${Math.round(worker.horasExtra)}h) - custo adicional a analisar`,
+          value: worker.horasExtra,
+          priority: 2
         });
       }
 
-      // 🟡 ALERTA 2: Registo único de horas extra (apenas 1 dia)
-      const daysWithOvertime = Array.from(worker.days.values()).filter(d => d.overtime > 0).length;
-      if (daysWithOvertime === 1 && worker.horasExtra > 0) {
-        workerAlerts.push({
-          level: 'info',
-          type: 'overtime_single',
-          message: `Apenas 1 registo de horas extra (${Math.round(worker.horasExtra)}h)`,
-          value: daysWithOvertime
-        });
-      }
-
-      // 🔴 ALERTA 3: Horas extra em FDS/Feriado muito elevadas (> 16h)
-      if (worker.horasFDS + worker.horasFeriado > 16) {
+      // 🟠 ALERTA ATENÇÃO 2: HORAS FDS/FERIADO ELEVADAS
+      const weekendHours = worker.horasFDS + worker.horasFeriado;
+      if (weekendHours > 16) {
         workerAlerts.push({
           level: 'warning',
           type: 'weekend_high',
-          message: `Muitas horas em FDS/Feriado (${Math.round(worker.horasFDS + worker.horasFeriado)}h)`,
-          value: worker.horasFDS + worker.horasFeriado
+          message: `Horas FDS/Feriado elevadas (${Math.round(weekendHours)}h) - custo adicional a analisar`,
+          value: weekendHours,
+          priority: 2
         });
       }
 
-      // 🟠 ALERTA 4: Presença muito baixa (< 50%)
-      const presenceNum = parseInt(worker.presence) || 0;
-      if (presenceNum < 50 && presenceNum > 0) {
+      // 🔵 ALERTA INFO 1: FÉRIAS LONGAS
+      if (worker.diasFerias > 10) {
         workerAlerts.push({
-          level: 'warning',
-          type: 'presence_low',
-          message: `Presença muito baixa (${presenceNum}%)`,
-          value: presenceNum
+          level: 'info',
+          type: 'holidays_long',
+          message: `Férias longas (${worker.diasFerias} dias)`,
+          value: worker.diasFerias,
+          priority: 3
         });
       }
 
-      // 🔵 ALERTA 5: Sem registos no período
-      if (worker.entries.length === 0 && worker.diasFerias === 0 && worker.diasBaixa === 0) {
-        workerAlerts.push({
-          level: 'error',
-          type: 'no_records',
-          message: 'Sem registos no período',
-          value: 0
-        });
-      }
-
-      // 🟡 ALERTA 6: Muitas faltas (> 2)
-      if (worker.faltasSemRemun > 2) {
-        workerAlerts.push({
-          level: 'warning',
-          type: 'absences_high',
-          message: `${worker.faltasSemRemun} faltas registadas`,
-          value: worker.faltasSemRemun
-        });
-      }
-
-      // 🟠 ALERTA 7: Baixa muito longa (> 10 dias)
+      // 🔵 ALERTA INFO 2: BAIXA LONGA
       if (worker.diasBaixa > 10) {
         workerAlerts.push({
           level: 'info',
           type: 'sick_long',
           message: `Baixa longa (${worker.diasBaixa} dias)`,
-          value: worker.diasBaixa
+          value: worker.diasBaixa,
+          priority: 3
         });
       }
 
-      // 🔴 ALERTA 8: Padrão estranho - trabalhou mas presença 0%
-      if (worker.entries.length > 0 && presenceNum === 0) {
+      // 🟡 ALERTA EXTRA: MUITAS FALTAS (mantido por ser relevante para RH)
+      if (worker.faltasSemRemun > 2) {
         workerAlerts.push({
-          level: 'error',
-          type: 'pattern_strange',
-          message: 'Tem registos mas presença 0% - possível erro',
-          value: worker.entries.length
+          level: 'warning',
+          type: 'absences_high',
+          message: `${worker.faltasSemRemun} faltas sem remuneração`,
+          value: worker.faltasSemRemun,
+          priority: 2
         });
       }
 
-      // 🟡 ALERTA 9: Só tem deslocações, sem trabalho normal
-      if (worker.deslocDia + worker.deslocExtra > 0 && worker.diasTrabalhados === 0) {
-        workerAlerts.push({
-          level: 'info',
-          type: 'only_displacement',
-          message: 'Apenas registos de deslocação',
-          value: worker.deslocDia + worker.deslocExtra
-        });
-      }
-
-      // 🔴 ALERTA 10: Horas normais = 0 mas tem horas extra (impossível)
-      if (worker.totalHours === 0 && worker.horasExtra > 0) {
-        workerAlerts.push({
-          level: 'error',
-          type: 'impossible_overtime',
-          message: 'Horas extra sem horas normais - verificar registos',
-          value: worker.horasExtra
-        });
-      }
+      // Ordenar alertas por prioridade (críticos primeiro)
+      workerAlerts.sort((a, b) => a.priority - b.priority);
 
       if (workerAlerts.length > 0) {
         alertList.push({
@@ -5214,14 +5198,21 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
     });
 
     // 🔍 ESTATÍSTICAS GERAIS DO RELATÓRIO
+    const workersWithMissingDays = stats.filter(s => {
+      const totalDaysAccounted = s.diasTrabalhados + s.diasFerias + s.diasBaixa + s.faltasSemRemun;
+      return (s.workDays - totalDaysAccounted) > 0;
+    }).length;
+
     const summary = {
       totalWorkers: stats.length,
       workersWithRecords: stats.filter(s => s.entries.length > 0).length,
       workersWithoutRecords: stats.filter(s => s.entries.length === 0 && s.diasFerias === 0 && s.diasBaixa === 0).length,
-      totalOvertime: Math.round(stats.reduce((sum, s) => sum + s.horasExtra, 0)),
-      workersWithHighOvertime: stats.filter(s => s.horasExtra > avgOvertime * 1.5).length,
+      workersWithMissingDays,  // NOVO: quantos têm dias em falta
+      totalOvertime: Math.round(totalOvertime),
+      workersWithHighOvertime: stats.filter(s => s.horasExtra > Math.min(20, avgOvertime * 1.5)).length,
       workersWithAbsences: stats.filter(s => s.faltasSemRemun > 0).length,
       workersWithSickLeave: stats.filter(s => s.diasBaixa > 0).length,
+      workersWithOvertimeCount: workersWithOvertime.length,  // NOVO: quantos têm horas extra
       totalAlerts: alertList.reduce((sum, a) => sum + a.alerts.length, 0)
     };
 
@@ -5870,9 +5861,12 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
               {alerts.alerts.filter(a => a.alerts.some(al => al.level === 'error')).length}
             </div>
             <div className="text-sm opacity-90 mb-3">
-              Requerem atenção imediata
+              Situações que requerem atenção
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2">
+              <span className="px-3 py-1.5 bg-white/20 rounded-full text-xs font-medium">
+                📝 Faltam registos: {alerts.summary.workersWithMissingDays}
+              </span>
               <span className="px-3 py-1.5 bg-white/20 rounded-full text-xs font-medium">
                 📭 Sem registos: {alerts.summary.workersWithoutRecords}
               </span>
@@ -5901,12 +5895,15 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
               {alerts.summary.totalOvertime}h
             </div>
             <div className="text-sm opacity-90 mb-3">
-              {alerts.summary.workersWithHighOvertime} com horas elevadas
+              {alerts.summary.workersWithOvertimeCount} {alerts.summary.workersWithOvertimeCount === 1 ? 'colaborador' : 'colaboradores'} com horas extra
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2">
               <span className="px-3 py-1.5 bg-white/20 rounded-full text-xs font-medium">
-                📈 Média: {alerts.summary.workersWithRecords > 0
-                  ? Math.round(alerts.summary.totalOvertime / alerts.summary.workersWithRecords)
+                ⚠️ Elevadas: {alerts.summary.workersWithHighOvertime}
+              </span>
+              <span className="px-3 py-1.5 bg-white/20 rounded-full text-xs font-medium">
+                📈 Média: {alerts.summary.workersWithOvertimeCount > 0
+                  ? Math.round(alerts.summary.totalOvertime / alerts.summary.workersWithOvertimeCount)
                   : 0}h/pessoa
               </span>
             </div>
