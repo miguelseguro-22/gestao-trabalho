@@ -13136,6 +13136,53 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
     const avgCostPerHour = totalHours > 0 ? totalCost / totalHours : 0;
     const totalBudget = allProjects.reduce((sum, p) => sum + p.budget, 0);
 
+    // 🔧 ANÁLISE DE MANUTENÇÃO
+    const maintenanceEntries = timeEntries.filter(entry =>
+      entry.workType === 'maintenance' &&
+      entry.date >= startDate &&
+      entry.date <= endDate
+    );
+
+    // Calcular custos de manutenção por obra
+    const maintenanceByProject = new Map();
+    maintenanceEntries.forEach(entry => {
+      const project = entry.project || 'Sem Obra';
+      if (!maintenanceByProject.has(project)) {
+        maintenanceByProject.set(project, {
+          cost: 0,
+          hours: 0,
+          entries: 0,
+          workers: new Set()
+        });
+      }
+      const data = maintenanceByProject.get(project);
+      const worker = people?.[entry.worker];
+      const r = personRates(people, entry.worker, prefs);
+      const hours = Number(entry.hours) || 0;
+      const overtime = Number(entry.overtime) || 0;
+      const cost = (hours * r.normal + overtime * r.extra);
+
+      data.cost += cost;
+      data.hours += hours + overtime;
+      data.entries += 1;
+      data.workers.add(entry.worker);
+    });
+
+    const maintenanceProjects = Array.from(maintenanceByProject.entries())
+      .map(([name, data]) => ({
+        name,
+        cost: data.cost,
+        hours: data.hours,
+        entries: data.entries,
+        workers: data.workers.size,
+        costPerHour: data.hours > 0 ? data.cost / data.hours : 0
+      }))
+      .sort((a, b) => b.cost - a.cost);
+
+    const totalMaintenanceCost = maintenanceProjects.reduce((sum, p) => sum + p.cost, 0);
+    const totalMaintenanceHours = maintenanceProjects.reduce((sum, p) => sum + p.hours, 0);
+    const maintenancePercentage = totalCost > 0 ? (totalMaintenanceCost / totalCost) * 100 : 0;
+
     // Top e Bottom performers
     const top5Expensive = projectsByCost.slice(0, 5);
     const top5Efficient = projectsByEfficiency.slice(0, 5);
@@ -13637,6 +13684,50 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
       `;
     }).join('')}
   </div>
+
+  <!-- CUSTOS DE MANUTENÇÃO -->
+  ${totalMaintenanceCost > 0 ? `
+  <div class="section">
+    <h2>🔧 Custos de Manutenção</h2>
+    <div style="background: linear-gradient(to right, #fffbeb, #fef3c7); border-left: 5px solid #f59e0b; padding: 20px; margin-bottom: 20px; border-radius: 8px;">
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; font-size: 9.5pt;">
+        <div>
+          <strong style="color: #92400e;">💰 Custo Total de Manutenção:</strong><br>
+          <span style="font-size: 16pt; font-weight: 700; color: #f59e0b;">${currency(totalMaintenanceCost)}</span>
+          <span style="font-size: 9pt; color: #92400e;"> (${maintenancePercentage.toFixed(1)}% do total)</span>
+        </div>
+        <div>
+          <strong style="color: #92400e;">⏱️ Horas de Manutenção:</strong><br>
+          <span style="font-size: 16pt; font-weight: 700; color: #f59e0b;">${totalMaintenanceHours.toFixed(1)}h</span>
+        </div>
+        <div>
+          <strong style="color: #92400e;">🏗️ Obras com Manutenção:</strong><br>
+          <span style="font-size: 16pt; font-weight: 700; color: #f59e0b;">${maintenanceProjects.length}</span>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-bottom: 10px; color: #92400e;">📊 Distribuição de Custos de Manutenção por Obra</h3>
+    ${maintenanceProjects.slice(0, 10).map((project, index) => {
+      const maxCost = maintenanceProjects[0].cost;
+      const percentage = (project.cost / maxCost) * 100;
+      const costPercentage = totalMaintenanceCost > 0 ? (project.cost / totalMaintenanceCost) * 100 : 0;
+      return `
+        <div class="chart-bar">
+          <div class="chart-rank" style="background: linear-gradient(135deg, #f59e0b, #d97706);">${index + 1}</div>
+          <div class="chart-label" title="${project.name}">${project.name}</div>
+          <div class="chart-bar-container">
+            <div class="chart-bar-fill" style="width: ${percentage}%; background: linear-gradient(90deg, #f59e0b, #fbbf24);"></div>
+          </div>
+          <div class="chart-value" style="color: #92400e;">
+            ${currency(project.cost)}
+            <span style="font-size: 8pt; color: #78350f;">(${costPercentage.toFixed(1)}% · ${project.hours.toFixed(1)}h · ${project.workers} colab.)</span>
+          </div>
+        </div>
+      `;
+    }).join('')}
+  </div>
+  ` : ''}
 
   <div style="page-break-before: always;"></div>
 
