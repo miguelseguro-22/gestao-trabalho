@@ -788,7 +788,9 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
         const cur=new Date(s);
         const last=new Date(e);
         while(cur<=last){
-          if(inRange(cur)) push(toLocalISO(cur),t.template);
+          const dow = cur.getDay(); // 0=Domingo, 6=Sábado
+          // 🔧 FIX: Não marcar fins de semana com cor de férias/baixa
+          if(inRange(cur) && dow !== 0 && dow !== 6) push(toLocalISO(cur),t.template);
           cur.setDate(cur.getDate()+1);
         }
       }else{
@@ -888,6 +890,13 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
           const ringToday = isToday(d) ? 'ring-2' : '';
           const ringStyle = isToday(d) ? { borderColor: '#00A9B8', borderWidth: '2px' } : {};
 
+          // 🆕 Destacar fins de semana com cor diferente
+          const dow = d.getDay(); // 0=Domingo, 6=Sábado
+          const isWeekend = dow === 0 || dow === 6;
+          const weekendBgClass = isWeekend && inCycle && !has
+            ? 'bg-slate-50 dark:bg-slate-800/40'
+            : '';
+
           return (
             <button
               key={i}
@@ -898,7 +907,7 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
                 'text-left rounded-2xl p-2 min-h-[72px] w-full transition ring-focus',
                 inCycle
                   ? (has ? 'text-white hover:brightness-110 border-0'
-                         : 'bg-white border hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800')
+                         : weekendBgClass || 'bg-white border hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800')
                   : 'bg-slate-100 dark:bg-slate-800/60 text-slate-400 cursor-not-allowed',
                 ringToday
               ].join(' ')}
@@ -4600,6 +4609,9 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
   const monthInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedWorker, setSelectedWorker] = useState(null);
 
+  // 🆕 Estado para controlar exibição de alertas
+  const [showAllAlerts, setShowAllAlerts] = useState(false);
+
   // 🆕 Comparação entre colaboradores
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [selectedForCompare, setSelectedForCompare] = useState([]);
@@ -5762,7 +5774,7 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
 
             {/* Lista de Alertas */}
             <div className="space-y-2">
-              {alerts.alerts.map((item, idx) => (
+              {(showAllAlerts ? alerts.alerts : alerts.alerts.slice(0, 3)).map((item, idx) => (
                 <div
                   key={idx}
                   className="p-3 rounded-lg bg-white dark:bg-slate-800 border dark:border-slate-700 hover:shadow-md transition-shadow"
@@ -5799,6 +5811,20 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
                   </div>
                 </div>
               ))}
+
+              {/* Botão Ver Mais/Menos */}
+              {alerts.alerts.length > 3 && (
+                <button
+                  onClick={() => setShowAllAlerts(!showAllAlerts)}
+                  className="w-full py-2 px-4 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-amber-500 dark:hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 text-slate-600 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 font-medium transition-all"
+                >
+                  {showAllAlerts ? (
+                    <>📋 Ver menos ({alerts.alerts.length - 3} ocultos)</>
+                  ) : (
+                    <>🔍 Ver mais {alerts.alerts.length - 3} alertas</>
+                  )}
+                </button>
+              )}
             </div>
 
             {/* Rodapé com ações */}
@@ -8969,6 +8995,57 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                               {isMaintenance ? '🔧 Manutenção' : '🏗️ Obras'}
                             </div>
                           </div>
+                        </div>
+                      </div>
+
+                      {/* 📋 Lista Detalhada de Registos */}
+                      <div>
+                        <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-3">
+                          📋 Registos Detalhados ({workerEntries.length})
+                        </h4>
+                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                          {workerEntries
+                            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) // Ordenar por data (mais recente primeiro)
+                            .map((entry, idx) => {
+                              const entryDate = new Date(entry.date);
+                              const hours = (Number(entry.hours) || 0);
+                              const overtime = (Number(entry.overtime) || 0);
+                              const totalHours = hours + overtime;
+                              const cost = hours * r.normal + overtime * r.extra;
+
+                              return (
+                                <div key={idx} className="p-3 rounded-lg border dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                                        📅 {entryDate.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                      </div>
+                                      <div className="text-xs text-slate-500">
+                                        {entryDate.toLocaleDateString('pt-PT', { weekday: 'short' })}
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <div className="text-sm font-bold" style={{ color: '#00A9B8' }}>
+                                        {totalHours}h
+                                      </div>
+                                      {overtime > 0 && (
+                                        <div className="text-xs text-orange-600 dark:text-orange-400">
+                                          +{overtime}h extra
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center justify-between text-xs">
+                                    <div className="text-slate-600 dark:text-slate-400 truncate flex-1">
+                                      🏗️ {entry.project || 'Sem obra'}
+                                    </div>
+                                    <div className="text-slate-600 dark:text-slate-400 ml-2">
+                                      €{cost.toFixed(2)}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
                         </div>
                       </div>
                     </div>
