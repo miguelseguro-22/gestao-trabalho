@@ -4603,7 +4603,7 @@ const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
     setCurrentYear(today.getFullYear());
   };
 
-  const todayISO = today.toISOString().slice(0, 10);
+  const todayString = today.toISOString().slice(0, 10);
 
   return (
     <section className="space-y-4">
@@ -4719,7 +4719,7 @@ const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
             {calendarDays.map((dayData, index) => {
               const tasks = tasksByDate[dayData.date] || [];
               const activeTasks = tasks.filter(t => !t.completed);
-              const isToday = dayData.date === todayISO;
+              const isToday = dayData.date === todayString;
 
               return (
                 <div
@@ -4778,7 +4778,7 @@ const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
         <>
           {!editing && !selectedDate && (
             <button
-              onClick={() => setSelectedDate(todayISO)}
+              onClick={() => setSelectedDate(todayString)}
               className="w-full p-4 rounded-xl border-2 border-dashed border-blue-300 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-blue-600 dark:text-blue-400 font-medium"
             >
               ➕ Adicionar Nova Tarefa
@@ -4815,7 +4815,7 @@ const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
                           <span className={`font-semibold ${task.completed ? 'line-through' : ''}`}>
                             📅 {task.date} {task.time && `· ⏰ ${task.time}`}
                           </span>
-                          {task.date === todayISO && !task.completed && (
+                          {task.date === todayString && !task.completed && (
                             <span className="px-2 py-0.5 text-xs rounded-full bg-orange-500 text-white font-bold">
                               HOJE
                             </span>
@@ -7226,9 +7226,9 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
   const [infoModal, setInfoModal] = useState(null); // 📊 Modal para detalhes dos cards clicáveis
 
   // 🔔 ALERTAS DE TAREFAS DA AGENDA
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayString = new Date().toISOString().slice(0, 10);
   const myTodayTasks = agenda.filter(task =>
-    task.date === todayISO &&
+    task.date === todayString &&
     !task.completed &&
     (auth?.role === 'admin' || task.worker === auth?.name)
   );
