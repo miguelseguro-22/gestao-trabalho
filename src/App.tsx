@@ -5817,95 +5817,131 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
       )}
 
       {/* 📊 DASHBOARD VISUAL DE KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Taxa de Cobertura */}
         <Card
-          className="p-5 cursor-pointer hover:scale-105 transition-all"
-          style={{ background: 'linear-gradient(to br, #00A9B8, #008A96)' }}
+          className="p-6 cursor-pointer hover:shadow-xl transition-all relative overflow-hidden group"
           onClick={() => setStatusFilter('ok')}
         >
-          <div className="text-white">
-            <div className="text-sm opacity-90 mb-2">Taxa de Cobertura</div>
-            <div className="text-4xl font-bold mb-2">
-              {Math.round((alerts.summary.workersWithRecords / alerts.summary.totalWorkers) * 100)}%
+          <div className="absolute inset-0 bg-gradient-to-br from-cyan-500 to-blue-600 opacity-90 group-hover:opacity-100 transition-opacity"></div>
+          <div className="relative z-10 text-white">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-sm font-medium opacity-90">Taxa de Cobertura</div>
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-2xl">
+                📊
+              </div>
             </div>
-            <div className="text-xs opacity-80">
+            <div className="text-5xl font-bold mb-3">
+              {alerts.summary.totalWorkers > 0
+                ? Math.round((alerts.summary.workersWithRecords / alerts.summary.totalWorkers) * 100)
+                : 0}%
+            </div>
+            <div className="text-sm opacity-90 mb-3">
               {alerts.summary.workersWithRecords} de {alerts.summary.totalWorkers} colaboradores
             </div>
-            <div className="mt-3 w-full h-2 bg-white/20 rounded-full overflow-hidden">
+            <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
               <div
-                className="h-full bg-white rounded-full transition-all"
-                style={{ width: `${(alerts.summary.workersWithRecords / alerts.summary.totalWorkers) * 100}%` }}
+                className="h-full bg-white rounded-full transition-all duration-500"
+                style={{
+                  width: `${alerts.summary.totalWorkers > 0
+                    ? (alerts.summary.workersWithRecords / alerts.summary.totalWorkers) * 100
+                    : 0}%`
+                }}
               />
             </div>
+            <div className="text-xs opacity-75 mt-2">👆 Clique para filtrar</div>
           </div>
         </Card>
 
         {/* Card 2: Alertas Críticos */}
         <Card
-          className="p-5 cursor-pointer hover:scale-105 transition-all"
-          style={{ background: 'linear-gradient(to br, #DC2626, #B91C1C)' }}
+          className="p-6 cursor-pointer hover:shadow-xl transition-all relative overflow-hidden group"
           onClick={() => setStatusFilter('critical')}
         >
-          <div className="text-white">
-            <div className="text-sm opacity-90 mb-2">🔴 Alertas Críticos</div>
-            <div className="text-4xl font-bold mb-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-500 to-rose-700 opacity-90 group-hover:opacity-100 transition-opacity"></div>
+          <div className="relative z-10 text-white">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-sm font-medium opacity-90">Alertas Críticos</div>
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-2xl">
+                🔴
+              </div>
+            </div>
+            <div className="text-5xl font-bold mb-3">
               {alerts.alerts.filter(a => a.alerts.some(al => al.level === 'error')).length}
             </div>
-            <div className="text-xs opacity-80">
+            <div className="text-sm opacity-90 mb-3">
               Requerem atenção imediata
             </div>
-            <div className="mt-3 flex items-center gap-2 text-xs">
-              <span className="px-2 py-1 bg-white/20 rounded-full">
-                Sem registos: {alerts.summary.workersWithoutRecords}
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1.5 bg-white/20 rounded-full text-xs font-medium">
+                📭 Sem registos: {alerts.summary.workersWithoutRecords}
               </span>
             </div>
+            <div className="text-xs opacity-75 mt-2">👆 Clique para filtrar</div>
           </div>
         </Card>
 
         {/* Card 3: Horas Extra */}
         <Card
-          className="p-5 cursor-pointer hover:scale-105 transition-all"
-          style={{ background: 'linear-gradient(to br, #F59E0B, #D97706)' }}
+          className="p-6 cursor-pointer hover:shadow-xl transition-all relative overflow-hidden group"
           onClick={() => {
             setSortBy('overtime');
             setSortOrder('desc');
           }}
         >
-          <div className="text-white">
-            <div className="text-sm opacity-90 mb-2">⏰ Total Horas Extra</div>
-            <div className="text-4xl font-bold mb-2">{alerts.summary.totalOvertime}h</div>
-            <div className="text-xs opacity-80">
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-500 to-orange-600 opacity-90 group-hover:opacity-100 transition-opacity"></div>
+          <div className="relative z-10 text-white">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-sm font-medium opacity-90">Total Horas Extra</div>
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-2xl">
+                ⏰
+              </div>
+            </div>
+            <div className="text-5xl font-bold mb-3">
+              {alerts.summary.totalOvertime}h
+            </div>
+            <div className="text-sm opacity-90 mb-3">
               {alerts.summary.workersWithHighOvertime} com horas elevadas
             </div>
-            <div className="mt-3 flex items-center gap-2 text-xs">
-              <span className="px-2 py-1 bg-white/20 rounded-full">
-                Média: {Math.round(alerts.summary.totalOvertime / Math.max(alerts.summary.workersWithRecords, 1))}h/pessoa
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1.5 bg-white/20 rounded-full text-xs font-medium">
+                📈 Média: {alerts.summary.workersWithRecords > 0
+                  ? Math.round(alerts.summary.totalOvertime / alerts.summary.workersWithRecords)
+                  : 0}h/pessoa
               </span>
             </div>
+            <div className="text-xs opacity-75 mt-2">👆 Clique para ordenar</div>
           </div>
         </Card>
 
         {/* Card 4: Situação Geral */}
         <Card
-          className="p-5 cursor-pointer hover:scale-105 transition-all"
-          style={{ background: 'linear-gradient(to br, #10B981, #059669)' }}
+          className="p-6 cursor-pointer hover:shadow-xl transition-all relative overflow-hidden group"
           onClick={() => setStatusFilter('all')}
         >
-          <div className="text-white">
-            <div className="text-sm opacity-90 mb-2">✅ Situação Geral</div>
-            <div className="text-4xl font-bold mb-2">
+          <div className="absolute inset-0 bg-gradient-to-br from-green-500 to-emerald-600 opacity-90 group-hover:opacity-100 transition-opacity"></div>
+          <div className="relative z-10 text-white">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-sm font-medium opacity-90">Situação Geral</div>
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-2xl">
+                ✅
+              </div>
+            </div>
+            <div className="text-5xl font-bold mb-3">
               {sortedStats.length - alerts.alerts.length}
             </div>
-            <div className="text-xs opacity-80">Colaboradores sem problemas</div>
-            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-              <span className="px-2 py-1 bg-white/20 rounded-full text-center">
+            <div className="text-sm opacity-90 mb-3">
+              Colaboradores sem problemas
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <span className="px-2 py-1.5 bg-white/20 rounded-full text-xs font-medium text-center">
                 Faltas: {alerts.summary.workersWithAbsences}
               </span>
-              <span className="px-2 py-1 bg-white/20 rounded-full text-center">
+              <span className="px-2 py-1.5 bg-white/20 rounded-full text-xs font-medium text-center">
                 Baixas: {alerts.summary.workersWithSickLeave}
               </span>
             </div>
+            <div className="text-xs opacity-75 mt-2">👆 Clique para ver todos</div>
           </div>
         </Card>
       </div>
