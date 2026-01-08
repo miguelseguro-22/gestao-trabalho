@@ -4550,11 +4550,14 @@ const VacationsView = ({ vacations, setVacations, people }) => {
 
     if (editing) {
       setVacations(list => list.map(v => v.id === form.id ? { ...form } : v));
+      setForm(empty());
+      setEditing(false);
     } else {
+      // Ao adicionar novo registo, manter o colaborador selecionado
+      const currentWorker = form.worker;
       setVacations(list => [{ ...form, id: uid() }, ...list]);
+      setForm({ ...empty(), worker: currentWorker });
     }
-    setForm(empty());
-    setEditing(false);
   };
 
   const edit = (vacation) => {
