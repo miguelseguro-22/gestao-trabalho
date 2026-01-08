@@ -12274,23 +12274,37 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
 
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [selectedProject, setSelectedProject] = useState('all');
+
+  // 💾 Persistir datas em localStorage
   const [startDate, setStartDate] = useState(() => {
+    const saved = localStorage.getItem('costAnalysis_startDate');
+    if (saved) return saved;
     const now = new Date();
     const monday = new Date(now);
     monday.setDate(now.getDate() - now.getDay() + 1);
     return monday.toISOString().slice(0, 10);
   });
   const [endDate, setEndDate] = useState(() => {
+    const saved = localStorage.getItem('costAnalysis_endDate');
+    if (saved) return saved;
     const now = new Date();
     const sunday = new Date(now);
     sunday.setDate(now.getDate() - now.getDay() + 7);
     return sunday.toISOString().slice(0, 10);
   });
 
+  // Guardar datas quando mudam
+  useEffect(() => {
+    localStorage.setItem('costAnalysis_startDate', startDate);
+    localStorage.setItem('costAnalysis_endDate', endDate);
+  }, [startDate, endDate]);
+
   // 🆕 Estado para consolidação de obras
   const [showConsolidateModal, setShowConsolidateModal] = useState(false);
   const [selectedProjects, setSelectedProjects] = useState([]);
   const [consolidatedName, setConsolidatedName] = useState('');
+  const [consolidateSearch, setConsolidateSearch] = useState('');
+  const [consolidateSortBy, setConsolidateSortBy] = useState('name'); // 'name', 'cost', 'similarity'
 
   // 🆕 Estado para classificação de obras (Manutenção vs Obras)
   const [showClassifyModal, setShowClassifyModal] = useState(false);
@@ -14517,11 +14531,102 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
               </div>
             )}
 
+            {/* Pesquisa e Ordenação */}
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium mb-2">
+                    🔍 Procurar Obras
+                  </label>
+                  <input
+                    type="text"
+                    value={consolidateSearch}
+                    onChange={(e) => setConsolidateSearch(e.target.value)}
+                    placeholder="Digite para procurar..."
+                    className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    📊 Ordenar Por
+                  </label>
+                  <select
+                    value={consolidateSortBy}
+                    onChange={(e) => setConsolidateSortBy(e.target.value)}
+                    className="px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="name">Nome (A-Z)</option>
+                    <option value="cost">Custo (maior → menor)</option>
+                    <option value="hours">Horas (maior → menor)</option>
+                    <option value="similarity">Similaridade</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Ações Rápidas */}
+              <div className="flex gap-2 flex-wrap">
+                {selectedProjects.length === 1 && (
+                  <>
+                    <button
+                      onClick={() => {
+                        const similar = findSimilarProjects(selectedProjects[0], 0.5);
+                        const similarNames = similar.map(p => p.name);
+                        setSelectedProjects([selectedProjects[0], ...similarNames]);
+                      }}
+                      className="px-3 py-1.5 text-sm rounded-lg bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-900 dark:text-amber-100 transition-all font-medium"
+                    >
+                      ⚡ Selecionar Similares (50%+)
+                    </button>
+                    <button
+                      onClick={() => {
+                        const similar = findSimilarProjects(selectedProjects[0], 0.3);
+                        const similarNames = similar.map(p => p.name);
+                        setSelectedProjects([selectedProjects[0], ...similarNames]);
+                      }}
+                      className="px-3 py-1.5 text-sm rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40 text-amber-800 dark:text-amber-200 transition-all"
+                    >
+                      ⚡ Similares (30%+)
+                    </button>
+                    <button
+                      onClick={() => {
+                        setConsolidatedName(selectedProjects[0]);
+                      }}
+                      className="px-3 py-1.5 text-sm rounded-lg bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-900 dark:text-blue-100 transition-all font-medium"
+                    >
+                      📝 Usar como Nome Final
+                    </button>
+                  </>
+                )}
+                {selectedProjects.length > 0 && (
+                  <button
+                    onClick={() => setSelectedProjects([])}
+                    className="px-3 py-1.5 text-sm rounded-lg bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-900 dark:text-red-100 transition-all"
+                  >
+                    ✖️ Limpar Seleção
+                  </button>
+                )}
+                {consolidateSearch && (
+                  <button
+                    onClick={() => setConsolidateSearch('')}
+                    className="px-3 py-1.5 text-sm rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all"
+                  >
+                    🔍 Limpar Pesquisa
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Lista de obras */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm font-medium">
-                  Obras encontradas no período ({projectNames.length})
+                  Obras encontradas ({(() => {
+                    const filtered = projectNames.filter(name =>
+                      consolidateSearch === '' ||
+                      name.toLowerCase().includes(consolidateSearch.toLowerCase())
+                    );
+                    return filtered.length;
+                  })()}/{projectNames.length})
                 </label>
                 <div className="text-xs text-slate-500">
                   {selectedProjects.length} selecionadas
@@ -14529,7 +14634,38 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
               </div>
 
               <div className="border dark:border-slate-700 rounded-lg max-h-96 overflow-y-auto">
-                {projectNames.map((projectName, index) => {
+                {(() => {
+                  // Filtrar por pesquisa
+                  let filtered = projectNames.filter(name =>
+                    consolidateSearch === '' ||
+                    name.toLowerCase().includes(consolidateSearch.toLowerCase())
+                  );
+
+                  // Ordenar
+                  const sorted = [...filtered].sort((a, b) => {
+                    if (consolidateSortBy === 'name') {
+                      return a.localeCompare(b);
+                    } else if (consolidateSortBy === 'cost') {
+                      const statsA = getProjectStats(a);
+                      const statsB = getProjectStats(b);
+                      return statsB.cost - statsA.cost;
+                    } else if (consolidateSortBy === 'hours') {
+                      const statsA = getProjectStats(a);
+                      const statsB = getProjectStats(b);
+                      return statsB.hours - statsA.hours;
+                    } else if (consolidateSortBy === 'similarity' && selectedProjects.length === 1) {
+                      const simA = stringSimilarity(selectedProjects[0], a);
+                      const simB = stringSimilarity(selectedProjects[0], b);
+                      return simB - simA;
+                    }
+                    return 0;
+                  });
+
+                  return sorted.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500">
+                      Nenhuma obra encontrada com "{consolidateSearch}"
+                    </div>
+                  ) : sorted.map((projectName, index) => {
                   const stats = getProjectStats(projectName);
                   const similarProjects = selectedProjects.length === 1 && selectedProjects[0] !== projectName
                     ? findSimilarProjects(selectedProjects[0], 0.5)
@@ -14573,7 +14709,8 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
                       )}
                     </label>
                   );
-                })}
+                  });
+                })()}
               </div>
             </div>
 
@@ -14585,6 +14722,8 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
                   setShowConsolidateModal(false);
                   setSelectedProjects([]);
                   setConsolidatedName('');
+                  setConsolidateSearch('');
+                  setConsolidateSortBy('name');
                 }}
               >
                 Cancelar
