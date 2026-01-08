@@ -5099,6 +5099,28 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
       ? totalOvertime / workersWithOvertime.length
       : 0;
 
+    // 🆕 CRÍTICO: Obter TODOS os colaboradores (incluindo os sem registos)
+    const allWorkerNames = Object.keys(people || {});
+    const statsMap = new Map(stats.map(s => [s.name, s]));
+
+    // 🆕 ANALISAR COLABORADORES SEM NENHUM REGISTO
+    allWorkerNames.forEach(workerName => {
+      if (!statsMap.has(workerName)) {
+        // Colaborador não tem NENHUM registo no período
+        const workDays = stats[0]?.workDays || 21; // Usar workDays do primeiro worker como referência
+        alertList.push({
+          worker: workerName,
+          alerts: [{
+            level: 'error',
+            type: 'missing_records',
+            message: `Faltam ${workDays} ${workDays === 1 ? 'dia' : 'dias'} de registo (0/${workDays} dias preenchidos)`,
+            value: workDays,
+            priority: 1  // Máxima prioridade
+          }]
+        });
+      }
+    });
+
     stats.forEach(worker => {
       const workerAlerts = [];
 
@@ -5198,26 +5220,29 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
     });
 
     // 🔍 ESTATÍSTICAS GERAIS DO RELATÓRIO
-    const workersWithMissingDays = stats.filter(s => {
+    // Contar colaboradores com dias em falta (incluindo os sem nenhum registo)
+    const workersWithMissingDaysInStats = stats.filter(s => {
       const totalDaysAccounted = s.diasTrabalhados + s.diasFerias + s.diasBaixa + s.faltasSemRemun;
       return (s.workDays - totalDaysAccounted) > 0;
     }).length;
+    const workersWithNoRecords = allWorkerNames.filter(name => !statsMap.has(name)).length;
+    const workersWithMissingDays = workersWithMissingDaysInStats + workersWithNoRecords;
 
     const summary = {
-      totalWorkers: stats.length,
+      totalWorkers: Math.max(stats.length, allWorkerNames.length),  // 🆕 Total real de colaboradores
       workersWithRecords: stats.filter(s => s.entries.length > 0).length,
-      workersWithoutRecords: stats.filter(s => s.entries.length === 0 && s.diasFerias === 0 && s.diasBaixa === 0).length,
-      workersWithMissingDays,  // NOVO: quantos têm dias em falta
+      workersWithoutRecords: workersWithNoRecords,  // 🆕 Incluir os sem nenhum registo
+      workersWithMissingDays,  // 🆕 Incluir todos com dias em falta
       totalOvertime: Math.round(totalOvertime),
       workersWithHighOvertime: stats.filter(s => s.horasExtra > Math.min(20, avgOvertime * 1.5)).length,
       workersWithAbsences: stats.filter(s => s.faltasSemRemun > 0).length,
       workersWithSickLeave: stats.filter(s => s.diasBaixa > 0).length,
-      workersWithOvertimeCount: workersWithOvertime.length,  // NOVO: quantos têm horas extra
+      workersWithOvertimeCount: workersWithOvertime.length,
       totalAlerts: alertList.reduce((sum, a) => sum + a.alerts.length, 0)
     };
 
     return { alerts: alertList, summary };
-  }, [stats]);
+  }, [stats, people]);
 
   // 🆕 Lista de todos os colaboradores únicos do sistema
   const allWorkerNames = useMemo(() => {
@@ -6921,7 +6946,7 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
 // ============================================================
 // 👤 PERFIL DO COLABORADOR (TÉCNICO/ENCARREGADO/DIRETOR)
 // ============================================================
-const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], vehicles = [], catalog = [] }) => {
+const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects = [], vehicles = [], catalog = [] }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [detailModal, setDetailModal] = useState(null);
   const [showAdminDashboard, setShowAdminDashboard] = useState(auth?.role === 'admin');
@@ -7491,7 +7516,7 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                     <div
                       key={index}
                       className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer hover:scale-102"
-                      onClick={() => setInfoModal({ type: 'projectDetail', data: { projectName: project.name, timeEntries, people, orders } })}
+                      onClick={() => setInfoModal({ type: 'projectDetail', data: { projectName: project.name, timeEntries, people, prefs, orders } })}
                     >
                       <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white pointer-events-none" style={{ background: `linear-gradient(to bottom right, #00677F, #00A9B8)` }}>
                         {index + 1}
@@ -7530,7 +7555,7 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
                     <div
                       key={index}
                       className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer hover:scale-102"
-                      onClick={() => setInfoModal({ type: 'workerDetail', data: { workerName: worker.name, timeEntries, people } })}
+                      onClick={() => setInfoModal({ type: 'workerDetail', data: { workerName: worker.name, timeEntries, people, prefs } })}
                     >
                       <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white pointer-events-none" style={{ background: `linear-gradient(to bottom right, #BE8A3A, #A07430)` }}>
                         {index + 1}
@@ -8580,23 +8605,27 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
 
                 {/* ANÁLISE DETALHADA DA OBRA */}
                 {infoModal.type === 'projectDetail' && (() => {
-                  const { projectName, timeEntries, people, orders } = infoModal.data;
+                  const { projectName, timeEntries, people, orders, prefs } = infoModal.data;
 
                   // Filtrar registos desta obra (mesmo critério do Top 5)
                   const projectEntries = timeEntries.filter(t => t.project === projectName && isNormalWork(t.template));
 
-                  // Calcular horas e custos por colaborador
+                  // Calcular horas e custos por colaborador (usando lógica correta de custos)
                   const workerStats = new Map();
                   projectEntries.forEach(entry => {
-                    const hours = (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
-                    const rate = Number(people?.[entry.worker]?.rate || 0);
-                    const cost = hours * rate;
+                    const hours = (Number(entry.hours) || 0);
+                    const overtime = (Number(entry.overtime) || 0);
+                    const totalHours = hours + overtime;
+
+                    // ✅ USAR LÓGICA CORRETA: horas normais × taxa normal, horas extra × taxa extra
+                    const r = personRates(people, entry.worker, prefs);
+                    const cost = hours * r.normal + overtime * r.extra;
 
                     if (!workerStats.has(entry.worker)) {
-                      workerStats.set(entry.worker, { hours: 0, cost: 0, rate, entries: 0 });
+                      workerStats.set(entry.worker, { hours: 0, cost: 0, rate: r.normal, entries: 0 });
                     }
                     const stats = workerStats.get(entry.worker);
-                    stats.hours += hours;
+                    stats.hours += totalHours;  // ✅ Total de horas (normais + extra)
                     stats.cost += cost;
                     stats.entries += 1;
                   });
@@ -8771,26 +8800,31 @@ const ProfileView = ({ timeEntries, auth, people, orders = [], projects = [], ve
 
                 {/* ANÁLISE DETALHADA DO COLABORADOR */}
                 {infoModal.type === 'workerDetail' && (() => {
-                  const { workerName, timeEntries, people } = infoModal.data;
+                  const { workerName, timeEntries, people, prefs } = infoModal.data;
 
                   // Filtrar registos deste colaborador (mesmo critério do Top 5)
                   const workerEntries = timeEntries.filter(t => t.worker === workerName && isNormalWork(t.template));
 
-                  // Taxa do colaborador
-                  const workerRate = Number(people?.[workerName]?.rate || 0);
+                  // ✅ USAR LÓGICA CORRETA: obter taxas do colaborador
+                  const r = personRates(people, workerName, prefs);
+                  const workerRate = r.normal;
                   const isMaintenance = people?.[workerName]?.isMaintenance || false;
 
-                  // Calcular horas e custos por obra
+                  // Calcular horas e custos por obra (usando lógica correta)
                   const projectStats = new Map();
                   workerEntries.forEach(entry => {
-                    const hours = (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
-                    const cost = hours * workerRate;
+                    const hours = (Number(entry.hours) || 0);
+                    const overtime = (Number(entry.overtime) || 0);
+                    const totalHours = hours + overtime;
+
+                    // ✅ USAR LÓGICA CORRETA: horas normais × taxa normal, horas extra × taxa extra
+                    const cost = hours * r.normal + overtime * r.extra;
 
                     if (!projectStats.has(entry.project)) {
                       projectStats.set(entry.project, { hours: 0, cost: 0, entries: 0 });
                     }
                     const stats = projectStats.get(entry.project);
-                    stats.hours += hours;
+                    stats.hours += totalHours;  // ✅ Total de horas (normais + extra)
                     stats.cost += cost;
                     stats.entries += 1;
                   });
@@ -15157,6 +15191,7 @@ function TableMaterials() {
               timeEntries={filteredTimeEntries}
               auth={auth}
               people={people}
+              prefs={prefs}
               orders={orders}
               projects={projects}
               vehicles={vehicles}
