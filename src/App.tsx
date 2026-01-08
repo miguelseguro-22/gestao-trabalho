@@ -12642,6 +12642,59 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
     };
   }, [costData, previousPeriodData]);
 
+  // 🧠 NOVO: Calcular similaridade entre strings (Levenshtein simplificado)
+  const stringSimilarity = (str1, str2) => {
+    const s1 = str1.toLowerCase().trim();
+    const s2 = str2.toLowerCase().trim();
+
+    if (s1 === s2) return 1.0;
+    if (s1.includes(s2) || s2.includes(s1)) return 0.8;
+
+    // Calcular palavras em comum
+    const words1 = s1.split(/\s+/);
+    const words2 = s2.split(/\s+/);
+    const commonWords = words1.filter(w => words2.includes(w)).length;
+    const maxWords = Math.max(words1.length, words2.length);
+
+    return commonWords / maxWords;
+  };
+
+  // 🧠 NOVO: Encontrar obras similares
+  const findSimilarProjects = (projectName, threshold = 0.6) => {
+    return projectNames
+      .filter(p => p !== projectName)
+      .map(p => ({ name: p, similarity: stringSimilarity(projectName, p) }))
+      .filter(p => p.similarity >= threshold)
+      .sort((a, b) => b.similarity - a.similarity);
+  };
+
+  // 📊 NOVO: Calcular estatísticas por obra
+  const getProjectStats = (projectName) => {
+    const projectEntries = timeEntries.filter(e =>
+      e.project === projectName &&
+      e.date >= startDate &&
+      e.date <= endDate
+    );
+
+    const totalHours = projectEntries.reduce((sum, e) =>
+      sum + (Number(e.hours) || 0) + (Number(e.overtime) || 0), 0
+    );
+
+    const totalCost = projectEntries.reduce((sum, e) => {
+      const worker = e.worker;
+      const r = personRates(people, worker, prefs);
+      const hours = Number(e.hours) || 0;
+      const overtime = Number(e.overtime) || 0;
+      return sum + (hours * r.normal + overtime * r.extra);
+    }, 0);
+
+    return {
+      entries: projectEntries.length,
+      hours: Math.round(totalHours),
+      cost: Math.round(totalCost)
+    };
+  };
+
   // 🆕 Função para consolidar obras (renomear múltiplas obras para um nome único)
   const handleConsolidateProjects = () => {
     if (selectedProjects.length < 2) {
@@ -12654,6 +12707,21 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
     }
 
     const finalName = consolidatedName.trim();
+
+    // Calcular totais antes de consolidar (para feedback)
+    const totalStats = selectedProjects.reduce((acc, proj) => {
+      const stats = getProjectStats(proj);
+      return {
+        entries: acc.entries + stats.entries,
+        hours: acc.hours + stats.hours,
+        cost: acc.cost + stats.cost
+      };
+    }, { entries: 0, hours: 0, cost: 0 });
+
+    // Confirmação com preview
+    if (!confirm(`Consolidar ${selectedProjects.length} obras em "${finalName}"?\n\n📊 Total:\n• ${totalStats.entries} registos\n• ${totalStats.hours}h\n• €${totalStats.cost.toFixed(2)}\n\nEsta ação não pode ser desfeita!`)) {
+      return;
+    }
 
     // Renomear todas as obras selecionadas nos time entries
     const updatedEntries = timeEntries.map(entry => {
@@ -12671,7 +12739,7 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
     setConsolidatedName('');
 
     // Feedback
-    alert(`${selectedProjects.length} obras consolidadas em "${finalName}"`);
+    alert(`✅ ${selectedProjects.length} obras consolidadas em "${finalName}"!\n\n📊 ${totalStats.entries} registos atualizados`);
   };
 
   // 🆕 Toggle seleção de obra
@@ -14313,6 +14381,50 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
               />
             </div>
 
+            {/* 📊 Preview de Totais (quando há seleção) */}
+            {selectedProjects.length > 0 && (
+              <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 p-4 rounded-lg border-2 border-blue-200 dark:border-blue-800">
+                <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">
+                  📊 Preview da Consolidação
+                </h4>
+                <div className="grid grid-cols-3 gap-3">
+                  {(() => {
+                    const totalStats = selectedProjects.reduce((acc, proj) => {
+                      const stats = getProjectStats(proj);
+                      return {
+                        entries: acc.entries + stats.entries,
+                        hours: acc.hours + stats.hours,
+                        cost: acc.cost + stats.cost
+                      };
+                    }, { entries: 0, hours: 0, cost: 0 });
+
+                    return (
+                      <>
+                        <div className="text-center p-3 bg-white dark:bg-slate-800 rounded-lg">
+                          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                            {totalStats.entries}
+                          </div>
+                          <div className="text-xs text-slate-600 dark:text-slate-400">Registos</div>
+                        </div>
+                        <div className="text-center p-3 bg-white dark:bg-slate-800 rounded-lg">
+                          <div className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">
+                            {totalStats.hours}h
+                          </div>
+                          <div className="text-xs text-slate-600 dark:text-slate-400">Horas Totais</div>
+                        </div>
+                        <div className="text-center p-3 bg-white dark:bg-slate-800 rounded-lg">
+                          <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                            €{totalStats.cost}
+                          </div>
+                          <div className="text-xs text-slate-600 dark:text-slate-400">Custo Total</div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
             {/* Lista de obras */}
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -14325,27 +14437,51 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
               </div>
 
               <div className="border dark:border-slate-700 rounded-lg max-h-96 overflow-y-auto">
-                {projectNames.map((projectName, index) => (
-                  <label
-                    key={index}
-                    className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b dark:border-slate-700 last:border-b-0 ${
-                      selectedProjects.includes(projectName)
-                        ? 'bg-blue-50 dark:bg-blue-900/20'
-                        : ''
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedProjects.includes(projectName)}
-                      onChange={() => toggleProjectSelection(projectName)}
-                      className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                    />
-                    <span className="flex-1 font-medium">{projectName}</span>
-                    {selectedProjects.includes(projectName) && (
-                      <Icon name="check" className="text-blue-600 dark:text-blue-400" />
-                    )}
-                  </label>
-                ))}
+                {projectNames.map((projectName, index) => {
+                  const stats = getProjectStats(projectName);
+                  const similarProjects = selectedProjects.length === 1 && selectedProjects[0] !== projectName
+                    ? findSimilarProjects(selectedProjects[0], 0.5)
+                    : [];
+                  const isSimilar = similarProjects.some(p => p.name === projectName);
+
+                  return (
+                    <label
+                      key={index}
+                      className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b dark:border-slate-700 last:border-b-0 transition-all ${
+                        selectedProjects.includes(projectName)
+                          ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-l-blue-500'
+                          : isSimilar
+                          ? 'bg-amber-50 dark:bg-amber-900/10 border-l-4 border-l-amber-400'
+                          : ''
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedProjects.includes(projectName)}
+                        onChange={() => toggleProjectSelection(projectName)}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{projectName}</span>
+                          {isSimilar && (
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100">
+                              ⚡ Similar
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1 flex gap-3">
+                          <span>📝 {stats.entries} reg.</span>
+                          <span>⏰ {stats.hours}h</span>
+                          <span>💰 €{stats.cost}</span>
+                        </div>
+                      </div>
+                      {selectedProjects.includes(projectName) && (
+                        <Icon name="check" className="text-blue-600 dark:text-blue-400" />
+                      )}
+                    </label>
+                  );
+                })}
               </div>
             </div>
 
