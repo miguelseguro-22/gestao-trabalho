@@ -11348,6 +11348,7 @@ const CAN = {
   people: new Set(["diretor", "admin"]),
   vehicles: new Set(["diretor", "admin"]),
   agenda: new Set(["encarregado", "diretor", "admin"]),
+  vacations: new Set(["diretor", "admin"]),
   // 🔧 Apenas diretor e admin podem ver registos pendentes e dashboard de equipa
   pendingApprovals: new Set(["diretor", "admin"]),
   teamDashboard: new Set(["diretor", "admin"]),
@@ -16323,7 +16324,7 @@ function TableMaterials() {
   )}
 
   {/* Férias - Diretor, Admin */}
-  {can("admin") && (
+  {can("vacations") && (
     <NavItem id="vacations" icon="sun" label="Férias" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
 </div>
