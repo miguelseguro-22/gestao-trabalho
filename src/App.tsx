@@ -4507,6 +4507,477 @@ const VehiclesView = ({ vehicles, setVehicles, peopleNames }) => {
   );
 };
 
+// ============================================================
+// 🏖️ GESTÃO DE FÉRIAS E ANÁLISE DE IMPACTO
+// ============================================================
+const VacationsView = ({ vacations, setVacations, people }) => {
+  const [form, setForm] = useState({ id: null, worker: '', startDate: todayISO(), endDate: todayISO(), status: 'approved', notes: '' });
+  const [editing, setEditing] = useState(false);
+  const [viewMode, setViewMode] = useState('list'); // 'list', 'calendar', 'report'
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const peopleNames = Object.keys(people || {}).sort();
+
+  // Função auxiliar: calcular dias úteis entre duas datas
+  const getWorkingDays = (start, end) => {
+    const startD = new Date(start);
+    const endD = new Date(end);
+    let count = 0;
+    const current = new Date(startD);
+
+    while (current <= endD) {
+      const day = current.getDay();
+      if (day !== 0 && day !== 6) count++; // Segunda a Sexta
+      current.setDate(current.getDate() + 1);
+    }
+    return count;
+  };
+
+  // CRUD Functions
+  const empty = () => ({ id: null, worker: '', startDate: todayISO(), endDate: todayISO(), status: 'approved', notes: '' });
+
+  const save = () => {
+    if (!form.worker || !form.startDate || !form.endDate) return;
+    if (new Date(form.endDate) < new Date(form.startDate)) {
+      alert('Data de fim deve ser posterior à data de início!');
+      return;
+    }
+
+    if (editing) {
+      setVacations(list => list.map(v => v.id === form.id ? { ...form } : v));
+    } else {
+      setVacations(list => [{ ...form, id: uid() }, ...list]);
+    }
+    setForm(empty());
+    setEditing(false);
+  };
+
+  const edit = (vacation) => {
+    setForm({ ...vacation });
+    setEditing(true);
+  };
+
+  const remove = (id) => {
+    if (confirm('Tem certeza que deseja remover estas férias?')) {
+      setVacations(list => list.filter(v => v.id !== id));
+    }
+  };
+
+  // Filtrar férias do ano selecionado
+  const yearVacations = vacations.filter(v => {
+    const year = new Date(v.startDate).getFullYear();
+    return year === selectedYear;
+  });
+
+  // Filtrar com pesquisa
+  const filteredVacations = yearVacations.filter(v =>
+    searchTerm === '' || v.worker.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Ordenar por data de início
+  const sortedVacations = [...filteredVacations].sort((a, b) =>
+    a.startDate.localeCompare(b.startDate)
+  );
+
+  // ANÁLISE DE CRUZAMENTO E IMPACTO
+  const analysis = useMemo(() => {
+    const result = {
+      totalDays: 0,
+      byWorker: {},
+      criticalPeriods: [],
+      monthlyAvailability: {}
+    };
+
+    // Analisar por trabalhador
+    yearVacations.forEach(v => {
+      const days = getWorkingDays(v.startDate, v.endDate);
+      result.totalDays += days;
+
+      if (!result.byWorker[v.worker]) {
+        result.byWorker[v.worker] = { days: 0, periods: [] };
+      }
+      result.byWorker[v.worker].days += days;
+      result.byWorker[v.worker].periods.push(v);
+    });
+
+    // Detectar períodos com cruzamento (múltiplas pessoas de férias ao mesmo tempo)
+    const dateMap = {};
+    yearVacations.forEach(v => {
+      const current = new Date(v.startDate);
+      const end = new Date(v.endDate);
+
+      while (current <= end) {
+        const dateKey = current.toISOString().slice(0, 10);
+        if (!dateMap[dateKey]) dateMap[dateKey] = [];
+        dateMap[dateKey].push(v.worker);
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
+    // Identificar períodos críticos (>= 3 pessoas de férias)
+    Object.entries(dateMap).forEach(([date, workers]) => {
+      if (workers.length >= 3) {
+        result.criticalPeriods.push({
+          date,
+          workers: [...new Set(workers)],
+          count: new Set(workers).size
+        });
+      }
+    });
+
+    // Disponibilidade mensal (% de colaboradores disponíveis)
+    const totalWorkers = peopleNames.length;
+    for (let month = 0; month < 12; month++) {
+      const monthStart = new Date(selectedYear, month, 1);
+      const monthEnd = new Date(selectedYear, month + 1, 0);
+
+      let totalAvailability = 0;
+      let daysInMonth = 0;
+
+      const current = new Date(monthStart);
+      while (current <= monthEnd) {
+        const day = current.getDay();
+        if (day !== 0 && day !== 6) { // Apenas dias úteis
+          const dateKey = current.toISOString().slice(0, 10);
+          const onVacation = new Set(dateMap[dateKey] || []).size;
+          const available = totalWorkers - onVacation;
+          totalAvailability += (available / totalWorkers) * 100;
+          daysInMonth++;
+        }
+        current.setDate(current.getDate() + 1);
+      }
+
+      result.monthlyAvailability[month] = daysInMonth > 0 ? Math.round(totalAvailability / daysInMonth) : 100;
+    }
+
+    return result;
+  }, [yearVacations, peopleNames, selectedYear]);
+
+  return (
+    <section className="space-y-4">
+      <PageHeader
+        icon="sun"
+        title="Gestão de Férias"
+        subtitle={`${yearVacations.length} períodos de férias em ${selectedYear} · ${analysis.totalDays} dias úteis`}
+        actions={
+          <div className="flex gap-2">
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="px-3 py-2 rounded-xl border dark:border-slate-700 dark:bg-slate-900"
+            >
+              {[selectedYear - 1, selectedYear, selectedYear + 1].map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-4 py-2 rounded-xl transition-all ${viewMode === 'list' ? 'bg-blue-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}
+            >
+              📋 Lista
+            </button>
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`px-4 py-2 rounded-xl transition-all ${viewMode === 'calendar' ? 'bg-blue-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}
+            >
+              📅 Calendário
+            </button>
+            <button
+              onClick={() => setViewMode('report')}
+              className={`px-4 py-2 rounded-xl transition-all ${viewMode === 'report' ? 'bg-blue-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}
+            >
+              📊 Impacto
+            </button>
+          </div>
+        }
+      />
+
+      {/* Formulário */}
+      {(editing || viewMode === 'list') && (
+        <Card className="p-4">
+          <h3 className="font-semibold text-lg mb-3">{editing ? 'Editar Férias' : 'Adicionar Férias'}</h3>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <label className="text-sm">Colaborador
+              <select
+                className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+                value={form.worker}
+                onChange={e => setForm({ ...form, worker: e.target.value })}
+              >
+                <option value="">Selecionar...</option>
+                {peopleNames.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm">Data Início
+              <input
+                type="date"
+                className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+                value={form.startDate}
+                onChange={e => setForm({ ...form, startDate: e.target.value })}
+              />
+            </label>
+            <label className="text-sm">Data Fim
+              <input
+                type="date"
+                className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+                value={form.endDate}
+                onChange={e => setForm({ ...form, endDate: e.target.value })}
+              />
+            </label>
+            <label className="text-sm">Status
+              <select
+                className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+                value={form.status}
+                onChange={e => setForm({ ...form, status: e.target.value })}
+              >
+                <option value="pending">Pendente</option>
+                <option value="approved">Aprovado</option>
+                <option value="rejected">Rejeitado</option>
+              </select>
+            </label>
+            <label className="text-sm">Notas
+              <input
+                className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
+                value={form.notes || ''}
+                onChange={e => setForm({ ...form, notes: e.target.value })}
+                placeholder="Observações..."
+              />
+            </label>
+          </div>
+          <div className="mt-3 flex gap-2 justify-end">
+            {editing && (
+              <Button variant="secondary" onClick={() => { setEditing(false); setForm(empty()); }}>
+                Cancelar
+              </Button>
+            )}
+            <Button onClick={save}>
+              {editing ? '💾 Guardar' : '➕ Adicionar'}
+            </Button>
+            {form.startDate && form.endDate && (
+              <span className="text-sm text-slate-500 self-center ml-2">
+                {getWorkingDays(form.startDate, form.endDate)} dias úteis
+              </span>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* VISTA: LISTA */}
+      {viewMode === 'list' && (
+        <Card className="p-4">
+          <div className="mb-4">
+            <input
+              type="text"
+              placeholder="🔍 Procurar colaborador..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 dark:bg-slate-900"
+            />
+          </div>
+          <div className="space-y-2">
+            {sortedVacations.length === 0 ? (
+              <div className="text-center py-8 text-slate-500">Sem férias registadas em {selectedYear}</div>
+            ) : (
+              sortedVacations.map(v => {
+                const days = getWorkingDays(v.startDate, v.endDate);
+                const statusColors = {
+                  pending: 'bg-yellow-50 border-yellow-300 dark:bg-yellow-900/20',
+                  approved: 'bg-green-50 border-green-300 dark:bg-green-900/20',
+                  rejected: 'bg-red-50 border-red-300 dark:bg-red-900/20'
+                };
+
+                return (
+                  <div
+                    key={v.id}
+                    className={`p-4 rounded-xl border-2 ${statusColors[v.status] || 'bg-white border-slate-200'}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="font-bold text-lg">{v.worker}</span>
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-blue-500 text-white">
+                            {days} dias úteis
+                          </span>
+                          {v.status === 'pending' && (
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-yellow-500 text-white">
+                              ⏳ Pendente
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-slate-600 dark:text-slate-400">
+                          📅 {new Date(v.startDate).toLocaleDateString('pt-PT')} → {new Date(v.endDate).toLocaleDateString('pt-PT')}
+                          {v.notes && <span className="ml-3">💬 {v.notes}</span>}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="secondary" size="sm" onClick={() => edit(v)}>Editar</Button>
+                        <Button variant="danger" size="sm" onClick={() => remove(v.id)}>Apagar</Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* VISTA: CALENDÁRIO ANUAL */}
+      {viewMode === 'calendar' && (
+        <Card className="p-4">
+          <h3 className="font-semibold text-lg mb-4">Calendário Anual de Férias - {selectedYear}</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((monthName, month) => {
+              const monthVacations = yearVacations.filter(v => {
+                const vStart = new Date(v.startDate);
+                const vEnd = new Date(v.endDate);
+                const monthStart = new Date(selectedYear, month, 1);
+                const monthEnd = new Date(selectedYear, month + 1, 0);
+
+                return (vStart <= monthEnd && vEnd >= monthStart);
+              });
+
+              const availability = analysis.monthlyAvailability[month] || 100;
+              const color = availability >= 80 ? 'bg-green-100 dark:bg-green-900/20' : availability >= 60 ? 'bg-yellow-100 dark:bg-yellow-900/20' : 'bg-red-100 dark:bg-red-900/20';
+
+              return (
+                <div key={month} className={`p-3 rounded-lg border ${color}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold">{monthName}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-white dark:bg-slate-800">
+                      {availability}% disponível
+                    </span>
+                  </div>
+                  {monthVacations.length > 0 ? (
+                    <div className="space-y-1 text-xs">
+                      {monthVacations.map((v, idx) => (
+                        <div key={idx} className="truncate">
+                          🏖️ {v.worker} ({new Date(v.startDate).getDate()}-{new Date(v.endDate).getDate()})
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-slate-400">Sem férias</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* VISTA: RELATÓRIO DE IMPACTO */}
+      {viewMode === 'report' && (
+        <div className="space-y-4">
+          {/* KPIs */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="p-4 bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+              <div className="text-sm opacity-90">Total de Férias</div>
+              <div className="text-3xl font-bold">{yearVacations.length}</div>
+              <div className="text-xs opacity-75">períodos</div>
+            </Card>
+            <Card className="p-4 bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+              <div className="text-sm opacity-90">Dias Úteis</div>
+              <div className="text-3xl font-bold">{analysis.totalDays}</div>
+              <div className="text-xs opacity-75">dias de férias</div>
+            </Card>
+            <Card className="p-4 bg-gradient-to-br from-orange-500 to-orange-600 text-white">
+              <div className="text-sm opacity-90">Períodos Críticos</div>
+              <div className="text-3xl font-bold">{analysis.criticalPeriods.length}</div>
+              <div className="text-xs opacity-75">dias com ≥3 pessoas</div>
+            </Card>
+            <Card className="p-4 bg-gradient-to-br from-green-500 to-green-600 text-white">
+              <div className="text-sm opacity-90">Média Disponibilidade</div>
+              <div className="text-3xl font-bold">
+                {Object.values(analysis.monthlyAvailability).length > 0
+                  ? Math.round(Object.values(analysis.monthlyAvailability).reduce((a, b) => a + b, 0) / 12)
+                  : 100}%
+              </div>
+              <div className="text-xs opacity-75">ao longo do ano</div>
+            </Card>
+          </div>
+
+          {/* Alertas de Períodos Críticos */}
+          {analysis.criticalPeriods.length > 0 && (
+            <Card className="p-4 border-2 border-red-500 bg-red-50 dark:bg-red-900/20">
+              <h3 className="font-semibold text-lg text-red-800 dark:text-red-300 mb-3">
+                ⚠️ Períodos Críticos Detectados
+              </h3>
+              <div className="space-y-2">
+                {analysis.criticalPeriods.slice(0, 10).map((period, idx) => (
+                  <div key={idx} className="p-2 bg-white dark:bg-slate-800 rounded-lg text-sm">
+                    <span className="font-semibold">{new Date(period.date).toLocaleDateString('pt-PT')}</span>
+                    <span className="text-red-600 dark:text-red-400 ml-2">
+                      ({period.count} pessoas de férias)
+                    </span>
+                    <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                      {period.workers.join(', ')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* Férias por Colaborador */}
+          <Card className="p-4">
+            <h3 className="font-semibold text-lg mb-3">📊 Férias por Colaborador</h3>
+            <div className="space-y-2">
+              {Object.entries(analysis.byWorker)
+                .sort(([, a], [, b]) => b.days - a.days)
+                .map(([worker, data]) => (
+                  <div key={worker} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold">{worker}</span>
+                      <span className="text-sm px-2 py-0.5 rounded-full bg-blue-500 text-white">
+                        {data.days} dias úteis
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-600 dark:text-slate-400">
+                      {data.periods.length} período{data.periods.length > 1 ? 's' : ''}:
+                      {data.periods.map((p, idx) => (
+                        <span key={idx} className="ml-2">
+                          {new Date(p.startDate).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })} -
+                          {new Date(p.endDate).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </Card>
+
+          {/* Gráfico de Disponibilidade Mensal */}
+          <Card className="p-4">
+            <h3 className="font-semibold text-lg mb-3">📈 Disponibilidade Mensal (%)</h3>
+            <div className="grid grid-cols-12 gap-2">
+              {['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'].map((m, idx) => {
+                const availability = analysis.monthlyAvailability[idx] || 100;
+                const color = availability >= 80 ? 'bg-green-500' : availability >= 60 ? 'bg-yellow-500' : 'bg-red-500';
+
+                return (
+                  <div key={idx} className="text-center">
+                    <div className="h-32 flex items-end">
+                      <div
+                        className={`w-full ${color} rounded-t transition-all`}
+                        style={{ height: `${availability}%` }}
+                        title={`${availability}%`}
+                      />
+                    </div>
+                    <div className="text-xs mt-1">{m}</div>
+                    <div className="text-xs font-bold">{availability}%</div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </div>
+      )}
+    </section>
+  );
+};
 
 const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
   const [form,setForm]=useState(() => ({ id:null, date:todayISO(), time:'08:00', worker:'', project:'', jobType:'Instalação', notes:'', completed: false }));
@@ -15850,6 +16321,11 @@ function TableMaterials() {
   {can("agenda") && (
     <NavItem id="agenda" icon="calendar" label="Agenda" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
+
+  {/* Férias - Diretor, Admin */}
+  {can("admin") && (
+    <NavItem id="vacations" icon="sun" label="Férias" setView={setView} setSidebarOpen={setSidebarOpen} />
+  )}
 </div>
 
           {/* PREFERÊNCIAS */}
@@ -15996,6 +16472,13 @@ function TableMaterials() {
               setAgenda={setAgenda}
               projectNames={projectNames}
               peopleNames={peopleNames}
+            />
+          )}
+          {view === "vacations" && (
+            <VacationsView
+              vacations={vacations}
+              setVacations={setVacations}
+              people={people}
             />
           )}
           {view === "obras" && (
