@@ -34,6 +34,10 @@ case 'eye':
 ;
 case 'eye-off':return<svg viewBox="0 0 24 24" className={className}><path {...S} d="M3 3l18 18"/><path {...S} d="M10.6 10.6A3 3 0 0 0 12 15a3 3 0 0 0 2.4-1.2"/><path {...S} d="M9.9 4.24A10.4 10.4 0 0 1 12 4c6 0 10 8 10 8a17.3 17.3 0 0 1-4.2 5.2"/><path {...S} d="M6.6 6.6C4.3 8.1 2.6 10.3 2 12c0 0 4 8 10 8 1.1 0 2.1-.2 3-.5"/></svg>;
 case 'building':return<svg viewBox="0 0 24 24" className={className}><rect {...S} x="3" y="3" width="18" height="18" rx="2"/><path {...S} d="M7 7h10M7 11h10M7 15h6M7 19V3"/></svg>;
+case 'sun':return<svg viewBox="0 0 24 24" className={className}><circle {...S} cx="12" cy="12" r="4"/><path {...S} d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>;
+case 'users':return<svg viewBox="0 0 24 24" className={className}><path {...S} d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle {...S} cx="9" cy="7" r="4"/><path {...S} d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+case 'truck':return<svg viewBox="0 0 24 24" className={className}><rect {...S} x="1" y="3" width="15" height="13"/><path {...S} d="M16 8h4l3 3v5h-2m-5 0H5m0 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0m16 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0"/></svg>;
+case 'check-square':return<svg viewBox="0 0 24 24" className={className}><path {...S} d="M9 11l3 3L22 4"/><path {...S} d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>;
     default:return null;
   }
 };
@@ -16295,7 +16299,7 @@ function TableMaterials() {
   
   {/* Logística - Logística e Admin */}
   {can("logistics") && (
-    <NavItem id="logistics" icon="package" label="Logística (Direção)" setView={setView} setSidebarOpen={setSidebarOpen} />
+    <NavItem id="logistics" icon="truck" label="Logística (Direção)" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
   
   {/* Obras - Diretor e Admin */}
@@ -16310,7 +16314,7 @@ function TableMaterials() {
 
   {/* Colaboradores - Diretor e Admin */}
   {can("people") && (
-    <NavItem id="people" icon="user" label="Colaboradores" setView={setView} setSidebarOpen={setSidebarOpen} />
+    <NavItem id="people" icon="users" label="Colaboradores" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
   
   {/* Veículos - Diretor e Admin */}
@@ -16320,7 +16324,7 @@ function TableMaterials() {
   
   {/* Agenda - Encarregado, Diretor, Admin */}
   {can("agenda") && (
-    <NavItem id="agenda" icon="calendar" label="Agenda" setView={setView} setSidebarOpen={setSidebarOpen} />
+    <NavItem id="agenda" icon="check-square" label="Agenda" setView={setView} setSidebarOpen={setSidebarOpen} />
   )}
 
   {/* Férias - Diretor, Admin */}
