@@ -4509,7 +4509,7 @@ const VehiclesView = ({ vehicles, setVehicles, peopleNames }) => {
 
 
 const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
-  const empty = { id:null, date:todayISO(), time:'08:00', worker:'', project:'', jobType:'Instalação', notes:'', completed: false };
+  const empty = () => ({ id:null, date:todayISO(), time:'08:00', worker:'', project:'', jobType:'Instalação', notes:'', completed: false });
   const [form,setForm]=useState(empty);
   const [editing,setEditing]=useState(false);
   const [viewMode, setViewMode] = useState('calendar'); // 'calendar' ou 'list'
@@ -4522,9 +4522,9 @@ const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
     }else{
       setAgenda(list=>[{...form,id:uid(), completed: false}, ...list]);
     }
-    setForm(empty); setEditing(false); setSelectedDate(null);
+    setForm(empty()); setEditing(false); setSelectedDate(null);
   };
-  const edit=(a)=>{ setForm({ ...empty, ...a }); setEditing(true); };
+  const edit=(a)=>{ setForm({ ...empty(), ...a }); setEditing(true); };
   const remove=(id)=> setAgenda(list=>list.filter(a=>a.id!==id));
   const toggleComplete=(id)=> {
     setAgenda(list=>list.map(a=>a.id===id?{...a, completed: !a.completed}:a));
@@ -4677,7 +4677,7 @@ const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
             </label>
           </div>
           <div className="mt-3 flex gap-2 justify-end">
-            <Button variant="secondary" onClick={()=>{setEditing(false);setForm(empty);setSelectedDate(null);}}>Cancelar</Button>
+            <Button variant="secondary" onClick={()=>{setEditing(false);setForm(empty());setSelectedDate(null);}}>Cancelar</Button>
             <Button onClick={save}>{editing?'Guardar':'Adicionar'}</Button>
           </div>
         </Card>
@@ -4726,7 +4726,7 @@ const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
                   onClick={() => {
                     if (dayData.isCurrentMonth) {
                       setSelectedDate(dayData.date);
-                      setForm({...empty, date: dayData.date});
+                      setForm({...empty(), date: dayData.date});
                     }
                   }}
                   className={`min-h-[100px] p-2 rounded-lg border-2 transition-all cursor-pointer ${
