@@ -2620,33 +2620,52 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
   const obrasFromTimesheet = useMemo(() => {
     const obrasMap = new Map();
 
+    // Função para separar obras quando há separadores
+    const splitObraNames = (projectName) => {
+      if (!projectName) return ['Sem Obra'];
+
+      // Split por " e ", ",", ou "/"
+      return projectName
+        .split(/\s+e\s+|,|\//)
+        .map(n => n.trim())
+        .filter(n => n.length > 0)
+        .map(n => n || 'Sem Obra');
+    };
+
     timeEntries.forEach(entry => {
-      const obraName = entry.project || 'Sem Obra';
-      if (!obrasMap.has(obraName)) {
-        obrasMap.set(obraName, {
-          name: obraName,
-          firstDate: entry.date,
-          lastDate: entry.date,
-          totalHours: 0,
-          totalCost: 0,
-          workers: new Set(),
-          entries: 0
-        });
-      }
+      const obraNames = splitObraNames(entry.project);
 
-      const obra = obrasMap.get(obraName);
-      obra.lastDate = entry.date > obra.lastDate ? entry.date : obra.lastDate;
-      obra.firstDate = entry.date < obra.firstDate ? entry.date : obra.firstDate;
+      // Processar cada obra separadamente
+      obraNames.forEach(obraName => {
+        if (!obrasMap.has(obraName)) {
+          obrasMap.set(obraName, {
+            name: obraName,
+            firstDate: entry.date,
+            lastDate: entry.date,
+            totalHours: 0,
+            totalCost: 0,
+            workers: new Set(),
+            entries: 0
+          });
+        }
 
-      const hours = Number(entry.hours) || 0;
-      const overtime = Number(entry.overtime) || 0;
-      obra.totalHours += hours + overtime;
-      obra.entries += 1;
-      obra.workers.add(entry.worker);
+        const obra = obrasMap.get(obraName);
+        obra.lastDate = entry.date > obra.lastDate ? entry.date : obra.lastDate;
+        obra.firstDate = entry.date < obra.firstDate ? entry.date : obra.firstDate;
 
-      // Calcular custo
-      const rates = personRates(people, entry.worker, {});
-      obra.totalCost += (hours * rates.normal + overtime * rates.extra);
+        const hours = Number(entry.hours) || 0;
+        const overtime = Number(entry.overtime) || 0;
+
+        // Dividir horas e custo proporcionalmente pelo número de obras
+        const divisor = obraNames.length;
+        obra.totalHours += (hours + overtime) / divisor;
+        obra.entries += 1 / divisor;
+        obra.workers.add(entry.worker);
+
+        // Calcular custo
+        const rates = personRates(people, entry.worker, {});
+        obra.totalCost += ((hours * rates.normal + overtime * rates.extra) / divisor);
+      });
     });
 
     return Array.from(obrasMap.values()).map(obra => ({
@@ -4623,9 +4642,11 @@ const VehiclesView = ({ vehicles, setVehicles, peopleNames }) => {
 const VacationsView = ({ vacations, setVacations, people }) => {
   const [form, setForm] = useState({ id: null, worker: '', startDate: todayISO(), endDate: todayISO(), status: 'approved', notes: '' });
   const [editing, setEditing] = useState(false);
-  const [viewMode, setViewMode] = useState('list'); // 'list', 'calendar', 'report'
+  const [viewMode, setViewMode] = useState('list'); // 'list', 'calendar', 'report', 'detailed-report'
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchWorkerTemp, setSearchWorkerTemp] = useState(''); // Para o relatório detalhado
+  const [selectedWorkerForReport, setSelectedWorkerForReport] = useState('all'); // 'all' ou nome do colaborador
   const fileInputRef = useRef(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [pendingFile, setPendingFile] = useState(null);
@@ -5111,6 +5132,12 @@ const VacationsView = ({ vacations, setVacations, people }) => {
               📊 Impacto
             </button>
             <button
+              onClick={() => setViewMode('detailed-report')}
+              className={`px-4 py-2 rounded-xl transition-all ${viewMode === 'detailed-report' ? 'bg-blue-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}
+            >
+              📄 Relatório
+            </button>
+            <button
               onClick={exportReport}
               className="px-4 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700 transition-all"
               title="Exportar relatório completo em Excel"
@@ -5420,6 +5447,229 @@ const VacationsView = ({ vacations, setVacations, people }) => {
           </Card>
         </div>
       )}
+
+      {/* VISTA: RELATÓRIO DETALHADO POR COLABORADOR */}
+      {viewMode === 'detailed-report' && (() => {
+        // Título dinâmico
+        const pageTitle = selectedWorkerForReport !== 'all'
+          ? `Relatório de Férias - ${selectedWorkerForReport}`
+          : 'Relatório de Férias';
+        const pageSubtitle = selectedWorkerForReport !== 'all'
+          ? `Análise detalhada de férias do colaborador`
+          : 'Selecione um colaborador para ver análise detalhada';
+
+        // Filtrar férias do colaborador selecionado no ano
+        const workerVacations = selectedWorkerForReport === 'all'
+          ? yearVacations
+          : yearVacations.filter(v => v.worker === selectedWorkerForReport);
+
+        // Calcular KPIs
+        const totalPeriods = workerVacations.length;
+        const totalDays = workerVacations.reduce((sum, v) => sum + getWorkingDays(v.startDate, v.endDate), 0);
+        const avgDaysPerPeriod = totalPeriods > 0 ? (totalDays / totalPeriods).toFixed(1) : 0;
+        const approvedCount = workerVacations.filter(v => v.status === 'approved').length;
+        const pendingCount = workerVacations.filter(v => v.status === 'pending').length;
+        const remainingDays = 22 - totalDays; // Assumindo 22 dias de férias por ano
+
+        return (
+          <div className="space-y-4">
+            {/* Cabeçalho com título dinâmico */}
+            <Card className="p-6 border-2 border-blue-500">
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                {pageTitle}
+              </h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                {pageSubtitle}
+              </p>
+            </Card>
+
+            {/* Campo de Pesquisa */}
+            <Card className="p-4">
+              <label className="text-sm font-medium mb-2 block">
+                Procurar Colaborador
+              </label>
+              <input
+                type="text"
+                value={searchWorkerTemp}
+                onChange={(e) => {
+                  setSearchWorkerTemp(e.target.value);
+                  // Verificar se há match exato
+                  const match = peopleNames.find(name =>
+                    name.toLowerCase() === e.target.value.toLowerCase()
+                  );
+                  if (match) {
+                    setSelectedWorkerForReport(match);
+                  } else if (e.target.value === '') {
+                    setSelectedWorkerForReport('all');
+                  }
+                }}
+                placeholder="Digite o nome do colaborador..."
+                list="workers-list-ferias"
+                className="w-full px-4 py-2 rounded-xl border dark:border-slate-700 dark:bg-slate-900"
+              />
+              <datalist id="workers-list-ferias">
+                {peopleNames.map(name => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+              {selectedWorkerForReport !== 'all' && (
+                <button
+                  onClick={() => {
+                    setSelectedWorkerForReport('all');
+                    setSearchWorkerTemp('');
+                  }}
+                  className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  ✕ Limpar seleção
+                </button>
+              )}
+            </Card>
+
+            {/* KPIs - Mostrar apenas quando um colaborador está selecionado */}
+            {selectedWorkerForReport !== 'all' && (
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <Card className="p-4 border-2 border-blue-500">
+                  <div className="text-sm text-slate-600 dark:text-slate-400">Total de Períodos</div>
+                  <div className="text-3xl font-bold text-blue-600 mt-2">{totalPeriods}</div>
+                  <div className="text-xs text-slate-500 mt-1">períodos de férias</div>
+                </Card>
+
+                <Card className="p-4 border-2 border-green-500">
+                  <div className="text-sm text-slate-600 dark:text-slate-400">Dias Gozados</div>
+                  <div className="text-3xl font-bold text-green-600 mt-2">{totalDays}</div>
+                  <div className="text-xs text-slate-500 mt-1">dias úteis</div>
+                </Card>
+
+                <Card className="p-4 border-2 border-purple-500">
+                  <div className="text-sm text-slate-600 dark:text-slate-400">Média por Período</div>
+                  <div className="text-3xl font-bold text-purple-600 mt-2">{avgDaysPerPeriod}</div>
+                  <div className="text-xs text-slate-500 mt-1">dias/período</div>
+                </Card>
+
+                <Card className="p-4 border-2 border-orange-500">
+                  <div className="text-sm text-slate-600 dark:text-slate-400">Status</div>
+                  <div className="text-2xl font-bold text-orange-600 mt-2">
+                    ✓ {approvedCount} / ⏳ {pendingCount}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">aprovados / pendentes</div>
+                </Card>
+
+                <Card className="p-4 border-2 border-red-500">
+                  <div className="text-sm text-slate-600 dark:text-slate-400">Dias Disponíveis</div>
+                  <div className="text-3xl font-bold text-red-600 mt-2">
+                    {remainingDays >= 0 ? remainingDays : 0}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {remainingDays > 0 ? 'dias restantes' : remainingDays === 0 ? 'férias completas' : 'dias excedidos'}
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {/* Tabela com Bordas Visíveis */}
+            {selectedWorkerForReport !== 'all' && workerVacations.length > 0 ? (
+              <Card className="p-0 overflow-hidden">
+                <div className="overflow-auto rounded-xl border-2 border-slate-300 dark:border-slate-600">
+                  <table className="min-w-full text-sm border-collapse">
+                    <thead className="bg-slate-100 dark:bg-slate-800">
+                      <tr>
+                        <th className="px-4 py-3 text-left border border-slate-300 dark:border-slate-600 font-bold">
+                          Período
+                        </th>
+                        <th className="px-4 py-3 text-left border border-slate-300 dark:border-slate-600 font-bold">
+                          Data Início
+                        </th>
+                        <th className="px-4 py-3 text-left border border-slate-300 dark:border-slate-600 font-bold">
+                          Data Fim
+                        </th>
+                        <th className="px-4 py-3 text-center border border-slate-300 dark:border-slate-600 font-bold">
+                          Dias Úteis
+                        </th>
+                        <th className="px-4 py-3 text-center border border-slate-300 dark:border-slate-600 font-bold">
+                          Status
+                        </th>
+                        <th className="px-4 py-3 text-left border border-slate-300 dark:border-slate-600 font-bold">
+                          Notas
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-slate-900">
+                      {workerVacations
+                        .sort((a, b) => new Date(b.startDate) - new Date(a.startDate))
+                        .map((v, idx) => {
+                          const days = getWorkingDays(v.startDate, v.endDate);
+                          const statusBadge = {
+                            approved: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-300', label: '✓ Aprovado' },
+                            pending: { bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-700 dark:text-yellow-300', label: '⏳ Pendente' },
+                            rejected: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-300', label: '✕ Rejeitado' }
+                          };
+                          const badge = statusBadge[v.status] || statusBadge.approved;
+
+                          return (
+                            <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                              <td className="px-4 py-3 font-medium border border-slate-300 dark:border-slate-600">
+                                #{idx + 1}
+                              </td>
+                              <td className="px-4 py-3 border border-slate-300 dark:border-slate-600">
+                                {new Date(v.startDate).toLocaleDateString('pt-PT')}
+                              </td>
+                              <td className="px-4 py-3 border border-slate-300 dark:border-slate-600">
+                                {new Date(v.endDate).toLocaleDateString('pt-PT')}
+                              </td>
+                              <td className="px-4 py-3 text-center border border-slate-300 dark:border-slate-600">
+                                <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold">
+                                  {days} dias
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center border border-slate-300 dark:border-slate-600">
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full ${badge.bg} ${badge.text} text-xs font-semibold`}>
+                                  {badge.label}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400">
+                                {v.notes || '-'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                    <tfoot className="bg-slate-100 dark:bg-slate-800">
+                      <tr>
+                        <td colSpan="3" className="px-4 py-3 text-right font-bold border border-slate-300 dark:border-slate-600">
+                          TOTAL
+                        </td>
+                        <td className="px-4 py-3 text-center font-bold border border-slate-300 dark:border-slate-600">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-600 text-white text-xs font-semibold">
+                            {totalDays} dias
+                          </span>
+                        </td>
+                        <td colSpan="2" className="px-4 py-3 border border-slate-300 dark:border-slate-600"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </Card>
+            ) : selectedWorkerForReport !== 'all' ? (
+              <Card className="p-8 text-center">
+                <div className="text-slate-400 text-lg mb-2">📭</div>
+                <div className="text-slate-600 dark:text-slate-400">
+                  Sem férias registadas para <strong>{selectedWorkerForReport}</strong> em {selectedYear}
+                </div>
+              </Card>
+            ) : (
+              <Card className="p-8 text-center">
+                <div className="text-slate-400 text-4xl mb-4">🔍</div>
+                <div className="text-xl font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Procure um colaborador
+                </div>
+                <div className="text-slate-600 dark:text-slate-400">
+                  Use o campo de pesquisa acima para selecionar um colaborador e ver o relatório detalhado de férias
+                </div>
+              </Card>
+            )}
+          </div>
+        );
+      })()}
     </section>
   );
 };
@@ -13252,9 +13502,9 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
     filteredEntries.forEach(entry => {
       if (!entry.project) return;
 
-      // Se o projeto contém "/", dividir em múltiplos projetos
-      if (entry.project.includes('/')) {
-        entry.project.split('/').forEach(part => {
+      // Se o projeto contém separadores (" e ", ",", "/"), dividir em múltiplos projetos
+      if (entry.project.match(/\s+e\s+|,|\//)) {
+        entry.project.split(/\s+e\s+|,|\//).forEach(part => {
           const trimmed = part.trim();
           if (trimmed) allProjects.add(trimmed);
         });
@@ -13297,7 +13547,17 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
     const filtered = timeEntries.filter(t => {
       if (!isNormalWork(t.template)) return false;
       if (t.date < prevStartStr || t.date > prevEndStr) return false;
-      if (selectedProject !== 'all' && t.project !== selectedProject) return false;
+
+      // 🔧 Verificar se selectedProject está em qualquer uma das obras separadas
+      if (selectedProject !== 'all') {
+        const projectRaw = t.project || 'Sem Obra';
+        const projects = projectRaw.match(/\s+e\s+|,|\//)
+          ? projectRaw.split(/\s+e\s+|,|\//).map(p => p.trim()).filter(Boolean)
+          : [projectRaw];
+
+        if (!projects.includes(selectedProject)) return false;
+      }
+
       return true;
     });
 
@@ -13325,7 +13585,17 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
       const filtered = timeEntries.filter(t => {
         if (!isNormalWork(t.template)) return false;
         if (t.date < startDate || t.date > endDate) return false;
-        if (selectedProject !== 'all' && t.project !== selectedProject) return false;
+
+        // 🔧 Verificar se selectedProject está em qualquer uma das obras separadas
+        if (selectedProject !== 'all') {
+          const projectRaw = t.project || 'Sem Obra';
+          const projects = projectRaw.match(/\s+e\s+|,|\//)
+            ? projectRaw.split(/\s+e\s+|,|\//).map(p => p.trim()).filter(Boolean)
+            : [projectRaw];
+
+          if (!projects.includes(selectedProject)) return false;
+        }
+
         // 🆕 Filtro por tipo de trabalho (Manutenção vs Obras)
         if (workTypeFilter !== 'all' && t.workType !== workTypeFilter) return false;
         return true;
@@ -13346,10 +13616,10 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
         const worker = entry.worker || entry.supervisor || 'Desconhecido';
         const rates = personRates(people, worker, null);
 
-        // 🔧 Se o projeto contém "/", dividir em múltiplos projetos
+        // 🔧 Se o projeto contém separadores (" e ", ",", "/"), dividir em múltiplos projetos
         const projectRaw = entry.project || 'Sem Obra';
-        const projects = projectRaw.includes('/')
-          ? projectRaw.split('/').map(p => p.trim()).filter(Boolean)
+        const projects = projectRaw.match(/\s+e\s+|,|\//)
+          ? projectRaw.split(/\s+e\s+|,|\//).map(p => p.trim()).filter(Boolean)
           : [projectRaw];
 
         const projectCount = projects.length;
