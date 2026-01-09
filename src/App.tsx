@@ -4523,6 +4523,8 @@ const VacationsView = ({ vacations, setVacations, people }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [searchTerm, setSearchTerm] = useState('');
   const fileInputRef = useRef(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [pendingFile, setPendingFile] = useState(null);
 
   const peopleNames = Object.keys(people || {}).sort();
 
@@ -4544,10 +4546,21 @@ const VacationsView = ({ vacations, setVacations, people }) => {
   // CRUD Functions
   const empty = () => ({ id: null, worker: '', startDate: todayISO(), endDate: todayISO(), status: 'approved', notes: '' });
 
-  // 📤 Importação de Excel
+  // 📤 Importação de Excel - Abrir modal de escolha
   const handleImportExcel = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    setPendingFile(file);
+    setShowImportModal(true);
+
+    // Limpar input para permitir reimportar o mesmo ficheiro
+    e.target.value = '';
+  };
+
+  // Processar importação com modo escolhido
+  const processImport = (mode) => {
+    if (!pendingFile) return;
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -4616,21 +4629,26 @@ const VacationsView = ({ vacations, setVacations, people }) => {
           imported++;
         });
 
-        // Adicionar todas as férias importadas
+        // Adicionar ou substituir conforme o modo
         if (newVacations.length > 0) {
-          setVacations(list => [...newVacations, ...list]);
+          if (mode === 'replace') {
+            setVacations(newVacations);
+            alert(`✅ Importação concluída (SUBSTITUIÇÃO)!\n\n📥 Importados: ${imported}\n⏭️ Ignorados: ${skipped}\n\n⚠️ Todos os registos anteriores foram removidos.`);
+          } else {
+            setVacations(list => [...newVacations, ...list]);
+            alert(`✅ Importação concluída (JUNTAR)!\n\n📥 Importados: ${imported}\n⏭️ Ignorados: ${skipped}\n\n✓ Registos adicionados aos existentes.`);
+          }
         }
-
-        alert(`✅ Importação concluída!\n\n📥 Importados: ${imported}\n⏭️ Ignorados: ${skipped}`);
       } catch (error) {
         console.error('Erro ao importar:', error);
         alert('❌ Erro ao processar o ficheiro Excel. Verifica o formato do ficheiro.');
       }
     };
-    reader.readAsArrayBuffer(file);
+    reader.readAsArrayBuffer(pendingFile);
 
-    // Limpar input para permitir reimportar o mesmo ficheiro
-    e.target.value = '';
+    // Limpar estado
+    setShowImportModal(false);
+    setPendingFile(null);
   };
 
   const save = () => {
@@ -4919,6 +4937,42 @@ const VacationsView = ({ vacations, setVacations, people }) => {
 
   return (
     <section className="space-y-4">
+      {/* Modal de escolha de modo de importação */}
+      {showImportModal && (
+        <Modal onClose={() => { setShowImportModal(false); setPendingFile(null); }}>
+          <div className="p-6">
+            <h3 className="text-xl font-bold mb-4">Importar Férias do Excel</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              Escolhe como queres importar o ficheiro:
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => processImport('merge')}
+                className="w-full p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all text-left"
+              >
+                <div className="font-semibold text-blue-700 dark:text-blue-300 mb-1">
+                  ➕ Juntar com Existentes
+                </div>
+                <div className="text-sm text-slate-600 dark:text-slate-400">
+                  Adiciona os registos do Excel aos que já existem no sistema
+                </div>
+              </button>
+              <button
+                onClick={() => processImport('replace')}
+                className="w-full p-4 rounded-xl bg-rose-50 dark:bg-rose-900/20 border-2 border-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-all text-left"
+              >
+                <div className="font-semibold text-rose-700 dark:text-rose-300 mb-1">
+                  🔄 Substituir Todos
+                </div>
+                <div className="text-sm text-slate-600 dark:text-slate-400">
+                  Remove todos os registos existentes e importa apenas os do Excel
+                </div>
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       <PageHeader
         icon="sun"
         title="Gestão de Férias"
