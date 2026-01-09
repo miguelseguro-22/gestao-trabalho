@@ -14819,7 +14819,7 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
       entry.date <= endDate
     );
 
-    // Calcular custos de manutenção por obra
+    // Calcular custos de manutenção por obra (com custo por visita/dia)
     const maintenanceByProject = new Map();
     maintenanceEntries.forEach(entry => {
       const project = entry.project || 'Sem Obra';
@@ -14828,7 +14828,8 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
           cost: 0,
           hours: 0,
           entries: 0,
-          workers: new Set()
+          workers: new Set(),
+          visitDays: new Set() // Dias únicos = visitas
         });
       }
       const data = maintenanceByProject.get(project);
@@ -14842,6 +14843,7 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
       data.hours += hours + overtime;
       data.entries += 1;
       data.workers.add(entry.worker);
+      data.visitDays.add(entry.date); // Adicionar dia único
     });
 
     const maintenanceProjects = Array.from(maintenanceByProject.entries())
@@ -14851,12 +14853,16 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
         hours: data.hours,
         entries: data.entries,
         workers: data.workers.size,
+        visits: data.visitDays.size, // Número de visitas (dias únicos)
+        costPerVisit: data.visitDays.size > 0 ? data.cost / data.visitDays.size : 0, // Custo por visita
         costPerHour: data.hours > 0 ? data.cost / data.hours : 0
       }))
       .sort((a, b) => b.cost - a.cost);
 
     const totalMaintenanceCost = maintenanceProjects.reduce((sum, p) => sum + p.cost, 0);
     const totalMaintenanceHours = maintenanceProjects.reduce((sum, p) => sum + p.hours, 0);
+    const totalMaintenanceVisits = maintenanceProjects.reduce((sum, p) => sum + p.visits, 0);
+    const avgCostPerVisit = totalMaintenanceVisits > 0 ? totalMaintenanceCost / totalMaintenanceVisits : 0;
     const maintenancePercentage = totalCost > 0 ? (totalMaintenanceCost / totalCost) * 100 : 0;
 
     // Top e Bottom performers
@@ -15423,27 +15429,38 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
   <div class="section">
     <h2>🔧 Custos de Manutenção</h2>
     <div style="background: linear-gradient(to right, #fffbeb, #fef3c7); border-left: 5px solid #f59e0b; padding: 20px; margin-bottom: 20px; border-radius: 8px;">
-      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; font-size: 9.5pt;">
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; font-size: 9.5pt; margin-bottom: 15px;">
         <div>
-          <strong style="color: #92400e;">💰 Custo Total de Manutenção:</strong><br>
+          <strong style="color: #92400e;">💰 Custo Total:</strong><br>
           <span style="font-size: 16pt; font-weight: 700; color: #f59e0b;">${currency(totalMaintenanceCost)}</span>
           <span style="font-size: 9pt; color: #92400e;"> (${maintenancePercentage.toFixed(1)}% do total)</span>
         </div>
         <div>
-          <strong style="color: #92400e;">⏱️ Horas de Manutenção:</strong><br>
-          <span style="font-size: 16pt; font-weight: 700; color: #f59e0b;">${totalMaintenanceHours.toFixed(1)}h</span>
+          <strong style="color: #92400e;">🚗 Total de Visitas:</strong><br>
+          <span style="font-size: 16pt; font-weight: 700; color: #f59e0b;">${totalMaintenanceVisits}</span>
+          <span style="font-size: 9pt; color: #92400e;"> dias</span>
         </div>
         <div>
-          <strong style="color: #92400e;">🏗️ Obras com Manutenção:</strong><br>
+          <strong style="color: #92400e;">📍 Custo por Visita:</strong><br>
+          <span style="font-size: 16pt; font-weight: 700; color: #dc2626;">${currency(avgCostPerVisit)}</span>
+          <span style="font-size: 9pt; color: #92400e;"> /visita</span>
+        </div>
+        <div>
+          <strong style="color: #92400e;">🏗️ Obras:</strong><br>
           <span style="font-size: 16pt; font-weight: 700; color: #f59e0b;">${maintenanceProjects.length}</span>
         </div>
       </div>
+
+      <div style="background: white; border-radius: 6px; padding: 12px; font-size: 9pt; color: #92400e; border: 1px solid #fbbf24;">
+        <strong>💡 Nota:</strong> O <strong>custo por visita</strong> representa o custo médio por dia de trabalho/intervenção.
+        Esta métrica é essencial para avaliar a eficiência das operações de manutenção.
+      </div>
     </div>
 
-    <h3 style="font-size: 11pt; margin-bottom: 10px; color: #92400e;">📊 Distribuição de Custos de Manutenção por Obra</h3>
-    ${maintenanceProjects.slice(0, 10).map((project, index) => {
-      const maxCost = maintenanceProjects[0].cost;
-      const percentage = (project.cost / maxCost) * 100;
+    <h3 style="font-size: 11pt; margin-bottom: 10px; color: #92400e;">📊 Distribuição por Obra (Ordenado por Custo por Visita)</h3>
+    ${maintenanceProjects.sort((a, b) => b.costPerVisit - a.costPerVisit).slice(0, 10).map((project, index) => {
+      const maxCostPerVisit = maintenanceProjects.sort((a, b) => b.costPerVisit - a.costPerVisit)[0].costPerVisit;
+      const percentage = (project.costPerVisit / maxCostPerVisit) * 100;
       const costPercentage = totalMaintenanceCost > 0 ? (project.cost / totalMaintenanceCost) * 100 : 0;
       return `
         <div class="chart-bar">
@@ -15453,8 +15470,10 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
             <div class="chart-bar-fill" style="width: ${percentage}%; background: linear-gradient(90deg, #f59e0b, #fbbf24);"></div>
           </div>
           <div class="chart-value" style="color: #92400e;">
-            ${currency(project.cost)}
-            <span style="font-size: 8pt; color: #78350f;">(${costPercentage.toFixed(1)}% · ${project.hours.toFixed(1)}h · ${project.workers} colab.)</span>
+            <strong>${currency(project.costPerVisit)}/visita</strong>
+            <span style="font-size: 8pt; color: #78350f; display: block; margin-top: 2px;">
+              ${project.visits} visitas · ${currency(project.cost)} total · ${project.workers} colab.
+            </span>
           </div>
         </div>
       `;
