@@ -14708,7 +14708,7 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
   };
 
   const exportAnalysisReport = async () => {
-    // 📊 Preparar dados para análise
+    // 📊 Preparar dados para análise (PERÍODO SELECIONADO)
     const allProjects = Array.from(costData.entries()).map(([name, data]) => ({
       name,
       cost: data.total,
@@ -14726,12 +14726,87 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
       data
     }));
 
+    // 📈 CALCULAR DADOS ACUMULADOS (desde o início até endDate)
+    const accumulatedData = new Map();
+
+    timeEntries
+      .filter(entry => entry.date <= endDate && entry.workType !== 'maintenance') // Tudo até a data final
+      .forEach(entry => {
+        const projectName = entry.project || 'Sem Projeto';
+        if (!accumulatedData.has(projectName)) {
+          accumulatedData.set(projectName, {
+            total: 0,
+            totalHours: 0,
+            horasNormais: 0,
+            horasExtra: 0,
+            horasFDS: 0,
+            horasFeriado: 0,
+            custoNormal: 0,
+            custoExtra: 0,
+            custoFDS: 0,
+            custoFeriado: 0,
+            workers: new Map()
+          });
+        }
+
+        const projData = accumulatedData.get(projectName);
+        const r = personRates(people, entry.worker, prefs);
+        const hours = Number(entry.hours) || 0;
+        const overtime = Number(entry.overtime) || 0;
+        const template = entry.template || 'Trabalho Normal';
+
+        // Calcular custos por tipo
+        if (template.includes('Fim de Semana') || template.includes('Feriado')) {
+          if (template.includes('Feriado')) {
+            projData.horasFeriado += hours + overtime;
+            projData.custoFeriado += (hours + overtime) * r.feriado;
+          } else {
+            projData.horasFDS += hours + overtime;
+            projData.custoFDS += (hours + overtime) * r.fds;
+          }
+        } else {
+          projData.horasNormais += hours;
+          projData.custoNormal += hours * r.normal;
+          projData.horasExtra += overtime;
+          projData.custoExtra += overtime * r.extra;
+        }
+
+        projData.totalHours += hours + overtime;
+        projData.total += (hours * r.normal + overtime * r.extra);
+
+        // Adicionar worker
+        if (!projData.workers.has(entry.worker)) {
+          projData.workers.set(entry.worker, { name: entry.worker });
+        }
+      });
+
+    const allProjectsAccumulated = Array.from(accumulatedData.entries()).map(([name, data]) => ({
+      name,
+      cost: data.total,
+      hours: data.totalHours,
+      workers: data.workers.size,
+      costPerHour: data.totalHours > 0 ? data.total / data.totalHours : 0,
+      normalCost: data.custoNormal,
+      extraCost: data.custoExtra,
+      fdsCost: data.custoFDS,
+      feriadoCost: data.custoFeriado,
+      horasNormais: data.horasNormais,
+      horasExtra: data.horasExtra,
+      horasFDS: data.horasFDS,
+      horasFeriado: data.horasFeriado,
+      overtimePercent: data.totalHours > 0 ? ((data.horasExtra + data.horasFDS + data.horasFeriado) / data.totalHours) * 100 : 0
+    }));
+
+    const totalCostAccumulated = allProjectsAccumulated.reduce((sum, p) => sum + p.cost, 0);
+    const totalHoursAccumulated = allProjectsAccumulated.reduce((sum, p) => sum + p.hours, 0);
+    const avgCostPerHourAccumulated = totalHoursAccumulated > 0 ? totalCostAccumulated / totalHoursAccumulated : 0;
+
     // Ordenações
     const projectsByCost = [...allProjects].sort((a, b) => b.cost - a.cost);
     const projectsByHours = [...allProjects].sort((a, b) => b.hours - a.hours);
     const projectsByEfficiency = [...allProjects].sort((a, b) => a.costPerHour - b.costPerHour);
 
-    // Métricas globais
+    // Métricas globais (PERÍODO)
     const totalCost = allProjects.reduce((sum, p) => sum + p.cost, 0);
     const totalHours = allProjects.reduce((sum, p) => sum + p.hours, 0);
     const avgCostPerHour = totalHours > 0 ? totalCost / totalHours : 0;
@@ -15180,31 +15255,88 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
     </div>
   </div>
 
-  <!-- KPIs PRINCIPAIS -->
-  <div class="kpi-grid">
-    <div class="kpi-card primary">
-      <div class="kpi-label">💰 Custo Total</div>
-      <div class="kpi-value">${currency(totalCost)}</div>
-      <div class="kpi-detail">${totalHours.toFixed(0)}h trabalhadas</div>
-    </div>
-    <div class="kpi-card ${totalBudget > 0 && totalCost <= totalBudget ? 'success' : 'warning'}">
-      <div class="kpi-label">📊 Custo Médio/Hora</div>
-      <div class="kpi-value">${currency(avgCostPerHour)}</div>
-      <div class="kpi-detail">por hora trabalhada</div>
-    </div>
-    <div class="kpi-card ${extraPercentage > 15 ? 'danger' : extraPercentage > 10 ? 'warning' : 'success'}">
-      <div class="kpi-label">⏰ Horas Extra</div>
-      <div class="kpi-value">${extraPercentage.toFixed(1)}%</div>
-      <div class="kpi-detail">do custo total</div>
-    </div>
-    <div class="kpi-card ${allProjects.length >= 50 ? 'primary' : 'success'}">
-      <div class="kpi-label">🏗️ Obras Ativas</div>
-      <div class="kpi-value">${allProjects.length}</div>
-      <div class="kpi-detail">no período</div>
+  <!-- KPIs PRINCIPAIS (PERÍODO SELECIONADO) -->
+  <div class="section">
+    <h2>📅 Métricas do Período Selecionado</h2>
+    <div class="kpi-grid">
+      <div class="kpi-card primary">
+        <div class="kpi-label">💰 Custo Total</div>
+        <div class="kpi-value">${currency(totalCost)}</div>
+        <div class="kpi-detail">${totalHours.toFixed(0)}h trabalhadas</div>
+      </div>
+      <div class="kpi-card ${totalBudget > 0 && totalCost <= totalBudget ? 'success' : 'warning'}">
+        <div class="kpi-label">📊 Custo Médio/Hora</div>
+        <div class="kpi-value">${currency(avgCostPerHour)}</div>
+        <div class="kpi-detail">por hora trabalhada</div>
+      </div>
+      <div class="kpi-card ${extraPercentage > 15 ? 'danger' : extraPercentage > 10 ? 'warning' : 'success'}">
+        <div class="kpi-label">⏰ Horas Extra</div>
+        <div class="kpi-value">${extraPercentage.toFixed(1)}%</div>
+        <div class="kpi-detail">do custo total</div>
+      </div>
+      <div class="kpi-card ${allProjects.length >= 50 ? 'primary' : 'success'}">
+        <div class="kpi-label">🏗️ Obras Ativas</div>
+        <div class="kpi-value">${allProjects.length}</div>
+        <div class="kpi-detail">no período</div>
+      </div>
     </div>
   </div>
 
-  <!-- TOP 10 OBRAS MAIS CARAS -->
+  <!-- 📈 SECÇÃO DE ACUMULADOS (DESDE O INÍCIO ATÉ ${new Date(endDate).toLocaleDateString('pt-PT')}) -->
+  <div class="section">
+    <h2>📈 Valores Acumulados (Desde o Início até ${new Date(endDate).toLocaleDateString('pt-PT')})</h2>
+    <div style="background: linear-gradient(to right, #f0fdf4, #dcfce7); border-left: 5px solid #10b981; padding: 20px; margin-bottom: 20px; border-radius: 8px;">
+      <p style="font-size: 9.5pt; color: #065f46; margin-bottom: 15px;">
+        <strong>📌 Nota:</strong> Esta secção apresenta os valores totais acumulados desde o início de cada obra até à data final do relatório (${new Date(endDate).toLocaleDateString('pt-PT')}),
+        permitindo uma visão completa do investimento total em cada projeto.
+      </p>
+
+      <div class="kpi-grid">
+        <div class="kpi-card success">
+          <div class="kpi-label">💰 Custo Total Acumulado</div>
+          <div class="kpi-value">${currency(totalCostAccumulated)}</div>
+          <div class="kpi-detail">${totalHoursAccumulated.toFixed(0)}h trabalhadas</div>
+        </div>
+        <div class="kpi-card success">
+          <div class="kpi-label">📊 Custo Médio/Hora</div>
+          <div class="kpi-value">${currency(avgCostPerHourAccumulated)}</div>
+          <div class="kpi-detail">média histórica</div>
+        </div>
+        <div class="kpi-card success">
+          <div class="kpi-label">⏱️ Total de Horas</div>
+          <div class="kpi-value">${totalHoursAccumulated.toFixed(0)}h</div>
+          <div class="kpi-detail">todas as obras</div>
+        </div>
+        <div class="kpi-card success">
+          <div class="kpi-label">🏗️ Total de Obras</div>
+          <div class="kpi-value">${allProjectsAccumulated.length}</div>
+          <div class="kpi-detail">com registos</div>
+        </div>
+      </div>
+
+      <!-- Top 10 Obras por Custo Acumulado -->
+      <h3 style="font-size: 11pt; margin: 20px 0 10px 0; color: #065f46;">💰 Top 10 Obras por Custo Acumulado</h3>
+      ${allProjectsAccumulated.sort((a, b) => b.cost - a.cost).slice(0, 10).map((project, index) => {
+        const maxCost = allProjectsAccumulated.sort((a, b) => b.cost - a.cost)[0].cost;
+        const percentage = (project.cost / maxCost) * 100;
+        return `
+          <div class="chart-bar">
+            <div class="chart-rank" style="background: linear-gradient(135deg, #10b981, #059669); color: white;">${index + 1}</div>
+            <div class="chart-label" title="${project.name}">${project.name}</div>
+            <div class="chart-bar-container">
+              <div class="chart-bar-fill" style="width: ${percentage}%; background: linear-gradient(90deg, #10b981, #34d399);"></div>
+            </div>
+            <div class="chart-value" style="color: #065f46;">
+              ${currency(project.cost)}
+              <span style="font-size: 8pt; color: #047857;">(${project.hours.toFixed(0)}h · ${project.workers} colab.)</span>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  </div>
+
+  <!-- TOP 10 OBRAS MAIS CARAS (PERÍODO) -->
   <div class="section">
     <h2>💰 Top 10 Obras Mais Caras</h2>
     <div style="text-align: center; margin: 20px 0;">
@@ -15342,6 +15474,11 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
       const extraPerc = project.cost > 0 ? (project.extraCost / project.cost) * 100 : 0;
       const fdsPerc = project.cost > 0 ? (project.fdsCost / project.cost) * 100 : 0;
       const feriadoPerc = project.cost > 0 ? (project.feriadoCost / project.cost) * 100 : 0;
+
+      // Buscar dados acumulados desta obra
+      const accumulatedProject = allProjectsAccumulated.find(p => p.name === project.name);
+      const hasAccumulated = accumulatedProject && accumulatedProject.cost > 0;
+
       return `
         <div style="margin-bottom: 40px; page-break-inside: avoid; background: #f8fafc; padding: 20px; border-radius: 10px; border: 2px solid #e2e8f0;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
@@ -15425,6 +15562,52 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
             </div>
           </div>
 
+          <!-- 📈 VALORES ACUMULADOS DESTA OBRA -->
+          ${hasAccumulated ? `
+          <div style="background: linear-gradient(to right, #f0fdf4, #dcfce7); border: 2px solid #10b981; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+            <h4 style="font-size: 11pt; color: #065f46; margin-bottom: 12px;">📈 Valores Acumulados (Desde o Início até ${new Date(endDate).toLocaleDateString('pt-PT')})</h4>
+
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px;">
+              <div style="text-align: center; padding: 10px; background: white; border-radius: 6px;">
+                <div style="font-size: 8pt; color: #059669; font-weight: 600; text-transform: uppercase;">Custo Total</div>
+                <div style="font-size: 14pt; font-weight: 800; color: #065f46;">${currency(accumulatedProject.cost)}</div>
+              </div>
+              <div style="text-align: center; padding: 10px; background: white; border-radius: 6px;">
+                <div style="font-size: 8pt; color: #059669; font-weight: 600; text-transform: uppercase;">Total Horas</div>
+                <div style="font-size: 14pt; font-weight: 800; color: #065f46;">${accumulatedProject.hours.toFixed(0)}h</div>
+              </div>
+              <div style="text-align: center; padding: 10px; background: white; border-radius: 6px;">
+                <div style="font-size: 8pt; color: #059669; font-weight: 600; text-transform: uppercase;">Custo/Hora</div>
+                <div style="font-size: 14pt; font-weight: 800; color: #065f46;">${currency(accumulatedProject.costPerHour)}</div>
+              </div>
+              <div style="text-align: center; padding: 10px; background: white; border-radius: 6px;">
+                <div style="font-size: 8pt; color: #059669; font-weight: 600; text-transform: uppercase;">% Extra</div>
+                <div style="font-size: 14pt; font-weight: 800; color: #065f46;">${accumulatedProject.overtimePercent.toFixed(1)}%</div>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; font-size: 8.5pt;">
+              <div style="padding: 8px; background: white; border-radius: 4px;">
+                <div style="color: #059669; font-weight: 600;">H. Normais</div>
+                <div style="font-weight: 700; color: #065f46;">${accumulatedProject.horasNormais.toFixed(0)}h · ${currency(accumulatedProject.normalCost)}</div>
+              </div>
+              <div style="padding: 8px; background: white; border-radius: 4px;">
+                <div style="color: #059669; font-weight: 600;">H. Extra</div>
+                <div style="font-weight: 700; color: #065f46;">${accumulatedProject.horasExtra.toFixed(0)}h · ${currency(accumulatedProject.extraCost)}</div>
+              </div>
+              <div style="padding: 8px; background: white; border-radius: 4px;">
+                <div style="color: #059669; font-weight: 600;">H. FDS</div>
+                <div style="font-weight: 700; color: #065f46;">${accumulatedProject.horasFDS.toFixed(0)}h · ${currency(accumulatedProject.fdsCost)}</div>
+              </div>
+              <div style="padding: 8px; background: white; border-radius: 4px;">
+                <div style="color: #059669; font-weight: 600;">H. Feriado</div>
+                <div style="font-weight: 700; color: #065f46;">${accumulatedProject.horasFeriado.toFixed(0)}h · ${currency(accumulatedProject.feriadoCost)}</div>
+              </div>
+            </div>
+          </div>
+          ` : ''}
+
+          <h4 style="font-size: 11pt; color: #00677F; margin-bottom: 10px;">👥 Breakdown por Colaborador (Período Selecionado)</h4>
           <table>
             <thead>
               <tr>
