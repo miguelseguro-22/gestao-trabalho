@@ -2617,6 +2617,25 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
   const [selectedObras, setSelectedObras] = useState([]);
   const [consolidatedName, setConsolidatedName] = useState('');
 
+  // Guardar overrides de classificação manual (obra → 'maintenance' | 'project')
+  const [manualClassifications, setManualClassifications] = useState(() => {
+    const saved = localStorage.getItem('obras_manual_classifications');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  // Guardar overrides quando mudam
+  useEffect(() => {
+    localStorage.setItem('obras_manual_classifications', JSON.stringify(manualClassifications));
+  }, [manualClassifications]);
+
+  // Função para alternar classificação manual
+  const toggleClassification = (obraName, currentIsMaintenance) => {
+    setManualClassifications(prev => ({
+      ...prev,
+      [obraName]: currentIsMaintenance ? 'project' : 'maintenance'
+    }));
+  };
+
   // Extrair todas as obras dos timeEntries
   const obrasFromTimesheet = useMemo(() => {
     const obrasMap = new Map();
@@ -2672,18 +2691,28 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
     return Array.from(obrasMap.values()).map(obra => {
       const workersList = Array.from(obra.workers);
 
-      // Determinar se é manutenção: contar quantos workers são técnicos de manutenção
+      // Determinar se é manutenção AUTOMATICAMENTE: contar quantos workers são técnicos de manutenção
       const maintenanceWorkers = workersList.filter(w => people?.[w]?.isMaintenance).length;
-      const isMaintenance = maintenanceWorkers > workersList.length / 2; // Maioria é técnico
+      const autoIsMaintenance = maintenanceWorkers > workersList.length / 2; // Maioria é técnico
+
+      // ✅ OVERRIDE MANUAL TEM PRIORIDADE
+      let isMaintenance = autoIsMaintenance;
+      let isManual = false;
+
+      if (manualClassifications[obra.name]) {
+        isMaintenance = manualClassifications[obra.name] === 'maintenance';
+        isManual = true;
+      }
 
       return {
         ...obra,
         workers: workersList,
         workersCount: workersList.length,
-        isMaintenance
+        isMaintenance,
+        isManualClassification: isManual
       };
     }).sort((a, b) => b.totalCost - a.totalCost);
-  }, [timeEntries, people]);
+  }, [timeEntries, people, manualClassifications]);
 
   // Filtrar com pesquisa e tipo de trabalho
   const filteredObras = useMemo(() => {
@@ -2768,11 +2797,16 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
 
       {/* Filtros de Tipo de Trabalho */}
       <Card className="p-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">
             Filtrar por:
           </div>
-          <div className="flex gap-2">
+          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+            💡 <span>Clique nos badges 🔧/🏗️ para mudar classificação · ✏️ = manual</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setWorkTypeFilter('all')}
               className={`px-4 py-2 rounded-xl transition-all font-medium ${
@@ -2976,13 +3010,29 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{obra.name}</span>
                       {obra.isMaintenance ? (
-                        <span className="px-2 py-0.5 text-xs rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 font-semibold">
-                          🔧 Manutenção
-                        </span>
+                        <button
+                          onClick={() => toggleClassification(obra.name, obra.isMaintenance)}
+                          className={`px-2 py-0.5 text-xs rounded-full font-semibold transition-all hover:scale-105 active:scale-95 ${
+                            obra.isManualClassification
+                              ? 'bg-orange-200 dark:bg-orange-800/50 text-orange-800 dark:text-orange-200 ring-2 ring-orange-400'
+                              : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200'
+                          }`}
+                          title={obra.isManualClassification ? 'Classificação manual - clique para alternar para Obra' : 'Classificação automática - clique para forçar como Obra'}
+                        >
+                          🔧 Manutenção{obra.isManualClassification && ' ✏️'}
+                        </button>
                       ) : (
-                        <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-semibold">
-                          🏗️ Obra
-                        </span>
+                        <button
+                          onClick={() => toggleClassification(obra.name, obra.isMaintenance)}
+                          className={`px-2 py-0.5 text-xs rounded-full font-semibold transition-all hover:scale-105 active:scale-95 ${
+                            obra.isManualClassification
+                              ? 'bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-200 ring-2 ring-green-400'
+                              : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200'
+                          }`}
+                          title={obra.isManualClassification ? 'Classificação manual - clique para alternar para Manutenção' : 'Classificação automática - clique para forçar como Manutenção'}
+                        >
+                          🏗️ Obra{obra.isManualClassification && ' ✏️'}
+                        </button>
                       )}
                     </div>
                   </td>
