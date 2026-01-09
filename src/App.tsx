@@ -2607,147 +2607,251 @@ const PriceCompareModal = ({ open, onClose, suppliers }) => {
   );
 };
 
-const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport }) => {
-  const empty = { id: null, name: '', manager: '', type: 'Eletricidade', family: '', budget: 0, estimatedHours: 0 };
-  const [form, setForm] = useState(empty);
-  const [editing, setEditing] = useState(false);
+// ============================================================
+// 🏗️ GESTÃO AVANÇADA DE OBRAS - Centro de Controlo
+// ============================================================
+const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntries, people }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState('consolidated'); // 'consolidated', 'all', 'manual'
+  const [selectedObras, setSelectedObras] = useState([]);
+  const [consolidatedName, setConsolidatedName] = useState('');
 
+  // Extrair todas as obras dos timeEntries
+  const obrasFromTimesheet = useMemo(() => {
+    const obrasMap = new Map();
 
-  const startEdit = (p) => { setEditing(true); setForm({ ...p }); };
-  const cancel    = () => { setEditing(false); setForm(empty); };
-  const save      = () => {
-    if (!form.name.trim()) return;
-    if (editing) {
-      setProjects(list => list.map(p => (p.id === form.id ? { ...form, id: p.id } : p)));
-    } else {
-     
-          setProjects(list => [{ ...form, id: uid() }, ...list]);
+    timeEntries.forEach(entry => {
+      const obraName = entry.project || 'Sem Obra';
+      if (!obrasMap.has(obraName)) {
+        obrasMap.set(obraName, {
+          name: obraName,
+          firstDate: entry.date,
+          lastDate: entry.date,
+          totalHours: 0,
+          totalCost: 0,
+          workers: new Set(),
+          entries: 0
+        });
+      }
+
+      const obra = obrasMap.get(obraName);
+      obra.lastDate = entry.date > obra.lastDate ? entry.date : obra.lastDate;
+      obra.firstDate = entry.date < obra.firstDate ? entry.date : obra.firstDate;
+
+      const hours = Number(entry.hours) || 0;
+      const overtime = Number(entry.overtime) || 0;
+      obra.totalHours += hours + overtime;
+      obra.entries += 1;
+      obra.workers.add(entry.worker);
+
+      // Calcular custo
+      const rates = personRates(people, entry.worker, {});
+      obra.totalCost += (hours * rates.normal + overtime * rates.extra);
+    });
+
+    return Array.from(obrasMap.values()).map(obra => ({
+      ...obra,
+      workers: Array.from(obra.workers),
+      workersCount: obra.workers.length
+    })).sort((a, b) => b.totalCost - a.totalCost);
+  }, [timeEntries, people]);
+
+  // Filtrar com pesquisa
+  const filteredObras = useMemo(() => {
+    if (!searchTerm) return obrasFromTimesheet;
+    const term = searchTerm.toLowerCase();
+    return obrasFromTimesheet.filter(o => o.name.toLowerCase().includes(term));
+  }, [obrasFromTimesheet, searchTerm]);
+
+  // Estatísticas gerais
+  const stats = useMemo(() => {
+    return {
+      total: obrasFromTimesheet.length,
+      totalHours: obrasFromTimesheet.reduce((sum, o) => sum + o.totalHours, 0),
+      totalCost: obrasFromTimesheet.reduce((sum, o) => sum + o.totalCost, 0),
+      activeObras: obrasFromTimesheet.filter(o => {
+        const lastDate = new Date(o.lastDate);
+        const now = new Date();
+        const daysDiff = (now - lastDate) / (1000 * 60 * 60 * 24);
+        return daysDiff <= 30; // Ativas nos últimos 30 dias
+      }).length
+    };
+  }, [obrasFromTimesheet]);
+
+  // Consolidar obras selecionadas
+  const consolidateSelected = () => {
+    if (selectedObras.length < 2) {
+      alert('Seleciona pelo menos 2 obras para consolidar!');
+      return;
     }
-    cancel();
-  };
+    if (!consolidatedName.trim()) {
+      alert('Insere o nome final da obra consolidada!');
+      return;
+    }
 
-  const remove = (id) => setProjects(list => list.filter(p => p.id !== id));
+    // TODO: Implementar consolidação real nos timeEntries
+    alert(`Consolidação: ${selectedObras.length} obras → "${consolidatedName}"\n\nFuncionalidade completa será implementada na próxima iteração.`);
+    setSelectedObras([]);
+    setConsolidatedName('');
+  };
 
   return (
     <section className="space-y-4">
       <PageHeader
         icon="wrench"
-        title="Obras"
-        subtitle={`${projects.length} registadas`}
+        title="Gestão de Obras"
+        subtitle={`${stats.total} obras identificadas · ${stats.activeObras} ativas · ${currency(stats.totalCost)} faturado`}
+        actions={
+          <div className="flex gap-2">
+            <button
+              onClick={() => setViewMode('consolidated')}
+              className={`px-4 py-2 rounded-xl transition-all ${viewMode === 'consolidated' ? 'bg-blue-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}
+            >
+              📊 Dashboard
+            </button>
+            <button
+              onClick={() => setViewMode('all')}
+              className={`px-4 py-2 rounded-xl transition-all ${viewMode === 'all' ? 'bg-blue-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}
+            >
+              📋 Todas
+            </button>
+          </div>
+        }
       />
 
-      {/* Formulário de criação/edição */}
+      {/* Pesquisa e Consolidação */}
       <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <label className="text-sm">Nome da obra
+        <div className="flex gap-3 items-end">
+          <div className="flex-1">
+            <label className="block text-sm font-medium mb-2">🔍 Procurar Obras</label>
             <input
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              value={form.name}
-              onChange={e => setForm({ ...form, name: e.target.value })}
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Digite para procurar..."
+              className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 dark:bg-slate-900"
             />
-          </label>
-
-          <label className="text-sm">Diretor de obra
-            <input
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              value={form.manager}
-              onChange={e => setForm({ ...form, manager: e.target.value })}
-            />
-          </label>
-
-          <label className="text-sm">Tipo
-            <select
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              value={form.type}
-              onChange={e => setForm({ ...form, type: e.target.value })}
-            >
-              <option>Eletricidade</option>
-              <option>AVAC</option>
-              <option>AVAC + Eletricidade</option>
-            </select>
-          </label>
-
-          <label className="text-sm">Gama/Família
-            <input
-              list="familias-catalogo"
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              value={form.family}
-              onChange={e => setForm({ ...form, family: e.target.value })}
-            />
-            <datalist id="familias-catalogo">
-              {uniqueFamilies.map(f => <option key={f} value={f} />)}
-            </datalist>
-          </label>
-
-          <label className="text-sm">Orçamento (€)
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              value={form.budget || ''}
-              onChange={e => setForm({ ...form, budget: parseFloat(e.target.value) || 0 })}
-              placeholder="0.00"
-            />
-          </label>
-
-          <label className="text-sm">Horas Estimadas
-            <input
-              type="number"
-              min="0"
-              step="1"
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              value={form.estimatedHours || ''}
-              onChange={e => setForm({ ...form, estimatedHours: parseInt(e.target.value) || 0 })}
-              placeholder="0"
-            />
-          </label>
-        </div>
-
-        <div className="mt-3 flex gap-2 justify-end">
-          {editing && <Button variant="secondary" onClick={cancel}>Cancelar</Button>}
-          <Button onClick={save}>{editing ? 'Guardar' : 'Adicionar'}</Button>
+          </div>
+          {selectedObras.length > 0 && (
+            <>
+              <div className="flex-1">
+                <label className="block text-sm font-medium mb-2">📝 Nome Consolidado</label>
+                <input
+                  type="text"
+                  value={consolidatedName}
+                  onChange={(e) => setConsolidatedName(e.target.value)}
+                  placeholder="Nome final da obra..."
+                  className="w-full px-3 py-2 rounded-xl border dark:border-slate-700 dark:bg-slate-900"
+                />
+              </div>
+              <Button onClick={consolidateSelected}>
+                🔄 Consolidar {selectedObras.length} obras
+              </Button>
+              <Button variant="secondary" onClick={() => setSelectedObras([])}>
+                ✖ Limpar
+              </Button>
+            </>
+          )}
         </div>
       </Card>
 
-      {/* Tabela de obras */}
+      {/* Dashboard View */}
+      {viewMode === 'consolidated' && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card className="p-4">
+            <div className="text-sm text-slate-500 dark:text-slate-400">Total de Obras</div>
+            <div className="text-3xl font-bold mt-2">{stats.total}</div>
+            <div className="text-sm text-slate-500 mt-1">{stats.activeObras} ativas (30 dias)</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-sm text-slate-500 dark:text-slate-400">Horas Totais</div>
+            <div className="text-3xl font-bold mt-2">{Math.round(stats.totalHours)}</div>
+            <div className="text-sm text-slate-500 mt-1">Todas as obras</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-sm text-slate-500 dark:text-slate-400">Custo Total</div>
+            <div className="text-3xl font-bold mt-2">{currency(stats.totalCost)}</div>
+            <div className="text-sm text-slate-500 mt-1">Mão de obra</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-sm text-slate-500 dark:text-slate-400">Custo Médio/Obra</div>
+            <div className="text-3xl font-bold mt-2">{currency(stats.totalCost / stats.total || 0)}</div>
+            <div className="text-sm text-slate-500 mt-1">Por obra</div>
+          </Card>
+        </div>
+      )}
+
+      {/* Lista de Obras */}
       <Card className="p-4">
+        <h3 className="font-semibold text-lg mb-3">
+          {searchTerm ? `Resultados: ${filteredObras.length}` : 'Todas as Obras'}
+        </h3>
         <div className="overflow-auto rounded-xl border dark:border-slate-800">
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-900/50">
               <tr>
+                <th className="px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedObras.length === filteredObras.length && filteredObras.length > 0}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedObras(filteredObras.map(o => o.name));
+                      } else {
+                        setSelectedObras([]);
+                      }
+                    }}
+                  />
+                </th>
                 <th className="px-3 py-2 text-left">Obra</th>
-                <th className="px-3 py-2 text-left">Diretor</th>
-                <th className="px-3 py-2 text-left">Tipo</th>
-                <th className="px-3 py-2 text-left">Família</th>
-                <th className="px-3 py-2 text-right">Orçamento</th>
-                <th className="px-3 py-2 text-right">Horas Est.</th>
-                <th className="px-3 py-2"></th>
+                <th className="px-3 py-2 text-left">Período Ativo</th>
+                <th className="px-3 py-2 text-right">Colaboradores</th>
+                <th className="px-3 py-2 text-right">Horas</th>
+                <th className="px-3 py-2 text-right">Custo</th>
+                <th className="px-3 py-2 text-right">Registos</th>
               </tr>
             </thead>
             <tbody>
-              {projects.length === 0 && (
+              {filteredObras.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="px-3 py-10 text-center text-slate-500">Sem obras</td>
+                  <td colSpan="7" className="px-3 py-10 text-center text-slate-500">
+                    {searchTerm ? 'Nenhuma obra encontrada' : 'Sem obras nos timesheets'}
+                  </td>
                 </tr>
               )}
 
-              {projects.map(p => (
-                <tr key={p.id} className="border-t dark:border-slate-800">
-                  <td className="px-3 py-2">{p.name}</td>
-                  <td className="px-3 py-2">{p.manager || '—'}</td>
-                  <td className="px-3 py-2">{p.type}</td>
-                  <td className="px-3 py-2">{p.family || '—'}</td>
+              {filteredObras.map(obra => (
+                <tr key={obra.name} className="border-t dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedObras.includes(obra.name)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedObras([...selectedObras, obra.name]);
+                        } else {
+                          setSelectedObras(selectedObras.filter(n => n !== obra.name));
+                        }
+                      }}
+                    />
+                  </td>
+                  <td className="px-3 py-2 font-medium">{obra.name}</td>
+                  <td className="px-3 py-2 text-slate-600 dark:text-slate-400">
+                    {fmtDate(obra.firstDate)} → {fmtDate(obra.lastDate)}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <span title={obra.workers.join(', ')}>
+                      {obra.workersCount} 👷
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-right font-medium">
-                    {p.budget > 0 ? currency(p.budget) : '—'}
+                    {Math.round(obra.totalHours)}h
                   </td>
-                  <td className="px-3 py-2 text-right">
-                    {p.estimatedHours > 0 ? `${p.estimatedHours}h` : '—'}
+                  <td className="px-3 py-2 text-right font-medium text-green-600 dark:text-green-400">
+                    {currency(obra.totalCost)}
                   </td>
-                  <td className="px-3 py-2 text-right">
-                    <Button variant="secondary" size="sm" onClick={() => openReport(p)}>Relatório</Button>{' '}
-                    <Button variant="secondary" size="sm" onClick={() => startEdit(p)}>Editar</Button>{' '}
-                    <Button variant="danger" size="sm" onClick={() => remove(p.id)}>Apagar</Button>
+                  <td className="px-3 py-2 text-right text-slate-500">
+                    {obra.entries}
                   </td>
                 </tr>
               ))}
@@ -16829,6 +16933,8 @@ function TableMaterials() {
               setProjects={setProjects}
               uniqueFamilies={uniqueFamilies}
               openReport={openReport}
+              timeEntries={timeEntries}
+              people={people}
             />
           )}
 
