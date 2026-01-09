@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, supabaseReady } from './lib/supabaseClient'
 import { Chart, registerables } from 'chart.js';
+import * as XLSX from 'xlsx';
 
 // Registrar componentes do Chart.js
 Chart.register(...registerables);
@@ -38,6 +39,7 @@ case 'sun':return<svg viewBox="0 0 24 24" className={className}><circle {...S} c
 case 'users':return<svg viewBox="0 0 24 24" className={className}><path {...S} d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle {...S} cx="9" cy="7" r="4"/><path {...S} d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
 case 'truck':return<svg viewBox="0 0 24 24" className={className}><rect {...S} x="1" y="3" width="15" height="13"/><path {...S} d="M16 8h4l3 3v5h-2m-5 0H5m0 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0m16 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0"/></svg>;
 case 'check-square':return<svg viewBox="0 0 24 24" className={className}><path {...S} d="M9 11l3 3L22 4"/><path {...S} d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>;
+case 'upload':return<svg viewBox="0 0 24 24" className={className}><path {...S} d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path {...S} d="M17 8l-5-5-5 5"/><path {...S} d="M12 3v12"/></svg>;
     default:return null;
   }
 };
@@ -4541,6 +4543,95 @@ const VacationsView = ({ vacations, setVacations, people }) => {
   // CRUD Functions
   const empty = () => ({ id: null, worker: '', startDate: todayISO(), endDate: todayISO(), status: 'approved', notes: '' });
 
+  // 📤 Importação de Excel
+  const handleImportExcel = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false });
+
+        let imported = 0;
+        let skipped = 0;
+        const newVacations = [];
+
+        // Processar linhas (começar da linha 1 para saltar cabeçalho se existir)
+        rows.forEach((row, index) => {
+          if (index === 0) return; // Saltar primeira linha (cabeçalhos)
+
+          const dataFim = row[0];      // Coluna A: Data Fim
+          const dataInicio = row[1];   // Coluna B: Data Início
+          const nome = row[3];         // Coluna D: Nome
+
+          // Validar dados
+          if (!nome || !dataInicio || !dataFim) {
+            skipped++;
+            return;
+          }
+
+          // Converter datas do formato Excel para ISO (YYYY-MM-DD)
+          const parseExcelDate = (dateStr) => {
+            if (!dateStr) return null;
+
+            // Se for número (data Excel), converter
+            if (!isNaN(dateStr)) {
+              const date = XLSX.SSF.parse_date_code(Number(dateStr));
+              return `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
+            }
+
+            // Se for string, tentar converter diferentes formatos
+            // Formato DD/MM/YYYY ou DD-MM-YYYY
+            const parts = dateStr.split(/[\/\-]/);
+            if (parts.length === 3) {
+              const [day, month, year] = parts;
+              return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            }
+
+            return dateStr;
+          };
+
+          const startDate = parseExcelDate(dataInicio);
+          const endDate = parseExcelDate(dataFim);
+
+          if (!startDate || !endDate) {
+            skipped++;
+            return;
+          }
+
+          // Adicionar férias
+          newVacations.push({
+            id: uid(),
+            worker: String(nome).trim(),
+            startDate,
+            endDate,
+            status: 'approved',
+            notes: 'Importado de Excel'
+          });
+          imported++;
+        });
+
+        // Adicionar todas as férias importadas
+        if (newVacations.length > 0) {
+          setVacations(list => [...newVacations, ...list]);
+        }
+
+        alert(`✅ Importação concluída!\n\n📥 Importados: ${imported}\n⏭️ Ignorados: ${skipped}`);
+      } catch (error) {
+        console.error('Erro ao importar:', error);
+        alert('❌ Erro ao processar o ficheiro Excel. Verifica o formato do ficheiro.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+
+    // Limpar input para permitir reimportar o mesmo ficheiro
+    e.target.value = '';
+  };
+
   const save = () => {
     if (!form.worker || !form.startDate || !form.endDate) return;
     if (new Date(form.endDate) < new Date(form.startDate)) {
@@ -4703,7 +4794,23 @@ const VacationsView = ({ vacations, setVacations, people }) => {
       {/* Formulário */}
       {(editing || viewMode === 'list') && (
         <Card className="p-4">
-          <h3 className="font-semibold text-lg mb-3">{editing ? 'Editar Férias' : 'Adicionar Férias'}</h3>
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-semibold text-lg">{editing ? 'Editar Férias' : 'Adicionar Férias'}</h3>
+            {!editing && (
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleImportExcel}
+                  className="hidden"
+                />
+                <Button variant="secondary">
+                  <Icon name="upload" className="w-4 h-4 inline mr-2" />
+                  Importar Excel
+                </Button>
+              </label>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <label className="text-sm">Colaborador
               <select
