@@ -13775,6 +13775,24 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
   // 🆕 Estado para filtro de tipo de trabalho (Manutenção vs Obras)
   const [workTypeFilter, setWorkTypeFilter] = useState('all');
 
+  // 🆕 Estado para criar relatório de custos adicionais
+  const [showCostReportForm, setShowCostReportForm] = useState(false);
+
+  // Estados do formulário de custos
+  const [costReportData, setCostReportData] = useState({
+    project: '',
+    date: new Date().toISOString().slice(0, 10),
+    workers: [],
+    costs: []
+  });
+
+  const [currentCost, setCurrentCost] = useState({
+    type: 'estadia', // estadia, portagem, gasoleo, refeicao, outros
+    description: '',
+    amount: 0,
+    quantity: 1
+  });
+
   const projectNames = useMemo(() => {
     const allProjects = new Set();
 
@@ -15701,12 +15719,286 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
 
   return (
     <section className="space-y-4">
-      <PageHeader
-        icon="activity"
-        title={pageTitle}
-        subtitle={pageSubtitle}
-      />
+      <div className="flex items-center justify-between">
+        <PageHeader
+          icon="activity"
+          title={pageTitle}
+          subtitle={pageSubtitle}
+        />
 
+        {/* Botão para alternar entre visualização e criação de relatório */}
+        <button
+          onClick={() => setShowCostReportForm(!showCostReportForm)}
+          className="px-6 py-3 rounded-xl text-sm font-medium transition-all shadow-md hover:shadow-lg"
+          style={{
+            background: showCostReportForm ? 'linear-gradient(to right, #00677F, #00A9B8)' : 'linear-gradient(to right, #10b981, #059669)',
+            color: 'white'
+          }}
+        >
+          {showCostReportForm ? '📊 Ver Custos' : '📝 Criar Relatório de Custos'}
+        </button>
+      </div>
+
+      {showCostReportForm ? (
+        // FORMULÁRIO DE CRIAÇÃO DE RELATÓRIO DE CUSTOS
+        <Card className="p-6">
+          <h2 className="text-2xl font-bold mb-6 text-slate-800 dark:text-slate-100">
+            📝 Criar Relatório de Custos Adicionais
+          </h2>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+            Registe custos adicionais como estadia, portagens, gasóleo, refeições, etc.
+          </p>
+
+          {/* FORMULÁRIO DE CUSTOS */}
+          <div className="space-y-6">
+            {/* Informações Básicas */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">🏗️ Obra *</label>
+                <select
+                  value={costReportData.project}
+                  onChange={(e) => setCostReportData({ ...costReportData, project: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+                  required
+                >
+                  <option value="">Selecione uma obra...</option>
+                  {projectNames.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">📅 Data *</label>
+                <input
+                  type="date"
+                  value={costReportData.date}
+                  onChange={(e) => setCostReportData({ ...costReportData, date: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Seleção de Colaboradores */}
+            <div>
+              <label className="block text-sm font-medium mb-2">👷 Colaboradores</label>
+              <div className="flex flex-wrap gap-2">
+                {Object.keys(people || {}).map(workerName => (
+                  <button
+                    key={workerName}
+                    type="button"
+                    onClick={() => {
+                      const workers = costReportData.workers.includes(workerName)
+                        ? costReportData.workers.filter(w => w !== workerName)
+                        : [...costReportData.workers, workerName];
+                      setCostReportData({ ...costReportData, workers });
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                      costReportData.workers.includes(workerName)
+                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-2 border-blue-500'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600'
+                    }`}
+                  >
+                    {workerName}
+                  </button>
+                ))}
+              </div>
+              {costReportData.workers.length > 0 && (
+                <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                  {costReportData.workers.length} colaborador(es) selecionado(s)
+                </div>
+              )}
+            </div>
+
+            {/* Adicionar Custo */}
+            <div className="border-t pt-6 dark:border-slate-700">
+              <h3 className="text-lg font-semibold mb-4">➕ Adicionar Custo</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Tipo</label>
+                  <select
+                    value={currentCost.type}
+                    onChange={(e) => setCurrentCost({ ...currentCost, type: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+                  >
+                    <option value="estadia">🏨 Estadia</option>
+                    <option value="portagem">🛣️ Portagem</option>
+                    <option value="gasoleo">⛽ Gasóleo</option>
+                    <option value="refeicao">🍽️ Refeição</option>
+                    <option value="outros">📦 Outros</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Descrição</label>
+                  <input
+                    type="text"
+                    value={currentCost.description}
+                    onChange={(e) => setCurrentCost({ ...currentCost, description: e.target.value })}
+                    placeholder="Ex: Hotel em Lisboa"
+                    className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Valor (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={currentCost.amount}
+                    onChange={(e) => setCurrentCost({ ...currentCost, amount: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Quantidade</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={currentCost.quantity}
+                    onChange={(e) => setCurrentCost({ ...currentCost, quantity: parseInt(e.target.value) || 1 })}
+                    className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
+                  />
+                </div>
+              </div>
+
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (currentCost.amount > 0) {
+                    const newCost = {
+                      ...currentCost,
+                      id: Date.now(),
+                      total: currentCost.amount * currentCost.quantity
+                    };
+                    setCostReportData({
+                      ...costReportData,
+                      costs: [...costReportData.costs, newCost]
+                    });
+                    setCurrentCost({
+                      type: 'estadia',
+                      description: '',
+                      amount: 0,
+                      quantity: 1
+                    });
+                  }
+                }}
+                disabled={currentCost.amount <= 0}
+              >
+                ➕ Adicionar Custo
+              </Button>
+            </div>
+
+            {/* Lista de Custos Adicionados */}
+            {costReportData.costs.length > 0 && (
+              <div className="border-t pt-6 dark:border-slate-700">
+                <h3 className="text-lg font-semibold mb-4">📋 Custos Adicionados</h3>
+
+                <div className="space-y-2">
+                  {costReportData.costs.map((cost) => {
+                    const typeIcons = {
+                      estadia: '🏨',
+                      portagem: '🛣️',
+                      gasoleo: '⛽',
+                      refeicao: '🍽️',
+                      outros: '📦'
+                    };
+
+                    return (
+                      <div
+                        key={cost.id}
+                        className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span>{typeIcons[cost.type]}</span>
+                            <span className="font-medium capitalize">{cost.type}</span>
+                            {cost.description && (
+                              <span className="text-sm text-slate-500">· {cost.description}</span>
+                            )}
+                          </div>
+                          <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                            {currency(cost.amount)} × {cost.quantity} = <strong>{currency(cost.total)}</strong>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setCostReportData({
+                              ...costReportData,
+                              costs: costReportData.costs.filter(c => c.id !== cost.id)
+                            });
+                          }}
+                          className="text-red-500 hover:text-red-700 px-2 py-1"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Total */}
+                <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border-2 border-green-500">
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-bold text-green-800 dark:text-green-400">Total</span>
+                    <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                      {currency(costReportData.costs.reduce((sum, c) => sum + c.total, 0))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Ações */}
+            <div className="flex gap-3 justify-end pt-6 border-t dark:border-slate-700">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowCostReportForm(false);
+                  setCostReportData({
+                    project: '',
+                    date: new Date().toISOString().slice(0, 10),
+                    workers: [],
+                    costs: []
+                  });
+                  setCurrentCost({
+                    type: 'estadia',
+                    description: '',
+                    amount: 0,
+                    quantity: 1
+                  });
+                }}
+              >
+                ❌ Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                onClick={async () => {
+                  if (!costReportData.project) {
+                    alert('Por favor selecione uma obra');
+                    return;
+                  }
+                  if (costReportData.costs.length === 0) {
+                    alert('Por favor adicione pelo menos um custo');
+                    return;
+                  }
+
+                  // TODO: Guardar no Supabase
+                  alert('Funcionalidade de guardar será implementada a seguir!');
+                  console.log('Dados a guardar:', costReportData);
+                }}
+                disabled={!costReportData.project || costReportData.costs.length === 0}
+              >
+                💾 Guardar Relatório
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <>
       {/* Filtros */}
       <Card className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -16608,6 +16900,8 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
             </div>
           </div>
         </Modal>
+      )}
+        </>
       )}
     </section>
   );
