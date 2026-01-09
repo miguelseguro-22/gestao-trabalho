@@ -4544,6 +4544,174 @@ const VacationsView = ({ vacations, setVacations, people }) => {
   // CRUD Functions
   const empty = () => ({ id: null, worker: '', startDate: todayISO(), endDate: todayISO(), status: 'approved', notes: '' });
 
+  // 📊 Exportar Relatório em Excel
+  const exportReport = () => {
+    try {
+      // Preparar dados para o relatório
+      const wb = XLSX.utils.book_new();
+
+      // FOLHA 1: RESUMO GERAL
+      const summaryData = [
+        ['RELATÓRIO DE FÉRIAS - RESUMO GERAL'],
+        ['Ano:', selectedYear],
+        ['Total de Colaboradores:', peopleNames.length],
+        ['Total de Períodos de Férias:', yearVacations.length],
+        ['Total de Dias de Férias:', analysis.totalDays],
+        [],
+        ['Colaborador', 'Períodos', 'Dias Úteis']
+      ];
+
+      Object.entries(analysis.byWorker)
+        .sort((a, b) => b[1].days - a[1].days)
+        .forEach(([worker, data]) => {
+          summaryData.push([worker, data.periods.length, data.days]);
+        });
+
+      const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(wb, ws1, 'Resumo');
+
+      // FOLHA 2: TODAS AS FÉRIAS
+      const allVacationsData = [
+        ['LISTA COMPLETA DE FÉRIAS'],
+        [],
+        ['Colaborador', 'Data Início', 'Data Fim', 'Dias Úteis', 'Status', 'Notas']
+      ];
+
+      yearVacations
+        .sort((a, b) => a.startDate.localeCompare(b.startDate))
+        .forEach(v => {
+          allVacationsData.push([
+            v.worker,
+            fmtDate(v.startDate),
+            fmtDate(v.endDate),
+            getWorkingDays(v.startDate, v.endDate),
+            v.status === 'approved' ? 'Aprovado' : v.status === 'pending' ? 'Pendente' : 'Rejeitado',
+            v.notes || ''
+          ]);
+        });
+
+      const ws2 = XLSX.utils.aoa_to_sheet(allVacationsData);
+      XLSX.utils.book_append_sheet(wb, ws2, 'Todas as Férias');
+
+      // FOLHA 3: PERÍODOS CRÍTICOS
+      const criticalData = [
+        ['PERÍODOS CRÍTICOS (≥3 pessoas de férias)'],
+        [],
+        ['Data', 'Nº Pessoas', 'Colaboradores']
+      ];
+
+      // Agrupar períodos críticos consecutivos
+      const groupedCritical = [];
+      let currentGroup = null;
+
+      analysis.criticalPeriods
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .forEach(period => {
+          if (!currentGroup || period.date !== currentGroup.endDate) {
+            if (currentGroup) groupedCritical.push(currentGroup);
+            currentGroup = {
+              startDate: period.date,
+              endDate: period.date,
+              maxCount: period.count,
+              workers: new Set(period.workers)
+            };
+          } else {
+            // Estender grupo
+            const nextDay = new Date(currentGroup.endDate);
+            nextDay.setDate(nextDay.getDate() + 1);
+            if (period.date === nextDay.toISOString().slice(0, 10)) {
+              currentGroup.endDate = period.date;
+              currentGroup.maxCount = Math.max(currentGroup.maxCount, period.count);
+              period.workers.forEach(w => currentGroup.workers.add(w));
+            }
+          }
+        });
+      if (currentGroup) groupedCritical.push(currentGroup);
+
+      groupedCritical.forEach(group => {
+        const dateRange = group.startDate === group.endDate
+          ? fmtDate(group.startDate)
+          : `${fmtDate(group.startDate)} a ${fmtDate(group.endDate)}`;
+        criticalData.push([
+          dateRange,
+          group.maxCount,
+          Array.from(group.workers).join(', ')
+        ]);
+      });
+
+      if (groupedCritical.length === 0) {
+        criticalData.push(['Nenhum período crítico identificado', '', '']);
+      }
+
+      const ws3 = XLSX.utils.aoa_to_sheet(criticalData);
+      XLSX.utils.book_append_sheet(wb, ws3, 'Períodos Críticos');
+
+      // FOLHA 4: DISPONIBILIDADE MENSAL
+      const monthlyData = [
+        ['DISPONIBILIDADE MENSAL DE COLABORADORES'],
+        [],
+        ['Mês', 'Disponibilidade Média', 'Dias com Baixa Disponibilidade (<60%)']
+      ];
+
+      const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                          'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+      Object.entries(analysis.monthlyAvailability).forEach(([monthStr, data]) => {
+        const month = parseInt(monthStr);
+        const avgAvailability = (data.totalAvailability / data.days * 100).toFixed(1);
+        const lowAvailabilityDays = data.details.filter(d => d.availability < 0.6).length;
+
+        monthlyData.push([
+          monthNames[month],
+          `${avgAvailability}%`,
+          lowAvailabilityDays
+        ]);
+      });
+
+      const ws4 = XLSX.utils.aoa_to_sheet(monthlyData);
+      XLSX.utils.book_append_sheet(wb, ws4, 'Disponibilidade Mensal');
+
+      // FOLHA 5: FÉRIAS POR COLABORADOR (detalhado)
+      const byWorkerData = [
+        ['FÉRIAS POR COLABORADOR - DETALHADO'],
+        []
+      ];
+
+      Object.entries(analysis.byWorker)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .forEach(([worker, data]) => {
+          byWorkerData.push([`COLABORADOR: ${worker}`, '', '', '']);
+          byWorkerData.push(['Data Início', 'Data Fim', 'Dias Úteis', 'Status']);
+
+          data.periods
+            .sort((a, b) => a.startDate.localeCompare(b.startDate))
+            .forEach(period => {
+              byWorkerData.push([
+                fmtDate(period.startDate),
+                fmtDate(period.endDate),
+                getWorkingDays(period.startDate, period.endDate),
+                period.status === 'approved' ? 'Aprovado' : period.status === 'pending' ? 'Pendente' : 'Rejeitado'
+              ]);
+            });
+
+          byWorkerData.push(['TOTAL:', '', data.days, '']);
+          byWorkerData.push([]);
+        });
+
+      const ws5 = XLSX.utils.aoa_to_sheet(byWorkerData);
+      XLSX.utils.book_append_sheet(wb, ws5, 'Por Colaborador');
+
+      // Exportar ficheiro
+      const fileName = `Relatorio_Ferias_${selectedYear}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      alert(`✅ Relatório exportado com sucesso!\n\nFicheiro: ${fileName}\n\n📊 Inclui:\n- Resumo geral\n- Lista completa de férias\n- Períodos críticos\n- Disponibilidade mensal\n- Detalhes por colaborador`);
+    } catch (error) {
+      console.error('Erro ao exportar relatório:', error);
+      alert('❌ Erro ao gerar o relatório. Verifica a consola para detalhes.');
+    }
+  };
+
   // 📤 Importação de Excel
   const handleImportExcel = (e) => {
     const file = e.target.files?.[0];
@@ -4787,6 +4955,13 @@ const VacationsView = ({ vacations, setVacations, people }) => {
               className={`px-4 py-2 rounded-xl transition-all ${viewMode === 'report' ? 'bg-blue-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}
             >
               📊 Impacto
+            </button>
+            <button
+              onClick={exportReport}
+              className="px-4 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700 transition-all"
+              title="Exportar relatório completo em Excel"
+            >
+              📥 Exportar Relatório
             </button>
           </div>
         }
