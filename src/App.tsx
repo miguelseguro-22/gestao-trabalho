@@ -4939,7 +4939,7 @@ const VacationsView = ({ vacations, setVacations, people }) => {
     <section className="space-y-4">
       {/* Modal de escolha de modo de importação */}
       {showImportModal && (
-        <Modal onClose={() => { setShowImportModal(false); setPendingFile(null); }}>
+        <Modal open={true} onClose={() => { setShowImportModal(false); setPendingFile(null); }}>
           <div className="p-6">
             <h3 className="text-xl font-bold mb-4">Importar Férias do Excel</h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
