@@ -4522,6 +4522,7 @@ const VacationsView = ({ vacations, setVacations, people }) => {
   const [viewMode, setViewMode] = useState('list'); // 'list', 'calendar', 'report'
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [searchTerm, setSearchTerm] = useState('');
+  const fileInputRef = useRef(null);
 
   const peopleNames = Object.keys(people || {}).sort();
 
@@ -4797,18 +4798,19 @@ const VacationsView = ({ vacations, setVacations, people }) => {
           <div className="flex justify-between items-center mb-3">
             <h3 className="font-semibold text-lg">{editing ? 'Editar Férias' : 'Adicionar Férias'}</h3>
             {!editing && (
-              <label className="cursor-pointer">
+              <>
                 <input
+                  ref={fileInputRef}
                   type="file"
                   accept=".xlsx,.xls"
                   onChange={handleImportExcel}
                   className="hidden"
                 />
-                <Button variant="secondary">
+                <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
                   <Icon name="upload" className="w-4 h-4 inline mr-2" />
                   Importar Excel
                 </Button>
-              </label>
+              </>
             )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
