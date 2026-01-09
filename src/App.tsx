@@ -5452,10 +5452,10 @@ const VacationsView = ({ vacations, setVacations, people }) => {
       {viewMode === 'detailed-report' && (() => {
         // Título dinâmico
         const pageTitle = selectedWorkerForReport !== 'all'
-          ? `Relatório de Férias - ${selectedWorkerForReport}`
+          ? selectedWorkerForReport
           : 'Relatório de Férias';
         const pageSubtitle = selectedWorkerForReport !== 'all'
-          ? `Análise detalhada de férias do colaborador`
+          ? `Análise detalhada de férias do colaborador em ${selectedYear}`
           : 'Selecione um colaborador para ver análise detalhada';
 
         // Filtrar férias do colaborador selecionado no ano
@@ -5472,128 +5472,203 @@ const VacationsView = ({ vacations, setVacations, people }) => {
         const remainingDays = 22 - totalDays; // Assumindo 22 dias de férias por ano
 
         return (
-          <div className="space-y-4">
-            {/* Cabeçalho com título dinâmico */}
-            <Card className="p-6 border-2 border-blue-500">
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-                {pageTitle}
-              </h2>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                {pageSubtitle}
-              </p>
+          <div className="space-y-6">
+            {/* Cabeçalho com título dinâmico - MELHORADO */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-700 dark:to-blue-800 rounded-2xl p-8 shadow-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                      <Icon name="sun" className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-3xl font-bold text-white">
+                        {pageTitle}
+                      </h2>
+                      <p className="text-sm text-blue-100 mt-1">
+                        {pageSubtitle}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {selectedWorkerForReport !== 'all' && (
+                  <div className="text-right">
+                    <div className="text-4xl font-bold text-white mb-1">{totalDays}</div>
+                    <div className="text-sm text-blue-100">dias de férias gozados</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Campo de Pesquisa - MELHORADO */}
+            <Card className="p-6 shadow-md">
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 block flex items-center gap-2">
+                    <Icon name="user" className="w-4 h-4" />
+                    Procurar Colaborador
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={searchWorkerTemp}
+                      onChange={(e) => {
+                        setSearchWorkerTemp(e.target.value);
+                        // Verificar se há match exato
+                        const match = peopleNames.find(name =>
+                          name.toLowerCase() === e.target.value.toLowerCase()
+                        );
+                        if (match) {
+                          setSelectedWorkerForReport(match);
+                        } else if (e.target.value === '') {
+                          setSelectedWorkerForReport('all');
+                        }
+                      }}
+                      placeholder="Digite o nome do colaborador..."
+                      list="workers-list-ferias"
+                      className="w-full px-4 py-3 pl-10 rounded-xl border-2 border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
+                    />
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                      🔍
+                    </div>
+                  </div>
+                  <datalist id="workers-list-ferias">
+                    {peopleNames.map(name => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
+                </div>
+                {selectedWorkerForReport !== 'all' && (
+                  <button
+                    onClick={() => {
+                      setSelectedWorkerForReport('all');
+                      setSearchWorkerTemp('');
+                    }}
+                    className="mt-6 px-6 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium transition-all flex items-center gap-2"
+                  >
+                    <Icon name="x" className="w-4 h-4" />
+                    Limpar
+                  </button>
+                )}
+              </div>
             </Card>
 
-            {/* Campo de Pesquisa */}
-            <Card className="p-4">
-              <label className="text-sm font-medium mb-2 block">
-                Procurar Colaborador
-              </label>
-              <input
-                type="text"
-                value={searchWorkerTemp}
-                onChange={(e) => {
-                  setSearchWorkerTemp(e.target.value);
-                  // Verificar se há match exato
-                  const match = peopleNames.find(name =>
-                    name.toLowerCase() === e.target.value.toLowerCase()
-                  );
-                  if (match) {
-                    setSelectedWorkerForReport(match);
-                  } else if (e.target.value === '') {
-                    setSelectedWorkerForReport('all');
-                  }
-                }}
-                placeholder="Digite o nome do colaborador..."
-                list="workers-list-ferias"
-                className="w-full px-4 py-2 rounded-xl border dark:border-slate-700 dark:bg-slate-900"
-              />
-              <datalist id="workers-list-ferias">
-                {peopleNames.map(name => (
-                  <option key={name} value={name} />
-                ))}
-              </datalist>
-              {selectedWorkerForReport !== 'all' && (
-                <button
-                  onClick={() => {
-                    setSelectedWorkerForReport('all');
-                    setSearchWorkerTemp('');
-                  }}
-                  className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  ✕ Limpar seleção
-                </button>
-              )}
-            </Card>
-
-            {/* KPIs - Mostrar apenas quando um colaborador está selecionado */}
+            {/* KPIs - Mostrar apenas quando um colaborador está selecionado - MELHORADO */}
             {selectedWorkerForReport !== 'all' && (
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                <Card className="p-4 border-2 border-blue-500">
-                  <div className="text-sm text-slate-600 dark:text-slate-400">Total de Períodos</div>
-                  <div className="text-3xl font-bold text-blue-600 mt-2">{totalPeriods}</div>
-                  <div className="text-xs text-slate-500 mt-1">períodos de férias</div>
-                </Card>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-5">
+                {/* Card 1: Total de Períodos */}
+                <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                      📅
+                    </div>
+                  </div>
+                  <div className="text-4xl font-bold text-white mb-2">{totalPeriods}</div>
+                  <div className="text-sm text-blue-100 font-medium">Total de Períodos</div>
+                  <div className="text-xs text-blue-200 mt-1">períodos de férias</div>
+                </div>
 
-                <Card className="p-4 border-2 border-green-500">
-                  <div className="text-sm text-slate-600 dark:text-slate-400">Dias Gozados</div>
-                  <div className="text-3xl font-bold text-green-600 mt-2">{totalDays}</div>
-                  <div className="text-xs text-slate-500 mt-1">dias úteis</div>
-                </Card>
+                {/* Card 2: Dias Gozados */}
+                <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                      ✅
+                    </div>
+                  </div>
+                  <div className="text-4xl font-bold text-white mb-2">{totalDays}</div>
+                  <div className="text-sm text-green-100 font-medium">Dias Gozados</div>
+                  <div className="text-xs text-green-200 mt-1">dias úteis</div>
+                </div>
 
-                <Card className="p-4 border-2 border-purple-500">
-                  <div className="text-sm text-slate-600 dark:text-slate-400">Média por Período</div>
-                  <div className="text-3xl font-bold text-purple-600 mt-2">{avgDaysPerPeriod}</div>
-                  <div className="text-xs text-slate-500 mt-1">dias/período</div>
-                </Card>
+                {/* Card 3: Média por Período */}
+                <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                      📊
+                    </div>
+                  </div>
+                  <div className="text-4xl font-bold text-white mb-2">{avgDaysPerPeriod}</div>
+                  <div className="text-sm text-purple-100 font-medium">Média por Período</div>
+                  <div className="text-xs text-purple-200 mt-1">dias/período</div>
+                </div>
 
-                <Card className="p-4 border-2 border-orange-500">
-                  <div className="text-sm text-slate-600 dark:text-slate-400">Status</div>
-                  <div className="text-2xl font-bold text-orange-600 mt-2">
+                {/* Card 4: Status */}
+                <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                      🔔
+                    </div>
+                  </div>
+                  <div className="text-3xl font-bold text-white mb-2">
                     ✓ {approvedCount} / ⏳ {pendingCount}
                   </div>
-                  <div className="text-xs text-slate-500 mt-1">aprovados / pendentes</div>
-                </Card>
+                  <div className="text-sm text-orange-100 font-medium">Status</div>
+                  <div className="text-xs text-orange-200 mt-1">aprovados / pendentes</div>
+                </div>
 
-                <Card className="p-4 border-2 border-red-500">
-                  <div className="text-sm text-slate-600 dark:text-slate-400">Dias Disponíveis</div>
-                  <div className="text-3xl font-bold text-red-600 mt-2">
+                {/* Card 5: Dias Disponíveis */}
+                <div className={`rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow ${
+                  remainingDays > 0
+                    ? 'bg-gradient-to-br from-red-500 to-red-600'
+                    : 'bg-gradient-to-br from-emerald-500 to-emerald-600'
+                }`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                      {remainingDays > 0 ? '⚠️' : '🎉'}
+                    </div>
+                  </div>
+                  <div className="text-4xl font-bold text-white mb-2">
                     {remainingDays >= 0 ? remainingDays : 0}
                   </div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    {remainingDays > 0 ? 'dias restantes' : remainingDays === 0 ? 'férias completas' : 'dias excedidos'}
+                  <div className={`text-sm font-medium ${remainingDays > 0 ? 'text-red-100' : 'text-emerald-100'}`}>
+                    Dias Disponíveis
                   </div>
-                </Card>
+                  <div className={`text-xs mt-1 ${remainingDays > 0 ? 'text-red-200' : 'text-emerald-200'}`}>
+                    {remainingDays > 0 ? 'dias restantes' : remainingDays === 0 ? 'férias completas! 🎊' : 'dias excedidos'}
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* Tabela com Bordas Visíveis */}
+            {/* Tabela com Bordas Visíveis - MELHORADA */}
             {selectedWorkerForReport !== 'all' && workerVacations.length > 0 ? (
-              <Card className="p-0 overflow-hidden">
-                <div className="overflow-auto rounded-xl border-2 border-slate-300 dark:border-slate-600">
+              <Card className="p-6 shadow-md">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                      📋
+                    </div>
+                    Histórico de Férias
+                  </h3>
+                  <div className="text-sm text-slate-500 dark:text-slate-400">
+                    {workerVacations.length} {workerVacations.length === 1 ? 'período' : 'períodos'}
+                  </div>
+                </div>
+                <div className="overflow-auto rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-sm">
                   <table className="min-w-full text-sm border-collapse">
-                    <thead className="bg-slate-100 dark:bg-slate-800">
+                    <thead className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700">
                       <tr>
-                        <th className="px-4 py-3 text-left border border-slate-300 dark:border-slate-600 font-bold">
-                          Período
+                        <th className="px-4 py-4 text-left border-b-2 border-slate-300 dark:border-slate-600 font-bold text-slate-700 dark:text-slate-200">
+                          #
                         </th>
-                        <th className="px-4 py-3 text-left border border-slate-300 dark:border-slate-600 font-bold">
+                        <th className="px-4 py-4 text-left border-b-2 border-slate-300 dark:border-slate-600 font-bold text-slate-700 dark:text-slate-200">
                           Data Início
                         </th>
-                        <th className="px-4 py-3 text-left border border-slate-300 dark:border-slate-600 font-bold">
+                        <th className="px-4 py-4 text-left border-b-2 border-slate-300 dark:border-slate-600 font-bold text-slate-700 dark:text-slate-200">
                           Data Fim
                         </th>
-                        <th className="px-4 py-3 text-center border border-slate-300 dark:border-slate-600 font-bold">
+                        <th className="px-4 py-4 text-center border-b-2 border-slate-300 dark:border-slate-600 font-bold text-slate-700 dark:text-slate-200">
                           Dias Úteis
                         </th>
-                        <th className="px-4 py-3 text-center border border-slate-300 dark:border-slate-600 font-bold">
+                        <th className="px-4 py-4 text-center border-b-2 border-slate-300 dark:border-slate-600 font-bold text-slate-700 dark:text-slate-200">
                           Status
                         </th>
-                        <th className="px-4 py-3 text-left border border-slate-300 dark:border-slate-600 font-bold">
+                        <th className="px-4 py-4 text-left border-b-2 border-slate-300 dark:border-slate-600 font-bold text-slate-700 dark:text-slate-200">
                           Notas
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white dark:bg-slate-900">
+                    <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800">
                       {workerVacations
                         .sort((a, b) => new Date(b.startDate) - new Date(a.startDate))
                         .map((v, idx) => {
@@ -5606,64 +5681,94 @@ const VacationsView = ({ vacations, setVacations, people }) => {
                           const badge = statusBadge[v.status] || statusBadge.approved;
 
                           return (
-                            <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                              <td className="px-4 py-3 font-medium border border-slate-300 dark:border-slate-600">
+                            <tr key={v.id} className="hover:bg-blue-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                              <td className="px-4 py-4 font-bold text-slate-500">
                                 #{idx + 1}
                               </td>
-                              <td className="px-4 py-3 border border-slate-300 dark:border-slate-600">
-                                {new Date(v.startDate).toLocaleDateString('pt-PT')}
+                              <td className="px-4 py-4 font-medium text-slate-700 dark:text-slate-300">
+                                {new Date(v.startDate).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' })}
                               </td>
-                              <td className="px-4 py-3 border border-slate-300 dark:border-slate-600">
-                                {new Date(v.endDate).toLocaleDateString('pt-PT')}
+                              <td className="px-4 py-4 font-medium text-slate-700 dark:text-slate-300">
+                                {new Date(v.endDate).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' })}
                               </td>
-                              <td className="px-4 py-3 text-center border border-slate-300 dark:border-slate-600">
-                                <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold">
+                              <td className="px-4 py-4 text-center">
+                                <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-bold shadow-sm">
                                   {days} dias
                                 </span>
                               </td>
-                              <td className="px-4 py-3 text-center border border-slate-300 dark:border-slate-600">
-                                <span className={`inline-flex items-center px-2 py-1 rounded-full ${badge.bg} ${badge.text} text-xs font-semibold`}>
+                              <td className="px-4 py-4 text-center">
+                                <span className={`inline-flex items-center px-3 py-1.5 rounded-lg ${badge.bg} ${badge.text} text-sm font-bold shadow-sm`}>
                                   {badge.label}
                                 </span>
                               </td>
-                              <td className="px-4 py-3 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400">
-                                {v.notes || '-'}
+                              <td className="px-4 py-4 text-slate-600 dark:text-slate-400 text-sm">
+                                {v.notes || <span className="text-slate-400 italic">Sem notas</span>}
                               </td>
                             </tr>
                           );
                         })}
                     </tbody>
-                    <tfoot className="bg-slate-100 dark:bg-slate-800">
+                    <tfoot className="bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-700 border-t-2 border-slate-300 dark:border-slate-600">
                       <tr>
-                        <td colSpan="3" className="px-4 py-3 text-right font-bold border border-slate-300 dark:border-slate-600">
-                          TOTAL
+                        <td colSpan="3" className="px-4 py-5 text-right font-bold text-slate-700 dark:text-slate-300 text-lg">
+                          TOTAL GERAL
                         </td>
-                        <td className="px-4 py-3 text-center font-bold border border-slate-300 dark:border-slate-600">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-600 text-white text-xs font-semibold">
+                        <td className="px-4 py-5 text-center">
+                          <span className="inline-flex items-center px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 text-white text-base font-bold shadow-md">
                             {totalDays} dias
                           </span>
                         </td>
-                        <td colSpan="2" className="px-4 py-3 border border-slate-300 dark:border-slate-600"></td>
+                        <td colSpan="2" className="px-4 py-5"></td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
               </Card>
             ) : selectedWorkerForReport !== 'all' ? (
-              <Card className="p-8 text-center">
-                <div className="text-slate-400 text-lg mb-2">📭</div>
-                <div className="text-slate-600 dark:text-slate-400">
-                  Sem férias registadas para <strong>{selectedWorkerForReport}</strong> em {selectedYear}
+              <Card className="p-16 text-center shadow-md">
+                <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-800 mb-6">
+                  <span className="text-5xl">📭</span>
+                </div>
+                <div className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-3">
+                  Sem Férias Registadas
+                </div>
+                <div className="text-lg text-slate-600 dark:text-slate-400 mb-2">
+                  O colaborador <strong className="text-blue-600 dark:text-blue-400">{selectedWorkerForReport}</strong> não tem férias registadas em <strong>{selectedYear}</strong>
+                </div>
+                <div className="text-sm text-slate-500 dark:text-slate-500 mt-6">
+                  💡 Dica: Adicione períodos de férias através do botão "📋 Lista"
                 </div>
               </Card>
             ) : (
-              <Card className="p-8 text-center">
-                <div className="text-slate-400 text-4xl mb-4">🔍</div>
-                <div className="text-xl font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                  Procure um colaborador
+              <Card className="p-16 text-center shadow-md">
+                <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 mb-8">
+                  <span className="text-7xl">🔍</span>
                 </div>
-                <div className="text-slate-600 dark:text-slate-400">
-                  Use o campo de pesquisa acima para selecionar um colaborador e ver o relatório detalhado de férias
+                <div className="text-3xl font-bold text-slate-800 dark:text-slate-200 mb-4">
+                  Selecione um Colaborador
+                </div>
+                <div className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto mb-8">
+                  Use o campo de pesquisa acima para selecionar um colaborador e visualizar o relatório detalhado de férias com análise completa
+                </div>
+                <div className="flex items-center justify-center gap-8 text-sm text-slate-500 dark:text-slate-500">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+                      📊
+                    </div>
+                    <span>KPIs Detalhados</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
+                      📋
+                    </div>
+                    <span>Histórico Completo</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center">
+                      📈
+                    </div>
+                    <span>Análise de Períodos</span>
+                  </div>
                 </div>
               </Card>
             )}
@@ -14012,6 +14117,12 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
   const exportProjectPDF = (projectName, projectData) => {
     const workers = Array.from(projectData.workers.values()).sort((a, b) => b.custoTotal - a.custoTotal);
 
+    // Calcular KPIs
+    const totalHours = Math.round(projectData.totalHours);
+    const avgCostPerHour = projectData.totalHours > 0 ? projectData.total / projectData.totalHours : 0;
+    const numWorkers = projectData.workers.size;
+    const totalCost = projectData.total;
+
     const html = `
 <!DOCTYPE html>
 <html>
@@ -14019,97 +14130,152 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
   <meta charset="UTF-8">
   <title>Relatório de Custos - ${projectName}</title>
   <style>
-    @page { size: A4; margin: 20mm; }
+    @page { size: A4; margin: 15mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-      font-size: 11pt;
+      font-size: 10pt;
       line-height: 1.4;
       color: #1e293b;
     }
     .header {
       text-align: center;
-      margin-bottom: 30px;
+      margin-bottom: 25px;
       border-bottom: 3px solid #00A9B8;
       padding-bottom: 15px;
     }
     .header h1 {
-      font-size: 24pt;
+      font-size: 22pt;
       color: #00677F;
       margin-bottom: 5px;
     }
     .header .subtitle {
-      font-size: 12pt;
+      font-size: 11pt;
       color: #64748b;
     }
     .info-box {
       background: #f1f5f9;
-      padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 20px;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      font-size: 9pt;
     }
-    .info-row {
+    .info-item {
       display: flex;
-      justify-content: space-between;
-      margin-bottom: 8px;
+      flex-direction: column;
     }
     .info-label {
       font-weight: 600;
       color: #475569;
+      margin-bottom: 3px;
     }
     .info-value {
       color: #0f172a;
+      font-weight: 500;
     }
-    .summary {
-      background: linear-gradient(135deg, #00677F 0%, #00A9B8 100%);
-      color: white;
-      padding: 20px;
+
+    /* 5 KPI CARDS COLORIDOS */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .kpi-card {
+      border: 2px solid;
       border-radius: 8px;
-      margin-bottom: 25px;
+      padding: 10px;
       text-align: center;
+      background: white;
     }
-    .summary h2 {
-      font-size: 16pt;
-      margin-bottom: 10px;
+    .kpi-card.blue { border-color: #3b82f6; }
+    .kpi-card.green { border-color: #22c55e; }
+    .kpi-card.purple { border-color: #a855f7; }
+    .kpi-card.orange { border-color: #f97316; }
+    .kpi-card.red { border-color: #ef4444; }
+    .kpi-label {
+      font-size: 8pt;
+      color: #64748b;
+      margin-bottom: 5px;
     }
-    .summary .total {
-      font-size: 32pt;
+    .kpi-value {
+      font-size: 18pt;
       font-weight: bold;
+      margin-bottom: 2px;
     }
+    .kpi-card.blue .kpi-value { color: #3b82f6; }
+    .kpi-card.green .kpi-value { color: #22c55e; }
+    .kpi-card.purple .kpi-value { color: #a855f7; }
+    .kpi-card.orange .kpi-value { color: #f97316; }
+    .kpi-card.red .kpi-value { color: #ef4444; }
+    .kpi-unit {
+      font-size: 7pt;
+      color: #94a3b8;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 20px;
+      margin-top: 15px;
+      border: 2px solid #cbd5e1;
     }
     th {
-      background: #00677F;
-      color: white;
-      padding: 12px 8px;
+      background: #f1f5f9;
+      color: #0f172a;
+      padding: 10px 6px;
       text-align: left;
-      font-weight: 600;
-      font-size: 10pt;
+      font-weight: 700;
+      font-size: 9pt;
+      border: 1px solid #cbd5e1;
     }
     th.right { text-align: right; }
     td {
-      padding: 10px 8px;
-      border-bottom: 1px solid #e2e8f0;
-      font-size: 10pt;
+      padding: 8px 6px;
+      border: 1px solid #cbd5e1;
+      font-size: 9pt;
+      background: white;
     }
     td.right { text-align: right; }
     td.bold { font-weight: 700; }
-    tr:nth-child(even) {
+    tr:nth-child(even) td {
       background: #f8fafc;
     }
-    .total-row {
-      background: #e0f2fe !important;
+    .total-row td {
+      background: #f1f5f9 !important;
       font-weight: 700;
+      border-top: 2px solid #64748b;
+    }
+    .metrics-footer {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 15px;
+      font-size: 8pt;
+    }
+    .metric-box {
+      background: #f8fafc;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+    }
+    .metric-label {
+      color: #64748b;
+      margin-bottom: 3px;
+    }
+    .metric-value {
+      font-weight: 700;
+      color: #0f172a;
+      font-size: 10pt;
     }
     .footer {
-      margin-top: 40px;
-      padding-top: 15px;
+      margin-top: 25px;
+      padding-top: 12px;
       border-top: 1px solid #cbd5e1;
       text-align: center;
-      font-size: 9pt;
+      font-size: 8pt;
       color: #64748b;
     }
   </style>
@@ -14121,38 +14287,62 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
   </div>
 
   <div class="info-box">
-    <div class="info-row">
+    <div class="info-item">
       <span class="info-label">Obra:</span>
       <span class="info-value">${projectName}</span>
     </div>
-    <div class="info-row">
+    <div class="info-item">
       <span class="info-label">Período:</span>
       <span class="info-value">${new Date(startDate).toLocaleDateString('pt-PT')} até ${new Date(endDate).toLocaleDateString('pt-PT')}</span>
     </div>
-    <div class="info-row">
+    <div class="info-item">
       <span class="info-label">Data de Emissão:</span>
-      <span class="info-value">${new Date().toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+      <span class="info-value">${new Date().toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' })} às ${new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>
     </div>
   </div>
 
-  <div class="summary">
-    <h2>Custo Total da Obra</h2>
-    <div class="total">${currency(projectData.total)}</div>
+  <!-- 5 KPI CARDS COLORIDOS -->
+  <div class="kpi-grid">
+    <div class="kpi-card blue">
+      <div class="kpi-label">N° de Horas</div>
+      <div class="kpi-value">${totalHours}h</div>
+      <div class="kpi-unit">horas totais</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Custo Médio/Hora</div>
+      <div class="kpi-value">${currency(avgCostPerHour)}</div>
+      <div class="kpi-unit">por hora</div>
+    </div>
+    <div class="kpi-card purple">
+      <div class="kpi-label">Horas & Custo</div>
+      <div class="kpi-value" style="font-size: 14pt;">${totalHours}h</div>
+      <div class="kpi-unit" style="font-weight: 600; color: #a855f7;">${currency(totalCost)}</div>
+    </div>
+    <div class="kpi-card orange">
+      <div class="kpi-label">N° de Colab</div>
+      <div class="kpi-value">${numWorkers}</div>
+      <div class="kpi-unit">colaboradores</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Custo Total da Obra</div>
+      <div class="kpi-value">${currency(totalCost)}</div>
+      <div class="kpi-unit">custo total</div>
+    </div>
   </div>
 
-  <h2 style="margin-bottom: 10px; color: #00677F; font-size: 14pt;">Breakdown por Colaborador</h2>
+  <h2 style="margin-top: 20px; margin-bottom: 10px; color: #00677F; font-size: 13pt;">Breakdown por Colaborador</h2>
 
   <table>
     <thead>
       <tr>
         <th>Colaborador</th>
-        <th class="right">H. Normais</th>
+        <th class="right">H.<br/>Normais</th>
         <th class="right">Custo</th>
-        <th class="right">H. Extra</th>
+        <th class="right">H.<br/>Extra</th>
         <th class="right">Custo</th>
-        <th class="right">H. FDS</th>
+        <th class="right">H.<br/>FDS</th>
         <th class="right">Custo</th>
-        <th class="right">H. Feriado</th>
+        <th class="right">H.<br/>Feriado</th>
         <th class="right">Custo</th>
         <th class="right">Total</th>
       </tr>
@@ -14160,7 +14350,7 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
     <tbody>
       ${workers.map(worker => `
         <tr>
-          <td>${worker.name}</td>
+          <td><strong>${worker.name}</strong></td>
           <td class="right">${worker.horasNormais.toFixed(1)}h</td>
           <td class="right">${currency(worker.custoNormal)}</td>
           <td class="right">${worker.horasExtra.toFixed(1)}h</td>
@@ -14173,7 +14363,7 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
         </tr>
       `).join('')}
       <tr class="total-row">
-        <td><strong>TOTAL GERAL</strong></td>
+        <td><strong>TOTAL<br/>GERAL</strong></td>
         <td class="right">${workers.reduce((s, w) => s + w.horasNormais, 0).toFixed(1)}h</td>
         <td class="right">${currency(workers.reduce((s, w) => s + w.custoNormal, 0))}</td>
         <td class="right">${workers.reduce((s, w) => s + w.horasExtra, 0).toFixed(1)}h</td>
@@ -14182,10 +14372,29 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
         <td class="right">${currency(workers.reduce((s, w) => s + w.custoFDS, 0))}</td>
         <td class="right">${workers.reduce((s, w) => s + w.horasFeriado, 0).toFixed(1)}h</td>
         <td class="right">${currency(workers.reduce((s, w) => s + w.custoFeriado, 0))}</td>
-        <td class="right bold" style="color: #00677F; font-size: 12pt;">${currency(projectData.total)}</td>
+        <td class="right bold" style="color: #00677F; font-size: 11pt;">${currency(projectData.total)}</td>
       </tr>
     </tbody>
   </table>
+
+  <div class="metrics-footer">
+    <div class="metric-box">
+      <div class="metric-label">Total Horas</div>
+      <div class="metric-value">${projectData.totalHours.toFixed(1)}h</div>
+    </div>
+    <div class="metric-box">
+      <div class="metric-label">% Horas Extra</div>
+      <div class="metric-value">${projectData.overtimePercent.toFixed(1)}%</div>
+    </div>
+    <div class="metric-box">
+      <div class="metric-label">Custo Médio/Hora</div>
+      <div class="metric-value">${currency(avgCostPerHour)}</div>
+    </div>
+    <div class="metric-box">
+      <div class="metric-label">Colaboradores</div>
+      <div class="metric-value">${projectData.workers.size}</div>
+    </div>
+  </div>
 
   <div class="footer">
     <p>Relatório gerado automaticamente pela Plataforma de Gestão de Trabalho</p>
