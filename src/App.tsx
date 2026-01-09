@@ -13199,6 +13199,7 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
 
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [selectedProject, setSelectedProject] = useState('all');
+  const [searchObraTemp, setSearchObraTemp] = useState(''); // Campo de pesquisa temporário
 
   // 💾 Persistir datas em localStorage
   const [startDate, setStartDate] = useState(() => {
@@ -14830,12 +14831,18 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
     }
   };
 
+  // Título dinâmico baseado na obra selecionada
+  const pageTitle = selectedProject !== 'all' ? selectedProject : 'Relatórios de Custos por Obra';
+  const pageSubtitle = selectedProject !== 'all'
+    ? 'Análise detalhada de custos e colaboradores'
+    : 'Análise de custos salariais por projeto e colaborador';
+
   return (
     <section className="space-y-4">
       <PageHeader
         icon="activity"
-        title="Relatórios de Custos por Obra"
-        subtitle="Análise de custos salariais por projeto e colaborador"
+        title={pageTitle}
+        subtitle={pageSubtitle}
       />
 
       {/* Filtros */}
@@ -14892,18 +14899,43 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-2">Obra</label>
-            <select
-              value={selectedProject}
-              onChange={(e) => setSelectedProject(e.target.value)}
+          <div className="relative">
+            <label className="block text-sm font-medium mb-2">🔍 Procurar Obra</label>
+            <input
+              type="text"
+              value={searchObraTemp}
+              onChange={(e) => {
+                setSearchObraTemp(e.target.value);
+                // Auto-selecionar se encontrar match exato
+                const match = projectNames.find(name =>
+                  name.toLowerCase() === e.target.value.toLowerCase()
+                );
+                if (match) {
+                  setSelectedProject(match);
+                } else if (e.target.value === '') {
+                  setSelectedProject('all');
+                }
+              }}
+              placeholder="Digite o nome da obra..."
               className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"
-            >
-              <option value="all">Todas as Obras</option>
+              list="obras-list"
+            />
+            <datalist id="obras-list">
               {projectNames.map(name => (
-                <option key={name} value={name}>{name}</option>
+                <option key={name} value={name} />
               ))}
-            </select>
+            </datalist>
+            {selectedProject !== 'all' && (
+              <button
+                onClick={() => {
+                  setSelectedProject('all');
+                  setSearchObraTemp('');
+                }}
+                className="absolute right-2 top-9 text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            )}
           </div>
         </div>
 
@@ -14946,6 +14978,56 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
           </div>
         )}
       </Card>
+
+      {/* KPIs da Obra Selecionada */}
+      {selectedProject !== 'all' && costData.has(selectedProject) && (() => {
+        const projectData = costData.get(selectedProject);
+        const avgCostPerHour = projectData.totalHours > 0 ? projectData.total / projectData.totalHours : 0;
+
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <Card className="p-4 border-2 border-blue-500">
+              <div className="text-sm text-slate-500 dark:text-slate-400">N° de Horas</div>
+              <div className="text-3xl font-bold mt-2">{Math.round(projectData.totalHours)}h</div>
+              <div className="text-xs text-slate-500 mt-1">
+                {projectData.horasNormais.toFixed(0)}h normais + {projectData.horasExtra.toFixed(0)}h extra
+              </div>
+            </Card>
+
+            <Card className="p-4 border-2 border-green-500">
+              <div className="text-sm text-slate-500 dark:text-slate-400">Custo Médio/Hora</div>
+              <div className="text-3xl font-bold mt-2">{currency(avgCostPerHour)}</div>
+              <div className="text-xs text-slate-500 mt-1">Taxa média ponderada</div>
+            </Card>
+
+            <Card className="p-4 border-2 border-purple-500">
+              <div className="text-sm text-slate-500 dark:text-slate-400">Horas & Custo</div>
+              <div className="text-2xl font-bold mt-2">
+                {projectData.totalHours.toFixed(0)}h
+              </div>
+              <div className="text-xl font-bold text-purple-600">
+                {currency(projectData.total)}
+              </div>
+            </Card>
+
+            <Card className="p-4 border-2 border-orange-500">
+              <div className="text-sm text-slate-500 dark:text-slate-400">N° de Colab</div>
+              <div className="text-3xl font-bold mt-2">{projectData.workers.size}</div>
+              <div className="text-xs text-slate-500 mt-1">Colaboradores ativos</div>
+            </Card>
+
+            <Card className="p-4 border-2 border-red-500">
+              <div className="text-sm text-slate-500 dark:text-slate-400">Custo Total da Obra</div>
+              <div className="text-3xl font-bold mt-2 text-red-600 dark:text-red-400">
+                {currency(projectData.total)}
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                {startDate && endDate ? `${fmtDate(startDate)} - ${fmtDate(endDate)}` : 'Período total'}
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* Previsão de Custos */}
       <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
@@ -15164,39 +15246,39 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
               </div>
             )}
 
-            {/* Tabela de Colaboradores */}
-            <div className="overflow-auto rounded-xl border dark:border-slate-800">
-              <table className="min-w-full text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-900/50">
+            {/* Tabela de Colaboradores - COM BORDAS VISÍVEIS */}
+            <div className="overflow-auto rounded-xl border-2 border-slate-300 dark:border-slate-600">
+              <table className="min-w-full text-sm border-collapse">
+                <thead className="bg-slate-100 dark:bg-slate-800">
                   <tr>
-                    <th className="px-3 py-2 text-left">Colaborador</th>
-                    <th className="px-3 py-2 text-right">H. Normais</th>
-                    <th className="px-3 py-2 text-right">Custo</th>
-                    <th className="px-3 py-2 text-right">H. Extra</th>
-                    <th className="px-3 py-2 text-right">Custo</th>
-                    <th className="px-3 py-2 text-right">H. FDS</th>
-                    <th className="px-3 py-2 text-right">Custo</th>
-                    <th className="px-3 py-2 text-right">H. Feriado</th>
-                    <th className="px-3 py-2 text-right">Custo</th>
-                    <th className="px-3 py-2 text-right">Tx Esforço</th>
-                    <th className="px-3 py-2 text-right font-bold">Total</th>
+                    <th className="px-3 py-2 text-left border border-slate-300 dark:border-slate-600 font-bold">Colaborador</th>
+                    <th className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600 font-bold">H. Normais</th>
+                    <th className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600 font-bold">Custo</th>
+                    <th className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600 font-bold">H. Extra</th>
+                    <th className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600 font-bold">Custo</th>
+                    <th className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600 font-bold">H. FDS</th>
+                    <th className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600 font-bold">Custo</th>
+                    <th className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600 font-bold">H. Feriado</th>
+                    <th className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600 font-bold">Custo</th>
+                    <th className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600 font-bold">Tx Esforço</th>
+                    <th className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600 font-bold">Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {Array.from(projectData.workers.values())
                     .sort((a, b) => b.custoTotal - a.custoTotal)
                     .map(worker => (
-                      <tr key={worker.name} className="border-t dark:border-slate-800">
-                        <td className="px-3 py-2 font-medium">{worker.name}</td>
-                        <td className="px-3 py-2 text-right">{worker.horasNormais.toFixed(1)}h</td>
-                        <td className="px-3 py-2 text-right">{currency(worker.custoNormal)}</td>
-                        <td className="px-3 py-2 text-right">{worker.horasExtra.toFixed(1)}h</td>
-                        <td className="px-3 py-2 text-right">{currency(worker.custoExtra)}</td>
-                        <td className="px-3 py-2 text-right">{worker.horasFDS.toFixed(1)}h</td>
-                        <td className="px-3 py-2 text-right">{currency(worker.custoFDS)}</td>
-                        <td className="px-3 py-2 text-right">{worker.horasFeriado.toFixed(1)}h</td>
-                        <td className="px-3 py-2 text-right">{currency(worker.custoFeriado)}</td>
-                        <td className="px-3 py-2 text-right">
+                      <tr key={worker.name} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td className="px-3 py-2 font-medium border border-slate-300 dark:border-slate-600">{worker.name}</td>
+                        <td className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600">{worker.horasNormais.toFixed(1)}h</td>
+                        <td className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600">{currency(worker.custoNormal)}</td>
+                        <td className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600">{worker.horasExtra.toFixed(1)}h</td>
+                        <td className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600">{currency(worker.custoExtra)}</td>
+                        <td className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600">{worker.horasFDS.toFixed(1)}h</td>
+                        <td className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600">{currency(worker.custoFDS)}</td>
+                        <td className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600">{worker.horasFeriado.toFixed(1)}h</td>
+                        <td className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600">{currency(worker.custoFeriado)}</td>
+                        <td className="px-3 py-2 text-right border border-slate-300 dark:border-slate-600">
                           <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
                             worker.effortRate >= 75 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
                             worker.effortRate >= 50 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
@@ -15205,7 +15287,7 @@ const CostReportsView = ({ timeEntries, setTimeEntries, projects, people, vehicl
                             {worker.effortRate.toFixed(1)}%
                           </span>
                         </td>
-                        <td className="px-3 py-2 text-right font-bold" style={{ color: '#00A9B8' }}>
+                        <td className="px-3 py-2 text-right font-bold border border-slate-300 dark:border-slate-600" style={{ color: '#00A9B8' }}>
                           {currency(worker.custoTotal)}
                         </td>
                       </tr>
