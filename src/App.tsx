@@ -2613,6 +2613,7 @@ const PriceCompareModal = ({ open, onClose, suppliers }) => {
 const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntries, people }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('consolidated'); // 'consolidated', 'all', 'manual'
+  const [workTypeFilter, setWorkTypeFilter] = useState('all'); // 'all', 'maintenance', 'projects'
   const [selectedObras, setSelectedObras] = useState([]);
   const [consolidatedName, setConsolidatedName] = useState('');
 
@@ -2668,24 +2669,51 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
       });
     });
 
-    return Array.from(obrasMap.values()).map(obra => ({
-      ...obra,
-      workers: Array.from(obra.workers),
-      workersCount: obra.workers.length
-    })).sort((a, b) => b.totalCost - a.totalCost);
+    return Array.from(obrasMap.values()).map(obra => {
+      const workersList = Array.from(obra.workers);
+
+      // Determinar se é manutenção: contar quantos workers são técnicos de manutenção
+      const maintenanceWorkers = workersList.filter(w => people?.[w]?.isMaintenance).length;
+      const isMaintenance = maintenanceWorkers > workersList.length / 2; // Maioria é técnico
+
+      return {
+        ...obra,
+        workers: workersList,
+        workersCount: workersList.length,
+        isMaintenance
+      };
+    }).sort((a, b) => b.totalCost - a.totalCost);
   }, [timeEntries, people]);
 
-  // Filtrar com pesquisa
+  // Filtrar com pesquisa e tipo de trabalho
   const filteredObras = useMemo(() => {
-    if (!searchTerm) return obrasFromTimesheet;
-    const term = searchTerm.toLowerCase();
-    return obrasFromTimesheet.filter(o => o.name.toLowerCase().includes(term));
-  }, [obrasFromTimesheet, searchTerm]);
+    let filtered = obrasFromTimesheet;
+
+    // Filtro por tipo de trabalho
+    if (workTypeFilter === 'maintenance') {
+      filtered = filtered.filter(o => o.isMaintenance);
+    } else if (workTypeFilter === 'projects') {
+      filtered = filtered.filter(o => !o.isMaintenance);
+    }
+
+    // Filtro por pesquisa
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(o => o.name.toLowerCase().includes(term));
+    }
+
+    return filtered;
+  }, [obrasFromTimesheet, searchTerm, workTypeFilter]);
 
   // Estatísticas gerais
   const stats = useMemo(() => {
+    const maintenanceObras = obrasFromTimesheet.filter(o => o.isMaintenance);
+    const projectObras = obrasFromTimesheet.filter(o => !o.isMaintenance);
+
     return {
       total: obrasFromTimesheet.length,
+      totalMaintenance: maintenanceObras.length,
+      totalProjects: projectObras.length,
       totalHours: obrasFromTimesheet.reduce((sum, o) => sum + o.totalHours, 0),
       totalCost: obrasFromTimesheet.reduce((sum, o) => sum + o.totalCost, 0),
       activeObras: obrasFromTimesheet.filter(o => {
@@ -2719,7 +2747,7 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
       <PageHeader
         icon="wrench"
         title="Gestão de Obras"
-        subtitle={`${stats.total} obras identificadas · ${stats.activeObras} ativas · ${currency(stats.totalCost)} faturado`}
+        subtitle={`${stats.total} obras · ${stats.totalMaintenance} manutenções · ${stats.totalProjects} projetos · ${currency(stats.totalCost)} faturado`}
         actions={
           <div className="flex gap-2">
             <button
@@ -2737,6 +2765,55 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
           </div>
         }
       />
+
+      {/* Filtros de Tipo de Trabalho */}
+      <Card className="p-4">
+        <div className="flex items-center gap-3">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+            Filtrar por:
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setWorkTypeFilter('all')}
+              className={`px-4 py-2 rounded-xl transition-all font-medium ${
+                workTypeFilter === 'all'
+                  ? 'bg-blue-500 text-white shadow-md'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              📋 Todas ({stats.total})
+            </button>
+            <button
+              onClick={() => setWorkTypeFilter('maintenance')}
+              className={`px-4 py-2 rounded-xl transition-all font-medium ${
+                workTypeFilter === 'maintenance'
+                  ? 'bg-orange-500 text-white shadow-md'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              🔧 Manutenções ({stats.totalMaintenance})
+            </button>
+            <button
+              onClick={() => setWorkTypeFilter('projects')}
+              className={`px-4 py-2 rounded-xl transition-all font-medium ${
+                workTypeFilter === 'projects'
+                  ? 'bg-green-500 text-white shadow-md'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              🏗️ Obras ({stats.totalProjects})
+            </button>
+          </div>
+          {workTypeFilter !== 'all' && (
+            <button
+              onClick={() => setWorkTypeFilter('all')}
+              className="ml-auto text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              ✕ Limpar filtro
+            </button>
+          )}
+        </div>
+      </Card>
 
       {/* Pesquisa e Consolidação */}
       <Card className="p-4">
@@ -2776,28 +2853,63 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
 
       {/* Dashboard View */}
       {viewMode === 'consolidated' && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="p-4">
-            <div className="text-sm text-slate-500 dark:text-slate-400">Total de Obras</div>
-            <div className="text-3xl font-bold mt-2">{stats.total}</div>
-            <div className="text-sm text-slate-500 mt-1">{stats.activeObras} ativas (30 dias)</div>
-          </Card>
-          <Card className="p-4">
-            <div className="text-sm text-slate-500 dark:text-slate-400">Horas Totais</div>
-            <div className="text-3xl font-bold mt-2">{Math.round(stats.totalHours)}</div>
-            <div className="text-sm text-slate-500 mt-1">Todas as obras</div>
-          </Card>
-          <Card className="p-4">
-            <div className="text-sm text-slate-500 dark:text-slate-400">Custo Total</div>
-            <div className="text-3xl font-bold mt-2">{currency(stats.totalCost)}</div>
-            <div className="text-sm text-slate-500 mt-1">Mão de obra</div>
-          </Card>
-          <Card className="p-4">
-            <div className="text-sm text-slate-500 dark:text-slate-400">Custo Médio/Obra</div>
-            <div className="text-3xl font-bold mt-2">{currency(stats.totalCost / stats.total || 0)}</div>
-            <div className="text-sm text-slate-500 mt-1">Por obra</div>
-          </Card>
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="p-4">
+              <div className="text-sm text-slate-500 dark:text-slate-400">Total de Obras</div>
+              <div className="text-3xl font-bold mt-2">{stats.total}</div>
+              <div className="text-sm text-slate-500 mt-1">{stats.activeObras} ativas (30 dias)</div>
+            </Card>
+            <Card className="p-4">
+              <div className="text-sm text-slate-500 dark:text-slate-400">Horas Totais</div>
+              <div className="text-3xl font-bold mt-2">{Math.round(stats.totalHours)}</div>
+              <div className="text-sm text-slate-500 mt-1">Todas as obras</div>
+            </Card>
+            <Card className="p-4">
+              <div className="text-sm text-slate-500 dark:text-slate-400">Custo Total</div>
+              <div className="text-3xl font-bold mt-2">{currency(stats.totalCost)}</div>
+              <div className="text-sm text-slate-500 mt-1">Mão de obra</div>
+            </Card>
+            <Card className="p-4">
+              <div className="text-sm text-slate-500 dark:text-slate-400">Custo Médio/Obra</div>
+              <div className="text-3xl font-bold mt-2">{currency(stats.totalCost / stats.total || 0)}</div>
+              <div className="text-sm text-slate-500 mt-1">Por obra</div>
+            </Card>
+          </div>
+
+          {/* Segmentação Manutenções vs Obras */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="p-5 border-2 border-orange-500">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                  🔧
+                </div>
+                <div>
+                  <div className="text-sm text-slate-600 dark:text-slate-400 font-medium">Manutenções</div>
+                  <div className="text-3xl font-bold text-orange-600">{stats.totalMaintenance}</div>
+                </div>
+              </div>
+              <div className="text-sm text-slate-500">
+                {((stats.totalMaintenance / stats.total) * 100).toFixed(1)}% do total
+              </div>
+            </Card>
+
+            <Card className="p-5 border-2 border-green-500">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                  🏗️
+                </div>
+                <div>
+                  <div className="text-sm text-slate-600 dark:text-slate-400 font-medium">Obras</div>
+                  <div className="text-3xl font-bold text-green-600">{stats.totalProjects}</div>
+                </div>
+              </div>
+              <div className="text-sm text-slate-500">
+                {((stats.totalProjects / stats.total) * 100).toFixed(1)}% do total
+              </div>
+            </Card>
+          </div>
+        </>
       )}
 
       {/* Lista de Obras */}
@@ -2834,7 +2946,13 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
               {filteredObras.length === 0 && (
                 <tr>
                   <td colSpan="7" className="px-3 py-10 text-center text-slate-500">
-                    {searchTerm ? 'Nenhuma obra encontrada' : 'Sem obras nos timesheets'}
+                    {searchTerm
+                      ? 'Nenhuma obra encontrada com esse nome'
+                      : workTypeFilter === 'maintenance'
+                      ? '🔧 Nenhuma manutenção encontrada'
+                      : workTypeFilter === 'projects'
+                      ? '🏗️ Nenhuma obra encontrada'
+                      : 'Sem obras nos timesheets'}
                   </td>
                 </tr>
               )}
@@ -2854,7 +2972,20 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
                       }}
                     />
                   </td>
-                  <td className="px-3 py-2 font-medium">{obra.name}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{obra.name}</span>
+                      {obra.isMaintenance ? (
+                        <span className="px-2 py-0.5 text-xs rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 font-semibold">
+                          🔧 Manutenção
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-semibold">
+                          🏗️ Obra
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-3 py-2 text-slate-600 dark:text-slate-400">
                     {fmtDate(obra.firstDate)} → {fmtDate(obra.lastDate)}
                   </td>
