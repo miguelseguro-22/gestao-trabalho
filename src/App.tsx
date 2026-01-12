@@ -12508,6 +12508,7 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showSplash, setShowSplash] = useState(true); // 🆕 Controla splash screen
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -12537,6 +12538,101 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
     '🎯', '📱', '💡', '🔨', '📋', '🚀'
   ];
 
+  // 🎨 SPLASH SCREEN - Mostra logo e transiciona para login
+  if (showSplash) {
+    return (
+      <div
+        className="min-h-screen relative overflow-hidden flex flex-col items-center justify-center p-4 cursor-pointer"
+        onClick={() => setShowSplash(false)}
+        style={{
+          background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)',
+        }}
+      >
+        <style>{`
+          @keyframes splashFloat {
+            0%, 100% { transform: translateY(0px) scale(1); }
+            50% { transform: translateY(-20px) scale(1.05); }
+          }
+          @keyframes splashPulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.6; }
+          }
+          @keyframes splashFadeIn {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+          }
+          @keyframes splashRipple {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+          }
+        `}</style>
+
+        {/* Elementos decorativos */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-white/10" style={{
+            animation: 'splashPulse 4s ease-in-out infinite',
+            filter: 'blur(60px)'
+          }} />
+          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-white/10" style={{
+            animation: 'splashPulse 4s ease-in-out infinite 2s',
+            filter: 'blur(60px)'
+          }} />
+        </div>
+
+        {/* Logo Container com efeito ripple */}
+        <div className="relative z-10" style={{ animation: 'splashFadeIn 1s ease-out' }}>
+          {/* Ripple effect */}
+          <div className="absolute inset-0 rounded-3xl" style={{
+            background: 'rgba(255,255,255,0.2)',
+            animation: 'splashRipple 2s ease-out infinite'
+          }} />
+
+          {/* Logo */}
+          <div
+            className="relative bg-white rounded-3xl p-12 shadow-2xl"
+            style={{ animation: 'splashFloat 4s ease-in-out infinite' }}
+          >
+            {/* Logo SVG da Engitaqus */}
+            <svg width="200" height="80" viewBox="0 0 200 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+              {/* Seta */}
+              <path d="M0 40 L30 40 M30 25 L50 40 L30 55 M50 40 L30 40" stroke="#00677F" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round"/>
+
+              {/* Espiral */}
+              <path d="M 70 25 Q 85 25 85 40 Q 85 50 80 55 Q 75 60 65 60 Q 50 60 50 45" stroke="#00677F" strokeWidth="6" fill="none" strokeLinecap="round"/>
+              <circle cx="85" cy="40" r="3" fill="#00677F"/>
+
+              {/* Texto "engitaqus" */}
+              <text x="0" y="75" fontFamily="Arial, sans-serif" fontSize="16" fontWeight="300" fill="#999">
+                <tspan fill="#00677F" fontWeight="bold">engit</tspan>
+                <tspan fill="#999">aqus</tspan>
+              </text>
+            </svg>
+          </div>
+        </div>
+
+        {/* Texto */}
+        <div className="relative z-10 mt-12 text-center" style={{ animation: 'splashFadeIn 1s ease-out 0.3s both' }}>
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">
+            Engitaqus
+          </h1>
+          <p className="text-white/80 text-lg mb-8">
+            Gestão de Trabalho
+          </p>
+          <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-white/20 backdrop-blur-sm">
+            <span className="text-white text-sm font-medium">Clique para entrar</span>
+            <span className="text-white text-lg">→</span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="absolute bottom-8 text-center text-white/60 text-sm">
+          <p>© 2026 Engitaqus • Gestão de Trabalho v2.0</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 🔐 LOGIN FORM (quando splash é fechada)
   return (
     <div className="min-h-screen relative overflow-hidden flex items-center justify-center p-4" style={{
       background: 'linear-gradient(to bottom, #f8fafc 0%, #e2e8f0 100%)',
