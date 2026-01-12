@@ -8,7 +8,7 @@
   html.dark { @apply bg-slate-950 text-slate-100; }
 }
 
-/* utilit�rios que usas no JSX e n�o existem no Tailwind */
+/* utilit�rios que usas no JSX e n�o existem no Tailwind */
 @layer components {
   .glass {
     @apply bg-white/70 backdrop-blur border border-slate-200
@@ -20,6 +20,26 @@
   }
   .drop-target {
     @apply ring-2 ring-indigo-400 border-indigo-400/60;
+  }
+}
+
+/* Prevenir zoom indesejado no mobile ao fazer duplo clique em inputs */
+@layer base {
+  input[type="number"],
+  input[type="time"],
+  input[type="date"],
+  input[type="text"],
+  input[type="tel"],
+  input[type="email"],
+  textarea,
+  select,
+  button {
+    touch-action: manipulation;
+  }
+
+  /* Garantir que inputs têm tamanho mínimo para não triggerar zoom automático no iOS */
+  input, textarea, select {
+    font-size: max(16px, 1rem);
   }
 }
 

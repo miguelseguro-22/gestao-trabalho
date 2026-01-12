@@ -2199,6 +2199,139 @@ const handleCatalog = (file) => {
   };
 
   const exportBackup=()=>{ const all=setters.get(); download(`backup_${todayISO()}.json`, JSON.stringify(all,null,2),'application/json'); };
+
+  // 📦 Exportar Timesheets em formato CSV compatível com importação
+  const exportTimesheetsCSV = () => {
+    const all = setters.get();
+    const entries = all.timeEntries || [];
+
+    if (!entries.length) {
+      addToast('Não há registos de horas para exportar.', 'warn');
+      return;
+    }
+
+    // Cabeçalhos no formato que o import reconhece
+    const headers = [
+      'Colaborador',
+      'Template',
+      'Data',
+      'Obra Normal',
+      'Encarregado Normal',
+      'Deslocação Normal',
+      'Hora Extra - Início',
+      'Hora Extra - Fim',
+      'Horas Extra',
+      'Obra FDS',
+      'Encarregado FDS',
+      'Deslocação Fim de Semana',
+      'FDS Início',
+      'FDS Fim',
+      'Horas FDS',
+      'Feriado',
+      'Obra Deslocada',
+      'Encarregado Deslocado',
+      'Férias Início',
+      'Férias Fim',
+      'Baixa Início',
+      'Baixa Fim',
+      'Dias de Baixa',
+      'Observações'
+    ];
+
+    const rows = entries.map(e => {
+      // Determinar valores baseados no template
+      const isNormal = e.template === 'Trabalho Normal';
+      const isWeekend = e.template && (e.template.includes('Fim') || e.template.includes('FDS'));
+      const isHoliday = e.template === 'Feriado';
+      const isShifted = e.template === 'Trabalho Deslocado';
+      const isVacation = e.template === 'Férias';
+      const isSick = e.template === 'Baixa';
+
+      return [
+        e.worker || '',
+        e.template || 'Trabalho Normal',
+        e.date || '',
+        isNormal ? (e.project || '') : '',
+        isNormal ? (e.supervisor || '') : '',
+        isNormal ? (e.displacement || '') : '',
+        e.otStart || '',
+        e.otEnd || '',
+        e.overtime || '',
+        isWeekend ? (e.project || '') : '',
+        isWeekend ? (e.supervisor || '') : '',
+        isWeekend ? (e.displacement || '') : '',
+        e.weekendStart || '',
+        e.weekendEnd || '',
+        isWeekend ? (e.hours || '') : '',
+        isHoliday ? 'Sim' : '',
+        isShifted ? (e.project || '') : '',
+        isShifted ? (e.supervisor || '') : '',
+        isVacation ? (e.periodStart || '') : '',
+        isVacation ? (e.periodEnd || '') : '',
+        isSick ? (e.periodStart || '') : '',
+        isSick ? (e.periodEnd || '') : '',
+        isSick ? (e.sickDays || '') : '',
+        e.notes || ''
+      ];
+    });
+
+    const csv = toCSV(headers, rows);
+    download(`timesheets_${todayISO()}.csv`, csv, 'text/csv;charset=utf-8');
+    addToast('Timesheets exportados com sucesso!', 'ok');
+  };
+
+  // 📦 Exportar Materials/Orders em formato CSV compatível com importação
+  const exportMaterialsCSV = () => {
+    const all = setters.get();
+    const orders = all.orders || [];
+
+    if (!orders.length) {
+      addToast('Não há pedidos de materiais para exportar.', 'warn');
+      return;
+    }
+
+    // Expandir orders (cada order pode ter múltiplos items)
+    const flatItems = orders.flatMap(order =>
+      (order.items || []).map(item => ({
+        requestedAt: order.requestedAt || '',
+        project: order.project || '',
+        item: item.name || '',
+        code: item.code || '',
+        qty: item.qty || 1,
+        requestedBy: order.requestedBy || '',
+        status: order.status || 'Pendente',
+        notes: order.notes || ''
+      }))
+    );
+
+    // Cabeçalhos no formato que o import reconhece
+    const headers = [
+      'Data Pedido',
+      'Obra',
+      'Item',
+      'Código',
+      'Quantidade',
+      'Requisitante',
+      'Estado',
+      'Observações'
+    ];
+
+    const rows = flatItems.map(item => [
+      item.requestedAt,
+      item.project,
+      item.item,
+      item.code,
+      item.qty,
+      item.requestedBy,
+      item.status,
+      item.notes
+    ]);
+
+    const csv = toCSV(headers, rows);
+    download(`materials_${todayISO()}.csv`, csv, 'text/csv;charset=utf-8');
+    addToast('Materiais exportados com sucesso!', 'ok');
+  };
+
   const shareEncode=(obj)=> btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
   const shareDecode=(code)=> JSON.parse(decodeURIComponent(escape(atob(code))));
   const buildPreview=(obj)=>{
@@ -2288,7 +2421,11 @@ const base={
         <Button variant={mode==='catalog'?'primary':'secondary'} onClick={()=>setMode('catalog')}>Catálogo Produtos (CSV)</Button>
         <Button variant={mode==='csv'?'primary':'secondary'} onClick={()=>setMode('csv')}>CSV por Secção</Button>
         <Button variant={mode==='json'?'primary':'secondary'} onClick={()=>setMode('json')}>Backup JSON</Button>
-        <div className="ml-auto"><Button variant="secondary" onClick={exportBackup}><Icon name="download"/> Exportar Backup</Button></div>
+        <div className="ml-auto flex gap-2">
+          <Button variant="secondary" onClick={exportBackup}><Icon name="download"/> Backup JSON</Button>
+          <Button variant="secondary" onClick={exportTimesheetsCSV}><Icon name="download"/> Timesheets CSV</Button>
+          <Button variant="secondary" onClick={exportMaterialsCSV}><Icon name="download"/> Materiais CSV</Button>
+        </div>
       </div>
 
       {mode==='catalog'&&(
