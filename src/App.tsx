@@ -17762,162 +17762,310 @@ function TimesheetsView() {
     )
   }
 
+  // 📊 Estatísticas em tempo real
+  const today = todayISO();
+  const thisWeekStart = new Date();
+  thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay() + 1);
+  const thisWeekStartISO = thisWeekStart.toISOString().slice(0, 10);
+
+  const stats = useMemo(() => {
+    const todayEntries = visibleTimeEntries.filter(t => t.date === today && t.template === 'Trabalho Normal');
+    const weekEntries = visibleTimeEntries.filter(t => t.date >= thisWeekStartISO && t.template === 'Trabalho Normal');
+    const monthEntries = visibleTimeEntries.filter(t => t.date?.startsWith(today.slice(0, 7)) && t.template === 'Trabalho Normal');
+
+    const todayHours = todayEntries.reduce((s, t) => s + (Number(t.hours) || 0), 0);
+    const todayOT = todayEntries.reduce((s, t) => s + (Number(t.overtime) || 0), 0);
+    const weekHours = weekEntries.reduce((s, t) => s + (Number(t.hours) || 0), 0);
+    const monthHours = monthEntries.reduce((s, t) => s + (Number(t.hours) || 0), 0);
+
+    const activeProjects = new Set(visibleTimeEntries.filter(t => t.project).map(t => t.project)).size;
+    const pendingApprovals = visibleTimeEntries.filter(t => t.status === 'pending').length;
+
+    return { todayHours, todayOT, weekHours, monthHours, activeProjects, pendingApprovals, todayEntries: todayEntries.length };
+  }, [visibleTimeEntries, today, thisWeekStartISO]);
+
+  // 🌊 Atividade recente
+  const recentActivity = useMemo(() => {
+    return visibleTimeEntries
+      .slice()
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+      .slice(0, 5);
+  }, [visibleTimeEntries]);
+
   return (
-    <section className="space-y-4">
-      <PageHeader
-  icon="clock"
-  title="Timesheets"
-  subtitle={`${visibleTimeEntries?.length || 0} registos`}
-  actions={
-    <>
-      {/* ⬇️ BOTÃO DE DEBUG TEMPORÁRIO */}
-      <Button
-        variant="secondary"
-        onClick={() => {
-          console.log('🔍 DEBUG:', {
-            auth,
-            totalEntries: timeEntries.length,
-            visibleEntries: visibleTimeEntries.length,
-            allWorkers: [...new Set(timeEntries.map(t => t.worker))],
-            allSupervisors: [...new Set(timeEntries.map(t => t.supervisor))],
-          });
-        }}
-      >
-        Debug
-      </Button>
+    <section className="space-y-6">
+      {/* 🎨 HERO SECTION - Animado com Gradiente */}
+      <div className="relative overflow-hidden rounded-3xl p-8 md:p-12" style={{
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
+        animation: 'gradientShift 15s ease infinite',
+        backgroundSize: '200% 200%'
+      }}>
+        <style>{`
+          @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+          }
+          @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+          }
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+          }
+          @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+          }
+          .hover-lift {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          }
+          .hover-lift:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+          }
+        `}</style>
 
-      <Button onClick={() => setModal({ name: "multi-work-time", initial: { date: todayISO() } })}>
-        <Icon name="plus" /> Novo Registo
-      </Button>
-    </>
-  }
-/>
+        <div className="relative z-10 text-white">
+          <div className="flex items-center gap-3 mb-3" style={{ animation: 'slideUp 0.6s ease-out' }}>
+            <div className="text-4xl" style={{ animation: 'float 3s ease-in-out infinite' }}>
+              👋
+            </div>
+            <h1 className="text-4xl md:text-5xl font-bold">
+              Olá, {auth?.name?.split(' ')[0] || 'Utilizador'}!
+            </h1>
+          </div>
+          <p className="text-xl text-white/90 mb-6" style={{ animation: 'slideUp 0.6s ease-out 0.1s both' }}>
+            Pronto para mais um dia produtivo? 🚀
+          </p>
 
-      <CycleCalendar
-        timeEntries={visibleTimeEntries || []}
-        offset={cycleOffset}
-        setOffset={setCycleOffset}
-        onDayClick={(iso) => {
-          // Verifica se existem registos para este dia
-          // 🔧 FIX: Parse date corretamente para evitar timezone issues
-          const [year, month, day] = iso.split('-').map(Number);
-          const target = new Date(year, month - 1, day, 0, 0, 0, 0);
-
-          const hasEntries = visibleTimeEntries.some(t => {
-            // Para Férias e Baixa, verificar se o dia está dentro do período
-            if (t.template === 'Férias' || t.template === 'Baixa') {
-              const [y1, m1, d1] = (t.periodStart || t.date).split('-').map(Number);
-              const start = new Date(y1, m1 - 1, d1, 0, 0, 0, 0);
-              const [y2, m2, d2] = (t.periodEnd || t.date).split('-').map(Number);
-              const end = new Date(y2, m2 - 1, d2, 0, 0, 0, 0);
-              return target >= start && target <= end;
-            }
-            // Para outros tipos, verificar se a data é igual
-            const [y, m, d] = t.date.split('-').map(Number);
-            const entryDate = new Date(y, m - 1, d, 0, 0, 0, 0);
-            return entryDate.getTime() === target.getTime();
-          });
-
-          // 🔧 FIX: Se existem registos, mostra detalhes; caso contrário, abre formulário de seleção de template
-          setModal({
-            name: hasEntries ? "day-details" : "multi-work-time",
-            dateISO: iso,
-            initial: hasEntries ? undefined : { date: iso }
-          });
-        }}
-        auth={auth}
-      />
-
-      {/* ✅ TABELA COM COLUNA DE AÇÕES */}
-      <Card className="p-4">
-        <div className="overflow-auto rounded-2xl border dark:border-slate-800">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900/50">
-              <tr>
-                <th className="px-3 py-2 text-left">Data</th>
-                <th className="px-3 py-2 text-left">Tipo</th>
-                <th className="px-3 py-2 text-left">Obra</th>
-                <th className="px-3 py-2 text-left">Colaborador</th>
-                <th className="px-3 py-2 text-right">Horas</th>
-                <th className="px-3 py-2 text-right">Extra</th>
-                <th className="px-3 py-2 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleTimeEntries.length === 0 && (
-                <tr>
-                  <td colSpan="7" className="px-3 py-8 text-center text-slate-500">
-                    Sem registos
-                  </td>
-                </tr>
-              )}
-
-              {visibleTimeEntries.slice(0, 20).map((t) => (
-                <tr key={t.id} className="border-t dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                  <td className="px-3 py-2">
-                    {t.template === 'Trabalho Normal' || t.template === 'Falta'
-                      ? t.date
-                      : `${t.periodStart} → ${t.periodEnd}`}
-                  </td>
-                  <td className="px-3 py-2">
-                    <Badge
-                      tone={
-                        t.template === 'Trabalho Normal' ? 'emerald' :
-                        t.template === 'Férias' ? 'blue' :
-                        t.template === 'Baixa' ? 'rose' : 'amber'
-                      }
-                    >
-                      {t.template}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-2">{t.project || "—"}</td>
-                  <td className="px-3 py-2">{t.worker || t.supervisor || "—"}</td>
-                  <td className="px-3 py-2 text-right">{t.hours || 0}</td>
-                  <td className="px-3 py-2 text-right">{t.overtime || 0}</td>
-                  
-                  {/* ✅ COLUNA DE AÇÕES */}
-                  <td className="px-3 py-2 text-right">
-                    <div className="flex gap-2 justify-end">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setModal({ name: "add-time", initial: t })}
-                      >
-                        Editar
-                      </Button>
-                      
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm(`Remover registo de ${t.template} em ${t.date || t.periodStart}?`)) {
-                            setTimeEntries(prev => prev.filter(entry => entry.id !== t.id));
-                            addToast("Registo removido com sucesso");
-                          }
-                        }}
-                      >
-                        Remover
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* Quick Stats na Hero */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-8" style={{ animation: 'slideUp 0.6s ease-out 0.2s both' }}>
+            <div className="glass-card rounded-2xl p-4 hover-lift cursor-pointer">
+              <div className="text-3xl font-bold">{stats.todayHours}h</div>
+              <div className="text-sm text-white/80 mt-1">Hoje</div>
+            </div>
+            <div className="glass-card rounded-2xl p-4 hover-lift cursor-pointer">
+              <div className="text-3xl font-bold">{stats.weekHours}h</div>
+              <div className="text-sm text-white/80 mt-1">Esta Semana</div>
+            </div>
+            <div className="glass-card rounded-2xl p-4 hover-lift cursor-pointer">
+              <div className="text-3xl font-bold">{stats.activeProjects}</div>
+              <div className="text-sm text-white/80 mt-1">Obras Ativas</div>
+            </div>
+            <div className="glass-card rounded-2xl p-4 hover-lift cursor-pointer">
+              <div className="text-3xl font-bold">{stats.todayEntries}</div>
+              <div className="text-sm text-white/80 mt-1">Registos Hoje</div>
+            </div>
+          </div>
         </div>
 
-        {/* Botão para ver todos */}
-        {visibleTimeEntries.length > 20 && (
-          <div className="mt-3 text-center">
-            <Button
-              variant="secondary"
-              onClick={() => setModal({ name: "ts-all" })}
-            >
-              Ver todos os {visibleTimeEntries.length} registos
-            </Button>
+        {/* Elementos decorativos animados */}
+        <div className="absolute top-10 right-10 w-32 h-32 rounded-full bg-white/10" style={{ animation: 'float 6s ease-in-out infinite', filter: 'blur(40px)' }} />
+        <div className="absolute bottom-10 left-10 w-40 h-40 rounded-full bg-white/10" style={{ animation: 'float 8s ease-in-out infinite 1s', filter: 'blur(50px)' }} />
+      </div>
+
+      {/* 📊 KPIS PRINCIPAIS - Design Moderno */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Card 1 */}
+        <div className="hover-lift rounded-3xl p-6 cursor-pointer" style={{
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          animation: 'slideUp 0.6s ease-out 0.3s both'
+        }}>
+          <div className="flex items-start justify-between">
+            <div className="text-white">
+              <div className="text-sm font-medium text-white/80 mb-2">Horas Mensais</div>
+              <div className="text-4xl font-bold mb-1">{stats.monthHours}h</div>
+              <div className="text-sm text-white/70">~{Math.round(stats.monthHours/22)}h por dia</div>
+            </div>
+            <div className="text-5xl opacity-20">📈</div>
           </div>
-        )}
-      </Card>
+          <div className="mt-4 h-2 bg-white/20 rounded-full overflow-hidden">
+            <div className="h-full bg-white rounded-full" style={{ width: `${Math.min((stats.monthHours / 176) * 100, 100)}%`, transition: 'width 1s ease-out' }} />
+          </div>
+        </div>
+
+        {/* Card 2 */}
+        <div className="hover-lift rounded-3xl p-6 cursor-pointer" style={{
+          background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+          animation: 'slideUp 0.6s ease-out 0.4s both'
+        }}>
+          <div className="flex items-start justify-between">
+            <div className="text-white">
+              <div className="text-sm font-medium text-white/80 mb-2">Horas Extra Hoje</div>
+              <div className="text-4xl font-bold mb-1">{stats.todayOT}h</div>
+              <div className="text-sm text-white/70">{stats.todayOT > 0 ? '💪 Dedicação extra!' : '✨ Trabalho regular'}</div>
+            </div>
+            <div className="text-5xl opacity-20">⚡</div>
+          </div>
+          <div className="mt-4 flex gap-1">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex-1 h-2 rounded-full" style={{
+                background: i < Math.ceil(stats.todayOT / 2) ? 'white' : 'rgba(255,255,255,0.2)',
+                transition: 'background 0.5s ease-out',
+                transitionDelay: `${i * 0.1}s`
+              }} />
+            ))}
+          </div>
+        </div>
+
+        {/* Card 3 */}
+        <div className="hover-lift rounded-3xl p-6 cursor-pointer" style={{
+          background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+          animation: 'slideUp 0.6s ease-out 0.5s both'
+        }}>
+          <div className="flex items-start justify-between">
+            <div className="text-white">
+              <div className="text-sm font-medium text-white/80 mb-2">Pendentes Aprovação</div>
+              <div className="text-4xl font-bold mb-1">{stats.pendingApprovals}</div>
+              <div className="text-sm text-white/70">{stats.pendingApprovals === 0 ? '✅ Tudo aprovado!' : '🟡 A aguardar...'}</div>
+            </div>
+            <div className="text-5xl opacity-20">📋</div>
+          </div>
+          <div className="mt-4 flex items-center gap-2">
+            <div className="flex-1 h-2 bg-white/20 rounded-full overflow-hidden">
+              <div className="h-full bg-white rounded-full" style={{
+                width: stats.pendingApprovals === 0 ? '100%' : '50%',
+                transition: 'width 1s ease-out'
+              }} />
+            </div>
+            <div className="text-xs text-white/70 font-medium">{stats.pendingApprovals === 0 ? '100%' : '50%'}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ⚡ QUICK ACTIONS */}
+      <div style={{ animation: 'slideUp 0.6s ease-out 0.6s both' }}>
+        <h2 className="text-xl font-bold mb-4 dark:text-white flex items-center gap-2">
+          <span>⚡</span> Ações Rápidas
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <button
+            onClick={() => setModal({ name: "multi-work-time", initial: { date: todayISO() } })}
+            className="hover-lift rounded-2xl p-6 text-left transition-all"
+            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+          >
+            <div className="text-3xl mb-3">➕</div>
+            <div className="text-white font-semibold">Novo Registo</div>
+            <div className="text-white/70 text-sm mt-1">Adicionar horas</div>
+          </button>
+
+          <button
+            onClick={() => setModal({ name: "ts-all" })}
+            className="hover-lift rounded-2xl p-6 text-left transition-all"
+            style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}
+          >
+            <div className="text-3xl mb-3">📊</div>
+            <div className="text-white font-semibold">Ver Todos</div>
+            <div className="text-white/70 text-sm mt-1">{visibleTimeEntries.length} registos</div>
+          </button>
+
+          <button
+            className="hover-lift rounded-2xl p-6 text-left transition-all"
+            style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' }}
+          >
+            <div className="text-3xl mb-3">📈</div>
+            <div className="text-white font-semibold">Relatórios</div>
+            <div className="text-white/70 text-sm mt-1">Análise mensal</div>
+          </button>
+
+          <button
+            className="hover-lift rounded-2xl p-6 text-left transition-all"
+            style={{ background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' }}
+          >
+            <div className="text-3xl mb-3">🎯</div>
+            <div className="text-white font-semibold">Metas</div>
+            <div className="text-white/70 text-sm mt-1">Progresso</div>
+          </button>
+        </div>
+      </div>
+
+      {/* 🌊 ATIVIDADE RECENTE */}
+      <div style={{ animation: 'slideUp 0.6s ease-out 0.7s both' }}>
+        <h2 className="text-xl font-bold mb-4 dark:text-white flex items-center gap-2">
+          <span>🕐</span> Atividade Recente
+        </h2>
+        <Card className="p-0 overflow-hidden">
+          <div className="divide-y dark:divide-slate-800">
+            {recentActivity.length === 0 ? (
+              <div className="p-8 text-center text-slate-500">
+                <div className="text-4xl mb-2">📭</div>
+                <div>Sem atividade recente</div>
+              </div>
+            ) : (
+              recentActivity.map((t, idx) => (
+                <div
+                  key={t.id}
+                  className="p-4 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all cursor-pointer"
+                  style={{ animation: `slideUp 0.4s ease-out ${0.8 + idx * 0.1}s both` }}
+                  onClick={() => setModal({ name: "add-time", initial: t })}
+                >
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{
+                    background: t.template === 'Trabalho Normal' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' :
+                               t.template === 'Férias' ? 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' :
+                               'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
+                  }}>
+                    {t.template === 'Trabalho Normal' ? '💼' :
+                     t.template === 'Férias' ? '🏖️' :
+                     t.template === 'Baixa' ? '🏥' : '📝'}
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold dark:text-white">{t.project || t.template}</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">
+                      {t.date} • {t.hours}h {t.overtime > 0 && `+ ${t.overtime}h extra`}
+                    </div>
+                  </div>
+                  <div className="text-slate-400">
+                    <Icon name="chev-right" />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* 📅 CALENDÁRIO */}
+      <div style={{ animation: 'slideUp 0.6s ease-out 0.8s both' }}>
+        <h2 className="text-xl font-bold mb-4 dark:text-white flex items-center gap-2">
+          <span>📅</span> Calendário de Registos
+        </h2>
+        <CycleCalendar
+          timeEntries={visibleTimeEntries || []}
+          offset={cycleOffset}
+          setOffset={setCycleOffset}
+          onDayClick={(iso) => {
+            const [year, month, day] = iso.split('-').map(Number);
+            const target = new Date(year, month - 1, day, 0, 0, 0, 0);
+
+            const hasEntries = visibleTimeEntries.some(t => {
+              if (t.template === 'Férias' || t.template === 'Baixa') {
+                const [y1, m1, d1] = (t.periodStart || t.date).split('-').map(Number);
+                const start = new Date(y1, m1 - 1, d1, 0, 0, 0, 0);
+                const [y2, m2, d2] = (t.periodEnd || t.date).split('-').map(Number);
+                const end = new Date(y2, m2 - 1, d2, 0, 0, 0, 0);
+                return target >= start && target <= end;
+              }
+              const [y, m, d] = t.date.split('-').map(Number);
+              const entryDate = new Date(y, m - 1, d, 0, 0, 0, 0);
+              return entryDate.getTime() === target.getTime();
+            });
+
+            setModal({
+              name: hasEntries ? "day-details" : "multi-work-time",
+              dateISO: iso,
+              initial: hasEntries ? undefined : { date: iso }
+            });
+          }}
+          auth={auth}
+        />
+      </div>
     </section>
   );
 }
