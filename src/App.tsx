@@ -12592,40 +12592,13 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
             className="relative bg-white rounded-3xl p-12 shadow-2xl"
             style={{ animation: 'splashFloat 4s ease-in-out infinite' }}
           >
-            {/* Logo SVG da Engitagus - OFICIAL */}
-            <svg width="320" height="100" viewBox="0 0 320 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-              {/* Seta para a direita */}
-              <g transform="translate(0, 20)">
-                <path d="M 0 30 L 45 30 M 45 15 L 70 30 L 45 45 Z"
-                      fill="#00677F"
-                      stroke="#00677F"
-                      strokeWidth="6"
-                      strokeLinejoin="round"/>
-              </g>
-
-              {/* Espiral / Símbolo característico */}
-              <g transform="translate(75, 15)">
-                {/* Círculo externo da espiral */}
-                <path d="M 35 10
-                         C 50 10, 60 20, 60 35
-                         C 60 50, 50 60, 35 60
-                         C 20 60, 10 50, 10 35
-                         C 10 25, 15 18, 25 15"
-                      stroke="#00677F"
-                      strokeWidth="8"
-                      fill="none"
-                      strokeLinecap="round"/>
-
-                {/* Círculo interno */}
-                <circle cx="35" cy="35" r="8" fill="#00677F"/>
-              </g>
-
-              {/* Texto "engitagus" */}
-              <text x="0" y="90" fontFamily="Arial, Helvetica, sans-serif" fontSize="32" fontWeight="400">
-                <tspan fill="#999999">engit</tspan>
-                <tspan fill="#CCCCCC">agus</tspan>
-              </text>
-            </svg>
+            {/* Logo da Engitagus - Imagem Oficial */}
+            <img
+              src="/logo-engitagus.png"
+              alt="Engitagus - Gestão de Trabalho"
+              className="w-auto h-24 object-contain"
+              style={{ maxWidth: '400px' }}
+            />
           </div>
         </div>
 
