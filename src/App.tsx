@@ -11723,40 +11723,6 @@ const MultiWorkTimesheetForm = ({
                       ))}
                     </div>
                   </div>
-
-                  {/* Horas Extra - Com Horário Início/Fim */}
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
-                      ⚡ Horas Extra (Horário)
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="time"
-                        value={work.extraStartTime}
-                        onChange={(e) => updateWork(work.id, 'extraStartTime', e.target.value)}
-                        placeholder="Início"
-                        className="w-full rounded-lg border-2 p-2 text-center text-sm font-bold dark:bg-slate-800 focus:ring-2"
-                        style={{ borderColor: '#BE8A3A', color: '#BE8A3A' }}
-                      />
-                      <input
-                        type="time"
-                        value={work.extraEndTime}
-                        onChange={(e) => updateWork(work.id, 'extraEndTime', e.target.value)}
-                        placeholder="Fim"
-                        className="w-full rounded-lg border-2 p-2 text-center text-sm font-bold dark:bg-slate-800 focus:ring-2"
-                        style={{ borderColor: '#BE8A3A', color: '#BE8A3A' }}
-                      />
-                    </div>
-                    {/* Mostrar total calculado */}
-                    {work.extraStartTime && work.extraEndTime && (
-                      <div className="text-center mt-2">
-                        <span className="text-xs text-slate-600 dark:text-slate-400">Total: </span>
-                        <span className="text-sm font-bold" style={{ color: '#BE8A3A' }}>
-                          +{diffHours(work.extraStartTime, work.extraEndTime).toFixed(1)}h
-                        </span>
-                      </div>
-                    )}
-                  </div>
                 </div>
               )}
 
@@ -12276,34 +12242,6 @@ const TimesheetTemplateForm = ({
                   />
                   {errors.weekendEndTime && <div className="text-xs text-rose-600 mt-1">{errors.weekendEndTime}</div>}
                   <div className="text-xs text-slate-500 mt-1">Horas calculadas: {weekendComputedHours || '—'}h</div>
-                </label>
-              </>
-            )}
-
-            {/* HORÁRIO EXTRA EM DIAS ÚTEIS */}
-            {template === 'Trabalho Normal' && !isWeekendDay && (
-              <>
-                <label className="text-sm">
-                  Hora extra (início)
-                  <input
-                    type="time"
-                    value={form.extraStartTime}
-                    onChange={e=>update('extraStartTime', e.target.value)}
-                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.extraStartTime?'border-rose-400':''}`}
-                  />
-                  {errors.extraStartTime && <div className="text-xs text-rose-600 mt-1">{errors.extraStartTime}</div>}
-                </label>
-
-                <label className="text-sm">
-                  Hora extra (fim)
-                  <input
-                    type="time"
-                    value={form.extraEndTime}
-                    onChange={e=>update('extraEndTime', e.target.value)}
-                    className={`mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700 ${errors.extraEndTime?'border-rose-400':''}`}
-                  />
-                  {errors.extraEndTime && <div className="text-xs text-rose-600 mt-1">{errors.extraEndTime}</div>}
-                  <div className="text-xs text-slate-500 mt-1">Horas extra calculadas: {overtimeComputedHours || '—'}h</div>
                 </label>
               </>
             )}
@@ -18254,51 +18192,6 @@ function TimesheetsView() {
         </div>
       </div>
 
-      {/* 🌊 ATIVIDADE RECENTE */}
-      <div style={{ animation: 'slideUp 0.6s ease-out 0.7s both' }}>
-        <h2 className="text-xl font-bold mb-4 dark:text-white flex items-center gap-2">
-          <span>🕐</span> Atividade Recente
-        </h2>
-        <Card className="p-0 overflow-hidden">
-          <div className="divide-y dark:divide-slate-800">
-            {recentActivity.length === 0 ? (
-              <div className="p-8 text-center text-slate-500">
-                <div className="text-4xl mb-2">📭</div>
-                <div>Sem atividade recente</div>
-              </div>
-            ) : (
-              recentActivity.map((t, idx) => (
-                <div
-                  key={t.id}
-                  className="p-4 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all cursor-pointer"
-                  style={{ animation: `slideUp 0.4s ease-out ${0.8 + idx * 0.1}s both` }}
-                  onClick={() => setModal({ name: "add-time", initial: t })}
-                >
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{
-                    background: t.template === 'Trabalho Normal' ? 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)' :
-                               t.template === 'Férias' ? 'linear-gradient(135deg, #00A9B8 0%, #00C4D6 100%)' :
-                               'linear-gradient(135deg, #2C3134 0%, #00677F 100%)'
-                  }}>
-                    {t.template === 'Trabalho Normal' ? '💼' :
-                     t.template === 'Férias' ? '🏖️' :
-                     t.template === 'Baixa' ? '🏥' : '📝'}
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-semibold dark:text-white">{t.project || t.template}</div>
-                    <div className="text-sm text-slate-500 dark:text-slate-400">
-                      {t.date} • {t.hours}h {t.overtime > 0 && `+ ${t.overtime}h extra`}
-                    </div>
-                  </div>
-                  <div className="text-slate-400">
-                    <Icon name="chev-right" />
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-      </div>
-
       {/* 📅 CALENDÁRIO */}
       <div style={{ animation: 'slideUp 0.6s ease-out 0.8s both' }}>
         <h2 className="text-xl font-bold mb-4 dark:text-white flex items-center gap-2">
@@ -18333,6 +18226,51 @@ function TimesheetsView() {
           }}
           auth={auth}
         />
+      </div>
+
+      {/* 🌊 ATIVIDADE RECENTE */}
+      <div style={{ animation: 'slideUp 0.6s ease-out 0.9s both' }}>
+        <h2 className="text-xl font-bold mb-4 dark:text-white flex items-center gap-2">
+          <span>🕐</span> Atividade Recente
+        </h2>
+        <Card className="p-0 overflow-hidden">
+          <div className="divide-y dark:divide-slate-800">
+            {recentActivity.length === 0 ? (
+              <div className="p-8 text-center text-slate-500">
+                <div className="text-4xl mb-2">📭</div>
+                <div>Sem atividade recente</div>
+              </div>
+            ) : (
+              recentActivity.map((t, idx) => (
+                <div
+                  key={t.id}
+                  className="p-4 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all cursor-pointer"
+                  style={{ animation: `slideUp 0.4s ease-out ${0.9 + idx * 0.1}s both` }}
+                  onClick={() => setModal({ name: "add-time", initial: t })}
+                >
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{
+                    background: t.template === 'Trabalho Normal' ? 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)' :
+                               t.template === 'Férias' ? 'linear-gradient(135deg, #00A9B8 0%, #00C4D6 100%)' :
+                               'linear-gradient(135deg, #2C3134 0%, #00677F 100%)'
+                  }}>
+                    {t.template === 'Trabalho Normal' ? '💼' :
+                     t.template === 'Férias' ? '🏖️' :
+                     t.template === 'Baixa' ? '🏥' : '📝'}
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold dark:text-white">{t.project || t.template}</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">
+                      {t.date} • {t.hours}h {t.overtime > 0 && `+ ${t.overtime}h extra`}
+                    </div>
+                  </div>
+                  <div className="text-slate-400">
+                    <Icon name="chev-right" />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
       </div>
     </section>
   );
