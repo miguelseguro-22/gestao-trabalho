@@ -12507,6 +12507,7 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -12537,42 +12538,176 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
   };
 
   return (
-    <div className="min-h-screen grid place-items-center bg-slate-50 dark:bg-slate-950 p-4">
-      <div className="w-full max-w-md p-6 space-y-4 rounded-2xl bg-white shadow-sm dark:bg-slate-900 dark:border dark:border-slate-800">
-        <h2 className="text-xl font-semibold text-center">Entrar</h2>
+    <div className="min-h-screen relative overflow-hidden flex items-center justify-center p-4" style={{
+      background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 50%, #00C4D6 100%)',
+    }}>
+      <style>{`
+        @keyframes loginFloat {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-30px) rotate(5deg); }
+        }
+        @keyframes loginSlide {
+          from { opacity: 0; transform: translateX(-50px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes loginFadeIn {
+          from { opacity: 0; transform: scale(0.9); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes loginPulse {
+          0%, 100% { transform: scale(1); opacity: 0.5; }
+          50% { transform: scale(1.1); opacity: 0.8; }
+        }
+        @keyframes loginRotate {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .login-glass {
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.3);
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        .login-input {
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .login-input:focus {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 25px -5px rgba(0, 103, 127, 0.3);
+        }
+      `}</style>
 
-        <form className="space-y-3" onSubmit={submit}>
-          <div>
-            <label className="text-sm">Email</label>
-            <input
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@empresa.pt"
-              required
-            />
+      {/* Elementos decorativos animados */}
+      <div className="absolute top-20 left-20 w-64 h-64 rounded-full" style={{
+        background: 'radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%)',
+        animation: 'loginFloat 8s ease-in-out infinite',
+        filter: 'blur(40px)'
+      }} />
+      <div className="absolute bottom-20 right-20 w-80 h-80 rounded-full" style={{
+        background: 'radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%)',
+        animation: 'loginFloat 10s ease-in-out infinite 2s',
+        filter: 'blur(50px)'
+      }} />
+      <div className="absolute top-1/2 left-1/2 w-96 h-96 rounded-full" style={{
+        background: 'radial-gradient(circle, rgba(0,196,214,0.3) 0%, transparent 70%)',
+        animation: 'loginPulse 6s ease-in-out infinite',
+        filter: 'blur(60px)',
+        transform: 'translate(-50%, -50%)'
+      }} />
+
+      {/* Card de Login */}
+      <div className="relative z-10 w-full max-w-md" style={{ animation: 'loginFadeIn 0.8s ease-out' }}>
+        {/* Logo/Título */}
+        <div className="text-center mb-8" style={{ animation: 'loginSlide 0.6s ease-out' }}>
+          <div className="inline-block mb-4">
+            <div className="w-20 h-20 rounded-3xl flex items-center justify-center text-5xl mx-auto" style={{
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)',
+              animation: 'loginFloat 4s ease-in-out infinite',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.15)'
+            }}>
+              🚀
+            </div>
           </div>
+          <h1 className="text-4xl font-bold text-white mb-2">Engitaqus</h1>
+          <p className="text-white/80 text-lg">Gestão de Trabalho</p>
+        </div>
 
-          <div>
-            <label className="text-sm">Password</label>
-            <input
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+        {/* Formulário */}
+        <div className="login-glass rounded-3xl p-8" style={{ animation: 'loginFadeIn 0.8s ease-out 0.2s both' }}>
+          <h2 className="text-2xl font-bold text-center mb-6" style={{
+            background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+          }}>
+            Bem-vindo de volta! 👋
+          </h2>
+
+          <form className="space-y-5" onSubmit={submit}>
+            <div style={{ animation: 'loginSlide 0.6s ease-out 0.3s both' }}>
+              <label className="block text-sm font-medium mb-2 text-slate-700">
+                <Icon name="user" className="w-4 h-4 inline mr-2" />
+                Email
+              </label>
+              <input
+                className="login-input w-full rounded-xl border-2 border-slate-200 p-3 focus:outline-none focus:border-[#00A9B8] bg-white"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="seu@email.com"
+                required
+              />
+            </div>
+
+            <div style={{ animation: 'loginSlide 0.6s ease-out 0.4s both' }}>
+              <label className="block text-sm font-medium mb-2 text-slate-700">
+                <Icon name="lock" className="w-4 h-4 inline mr-2" />
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  className="login-input w-full rounded-xl border-2 border-slate-200 p-3 pr-12 focus:outline-none focus:border-[#00A9B8] bg-white"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <Icon name={showPassword ? "eye-off" : "eye"} className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div
+                className="rounded-xl p-3 bg-red-50 border-2 border-red-200 text-red-600 text-sm font-medium flex items-center gap-2"
+                style={{ animation: 'loginSlide 0.4s ease-out' }}
+              >
+                <span className="text-lg">⚠️</span>
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-xl p-4 font-semibold text-white transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: loading ? '#6B7280' : 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)',
+                boxShadow: loading ? 'none' : '0 10px 30px -5px rgba(0, 103, 127, 0.5)',
+                animation: 'loginSlide 0.6s ease-out 0.5s both'
+              }}
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full" style={{
+                    animation: 'loginRotate 0.8s linear infinite'
+                  }} />
+                  A entrar...
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-2">
+                  Entrar
+                  <span>→</span>
+                </span>
+              )}
+            </button>
+          </form>
+
+          {/* Footer */}
+          <div className="mt-6 text-center text-sm text-slate-500" style={{ animation: 'loginSlide 0.6s ease-out 0.6s both' }}>
+            <p>Precisa de ajuda? Contacte o administrador</p>
           </div>
+        </div>
 
-          {error && (
-            <div className="text-red-500 text-sm">{error}</div>
-          )}
-
-          <Button className="w-full" disabled={loading}>
-            {loading ? "A entrar..." : "Entrar"}
-          </Button>
-        </form>
+        {/* Versão */}
+        <div className="mt-6 text-center text-white/60 text-sm" style={{ animation: 'loginFadeIn 1s ease-out 0.8s both' }}>
+          <p>© 2026 Engitaqus • v2.0</p>
+        </div>
       </div>
     </div>
   );
@@ -17794,9 +17929,9 @@ function TimesheetsView() {
 
   return (
     <section className="space-y-6">
-      {/* 🎨 HERO SECTION - Animado com Gradiente */}
+      {/* 🎨 HERO SECTION - Animado com Gradiente ENGITAQUS */}
       <div className="relative overflow-hidden rounded-3xl p-8 md:p-12" style={{
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
+        background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 50%, #00C4D6 100%)',
         animation: 'gradientShift 15s ease infinite',
         backgroundSize: '200% 200%'
       }}>
@@ -17871,11 +18006,11 @@ function TimesheetsView() {
         <div className="absolute bottom-10 left-10 w-40 h-40 rounded-full bg-white/10" style={{ animation: 'float 8s ease-in-out infinite 1s', filter: 'blur(50px)' }} />
       </div>
 
-      {/* 📊 KPIS PRINCIPAIS - Design Moderno */}
+      {/* 📊 KPIS PRINCIPAIS - Design Moderno ENGITAQUS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Card 1 */}
         <div className="hover-lift rounded-3xl p-6 cursor-pointer" style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)',
           animation: 'slideUp 0.6s ease-out 0.3s both'
         }}>
           <div className="flex items-start justify-between">
@@ -17893,7 +18028,7 @@ function TimesheetsView() {
 
         {/* Card 2 */}
         <div className="hover-lift rounded-3xl p-6 cursor-pointer" style={{
-          background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+          background: 'linear-gradient(135deg, #00A9B8 0%, #00C4D6 100%)',
           animation: 'slideUp 0.6s ease-out 0.4s both'
         }}>
           <div className="flex items-start justify-between">
@@ -17917,7 +18052,7 @@ function TimesheetsView() {
 
         {/* Card 3 */}
         <div className="hover-lift rounded-3xl p-6 cursor-pointer" style={{
-          background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+          background: 'linear-gradient(135deg, #2C3134 0%, #00677F 100%)',
           animation: 'slideUp 0.6s ease-out 0.5s both'
         }}>
           <div className="flex items-start justify-between">
@@ -17949,7 +18084,7 @@ function TimesheetsView() {
           <button
             onClick={() => setModal({ name: "multi-work-time", initial: { date: todayISO() } })}
             className="hover-lift rounded-2xl p-6 text-left transition-all"
-            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+            style={{ background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)' }}
           >
             <div className="text-3xl mb-3">➕</div>
             <div className="text-white font-semibold">Novo Registo</div>
@@ -17959,7 +18094,7 @@ function TimesheetsView() {
           <button
             onClick={() => setModal({ name: "ts-all" })}
             className="hover-lift rounded-2xl p-6 text-left transition-all"
-            style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}
+            style={{ background: 'linear-gradient(135deg, #00A9B8 0%, #00C4D6 100%)' }}
           >
             <div className="text-3xl mb-3">📊</div>
             <div className="text-white font-semibold">Ver Todos</div>
@@ -17968,7 +18103,7 @@ function TimesheetsView() {
 
           <button
             className="hover-lift rounded-2xl p-6 text-left transition-all"
-            style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' }}
+            style={{ background: 'linear-gradient(135deg, #2C3134 0%, #00677F 100%)' }}
           >
             <div className="text-3xl mb-3">📈</div>
             <div className="text-white font-semibold">Relatórios</div>
@@ -17977,7 +18112,7 @@ function TimesheetsView() {
 
           <button
             className="hover-lift rounded-2xl p-6 text-left transition-all"
-            style={{ background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' }}
+            style={{ background: 'linear-gradient(135deg, #00C4D6 0%, #00A9B8 100%)' }}
           >
             <div className="text-3xl mb-3">🎯</div>
             <div className="text-white font-semibold">Metas</div>
@@ -18007,9 +18142,9 @@ function TimesheetsView() {
                   onClick={() => setModal({ name: "add-time", initial: t })}
                 >
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{
-                    background: t.template === 'Trabalho Normal' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' :
-                               t.template === 'Férias' ? 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' :
-                               'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
+                    background: t.template === 'Trabalho Normal' ? 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)' :
+                               t.template === 'Férias' ? 'linear-gradient(135deg, #00A9B8 0%, #00C4D6 100%)' :
+                               'linear-gradient(135deg, #2C3134 0%, #00677F 100%)'
                   }}>
                     {t.template === 'Trabalho Normal' ? '💼' :
                      t.template === 'Férias' ? '🏖️' :
