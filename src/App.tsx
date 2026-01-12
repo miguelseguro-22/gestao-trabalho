@@ -8808,7 +8808,7 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
 // ============================================================
 // 👤 PERFIL DO COLABORADOR (TÉCNICO/ENCARREGADO/DIRETOR)
 // ============================================================
-const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects = [], vehicles = [], catalog = [], setView, agenda = [] }) => {
+const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects = [], vehicles = [], catalog = [], setView, agenda = [], vacations = [] }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [detailModal, setDetailModal] = useState(null);
   const [showAdminDashboard, setShowAdminDashboard] = useState(auth?.role === 'admin');
@@ -8821,6 +8821,46 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
     !task.completed &&
     (auth?.role === 'admin' || task.worker === auth?.name)
   );
+
+  // 🏖️ FÉRIAS DO COLABORADOR (do state vacations)
+  const myVacations = useMemo(() => {
+    return (vacations || [])
+      .filter(v => v.worker === auth?.name)
+      .filter(v => {
+        const year = new Date(v.startDate).getFullYear();
+        return year === selectedYear;
+      })
+      .sort((a, b) => a.startDate.localeCompare(b.startDate));
+  }, [vacations, auth?.name, selectedYear]);
+
+  // Calcular estatísticas das férias importadas
+  const vacationStats = useMemo(() => {
+    let totalDays = 0;
+    const periods = [];
+
+    myVacations.forEach(v => {
+      const start = new Date(v.startDate);
+      const end = new Date(v.endDate);
+      let days = 0;
+
+      // Contar apenas dias úteis (segunda a sexta)
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dow = d.getDay();
+        if (dow !== 0 && dow !== 6) days++; // Não conta fins de semana
+      }
+
+      totalDays += days;
+      periods.push({
+        start: v.startDate,
+        end: v.endDate,
+        days,
+        notes: v.notes || '',
+        status: v.status || 'approved'
+      });
+    });
+
+    return { totalDays, periods };
+  }, [myVacations]);
 
   // 🔐 Estados para mudança de password
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -9931,6 +9971,57 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
             )}
           </div>
         </Card>
+
+        {/* 🏖️ Períodos de Férias Registados (do sistema de férias) */}
+        {myVacations.length > 0 && (
+          <Card className="p-6">
+            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+              <span>🏖️</span> Períodos de Férias em {selectedYear}
+            </h3>
+            <div className="space-y-3">
+              {vacationStats.periods.map((period, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-xl border p-4 dark:border-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-all"
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="font-semibold text-slate-800 dark:text-slate-200">
+                          {new Date(period.start).toLocaleDateString('pt-PT')} → {new Date(period.end).toLocaleDateString('pt-PT')}
+                        </div>
+                        <div className="px-2 py-1 rounded-lg text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200">
+                          {period.days} {period.days === 1 ? 'dia' : 'dias'}
+                        </div>
+                      </div>
+                      {period.notes && (
+                        <div className="text-sm text-slate-500 dark:text-slate-400">
+                          📝 {period.notes}
+                        </div>
+                      )}
+                    </div>
+                    <div className="ml-4 text-2xl">
+                      ✅
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Resumo Total */}
+              <div className="mt-4 p-4 rounded-xl bg-gradient-to-r from-blue-50 to-violet-50 dark:from-blue-900/20 dark:to-violet-900/20 border border-blue-200 dark:border-blue-800">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="text-sm text-slate-600 dark:text-slate-400">Total de Férias Gozadas</div>
+                    <div className="text-2xl font-bold text-blue-700 dark:text-blue-300 mt-1">
+                      {vacationStats.totalDays} {vacationStats.totalDays === 1 ? 'dia' : 'dias'}
+                    </div>
+                  </div>
+                  <div className="text-4xl">🏖️</div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* Tabela de Registos Recentes */}
@@ -18643,6 +18734,7 @@ function TableMaterials() {
               catalog={catalog}
               setView={setView}
               agenda={agenda}
+              vacations={vacations}
             />
           )}
 
