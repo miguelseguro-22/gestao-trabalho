@@ -12736,6 +12736,31 @@ function App() {
   const applySnapshot = (snap: any) => {
     if (!snap) return
 
+    // 🛡️ VALIDAÇÃO: Detectar estrutura errada do Supabase
+    // Se snap tem propriedades { id, payload, updated_at }, então é a estrutura ERRADA
+    if (snap.id && snap.payload && snap.updated_at) {
+      console.error('❌ SNAPSHOT COM ESTRUTURA ERRADA! Não vai aplicar:', snap)
+      console.error('💡 Esperava: { timeEntries, orders, ... } mas recebeu: { id, payload, updated_at }')
+      return
+    }
+
+    // 🛡️ PROTEÇÃO: Se snapshot parece suspeito (sem propriedades esperadas), logar warning
+    const hasExpectedProps =
+      snap.hasOwnProperty('timeEntries') ||
+      snap.hasOwnProperty('orders') ||
+      snap.hasOwnProperty('projects') ||
+      snap.hasOwnProperty('people')
+
+    if (!hasExpectedProps) {
+      console.warn('⚠️ Snapshot não tem propriedades esperadas:', Object.keys(snap))
+    }
+
+    console.log('📥 Aplicando snapshot:', {
+      timeEntries: snap.timeEntries?.length || 0,
+      orders: snap.orders?.length || 0,
+      projects: snap.projects?.length || 0
+    })
+
     // ✅ SISTEMA ANTIGO: Carregar TODOS os dados do app_state (incluindo timeEntries)
     setTimeEntries(dedupTimeEntries(snap.timeEntries || []))
     setOrders(snap.orders || [])
@@ -12858,8 +12883,19 @@ function App() {
         const localTs = latestStampRef.current ? new Date(latestStampRef.current).getTime() : 0
 
         if(remoteTs>localTs){
-          const snap = (payload.new as any)?.payload || (payload.new as any)
-          applySnapshot({ ...snap, updatedAt })
+          // 🐛 FIX: Usar apenas payload.new.payload (nunca fallback para payload.new)
+          const snap = (payload.new as any)?.payload
+
+          // 🛡️ Validar que o snapshot tem estrutura válida antes de aplicar
+          if (snap && typeof snap === 'object') {
+            console.log('🔄 Realtime: Aplicando snapshot da cloud', {
+              hasTimeEntries: Array.isArray(snap.timeEntries),
+              timeEntriesCount: snap.timeEntries?.length || 0
+            })
+            applySnapshot({ ...snap, updatedAt })
+          } else {
+            console.warn('⚠️ Realtime: Snapshot inválido, ignorando', snap)
+          }
         }
       })
       .subscribe()
