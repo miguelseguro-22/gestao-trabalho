@@ -12514,22 +12514,15 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
     setLoading(true);
     setError(null);
 
-    // ✅ Usa o Auth.login() que já busca da tabela profiles!
     const res = await window.Auth?.login?.(email, password);
-
     setLoading(false);
 
     if (res?.ok) {
       const u = res.user;
-
-      console.log("✅ LOGIN SUCESSO:", u);
-      console.log("✅ ROLE:", u.role);
-
-      // ✅ O user já vem com role da BD!
       onLogin({
         id: u.id,
         email: u.email,
-        role: u.role, // ⬅️ já validado no auth.tsx
+        role: u.role,
         name: u.name,
       });
     } else {
@@ -12537,116 +12530,170 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
     }
   };
 
+  // 🎨 Ícones para o círculo rotativo
+  const circleIcons = [
+    '🏗️', '⚡', '🔧', '📊', '👷', '🚧',
+    '📐', '🏢', '⚙️', '📈', '💼', '✅',
+    '🎯', '📱', '💡', '🔨', '📋', '🚀'
+  ];
+
   return (
     <div className="min-h-screen relative overflow-hidden flex items-center justify-center p-4" style={{
-      background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 50%, #00C4D6 100%)',
+      background: 'linear-gradient(to bottom, #f8fafc 0%, #e2e8f0 100%)',
     }}>
       <style>{`
-        @keyframes loginFloat {
-          0%, 100% { transform: translateY(0px) rotate(0deg); }
-          50% { transform: translateY(-30px) rotate(5deg); }
+        @keyframes orbitRotate {
+          from { transform: translate(-50%, -50%) rotate(0deg); }
+          to { transform: translate(-50%, -50%) rotate(360deg); }
         }
-        @keyframes loginSlide {
-          from { opacity: 0; transform: translateX(-50px); }
-          to { opacity: 1; transform: translateX(0); }
+        @keyframes iconFloat {
+          0%, 100% { transform: translateY(0px) scale(1); }
+          50% { transform: translateY(-10px) scale(1.1); }
         }
-        @keyframes loginFadeIn {
-          from { opacity: 0; transform: scale(0.9); }
-          to { opacity: 1; transform: scale(1); }
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(30px) scale(0.95); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
-        @keyframes loginPulse {
-          0%, 100% { transform: scale(1); opacity: 0.5; }
-          50% { transform: scale(1.1); opacity: 0.8; }
+        @keyframes shimmer {
+          0% { background-position: -1000px 0; }
+          100% { background-position: 1000px 0; }
         }
-        @keyframes loginRotate {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+        .orbit-container {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 600px;
+          height: 600px;
+          transform: translate(-50%, -50%);
+          animation: orbitRotate 60s linear infinite;
         }
-        .login-glass {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.3);
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        .orbit-icon {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 80px;
+          height: 80px;
+          margin: -40px 0 0 -40px;
+          background: white;
+          border-radius: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 2rem;
+          box-shadow: 0 10px 40px rgba(0, 103, 127, 0.15);
+          transition: all 0.3s ease;
+          animation: iconFloat 3s ease-in-out infinite;
         }
-        .login-input {
+        .orbit-icon:hover {
+          transform: scale(1.2) translateY(-10px);
+          box-shadow: 0 20px 50px rgba(0, 103, 127, 0.25);
+        }
+        .login-card {
+          background: rgba(255, 255, 255, 0.98);
+          backdrop-filter: blur(30px);
+          border: 1px solid rgba(0, 169, 184, 0.1);
+          box-shadow: 0 30px 80px rgba(0, 103, 127, 0.15);
+        }
+        .input-field {
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .login-input:focus {
+        .input-field:focus {
           transform: translateY(-2px);
-          box-shadow: 0 10px 25px -5px rgba(0, 103, 127, 0.3);
+          box-shadow: 0 8px 24px rgba(0, 169, 184, 0.15);
+        }
+        .shimmer-text {
+          background: linear-gradient(90deg, #00677F 0%, #00A9B8 50%, #00C4D6 100%);
+          background-size: 200% auto;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          animation: shimmer 3s linear infinite;
         }
       `}</style>
 
-      {/* Elementos decorativos animados */}
-      <div className="absolute top-20 left-20 w-64 h-64 rounded-full" style={{
-        background: 'radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%)',
-        animation: 'loginFloat 8s ease-in-out infinite',
-        filter: 'blur(40px)'
-      }} />
-      <div className="absolute bottom-20 right-20 w-80 h-80 rounded-full" style={{
-        background: 'radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%)',
-        animation: 'loginFloat 10s ease-in-out infinite 2s',
-        filter: 'blur(50px)'
-      }} />
-      <div className="absolute top-1/2 left-1/2 w-96 h-96 rounded-full" style={{
-        background: 'radial-gradient(circle, rgba(0,196,214,0.3) 0%, transparent 70%)',
-        animation: 'loginPulse 6s ease-in-out infinite',
-        filter: 'blur(60px)',
-        transform: 'translate(-50%, -50%)'
-      }} />
+      {/* 🎨 CÍRCULO ROTATIVO DE ÍCONES */}
+      <div className="orbit-container">
+        {circleIcons.map((icon, i) => {
+          const angle = (360 / circleIcons.length) * i;
+          const radius = 280;
+          const x = Math.cos((angle * Math.PI) / 180) * radius;
+          const y = Math.sin((angle * Math.PI) / 180) * radius;
 
-      {/* Card de Login */}
-      <div className="relative z-10 w-full max-w-md" style={{ animation: 'loginFadeIn 0.8s ease-out' }}>
-        {/* Logo/Título */}
-        <div className="text-center mb-8" style={{ animation: 'loginSlide 0.6s ease-out' }}>
-          <div className="inline-block mb-4">
-            <div className="w-20 h-20 rounded-3xl flex items-center justify-center text-5xl mx-auto" style={{
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)',
-              animation: 'loginFloat 4s ease-in-out infinite',
-              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.15)'
-            }}>
-              🚀
+          return (
+            <div
+              key={i}
+              className="orbit-icon"
+              style={{
+                transform: `translate(${x}px, ${y}px) rotate(-${angle}deg)`,
+                animationDelay: `${i * 0.1}s`
+              }}
+            >
+              {icon}
             </div>
+          );
+        })}
+      </div>
+
+      {/* 📝 CARD DE LOGIN */}
+      <div className="relative z-10 w-full max-w-md" style={{ animation: 'fadeInUp 0.8s ease-out 0.3s both' }}>
+        {/* Logo Central */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-3xl mb-4 mx-auto" style={{
+            background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)',
+            boxShadow: '0 20px 50px rgba(0, 103, 127, 0.3)',
+            animation: 'iconFloat 4s ease-in-out infinite'
+          }}>
+            <span className="text-5xl">🏗️</span>
           </div>
-          <h1 className="text-4xl font-bold text-white mb-2">Engitaqus</h1>
-          <p className="text-white/80 text-lg">Gestão de Trabalho</p>
+          <h1 className="text-5xl font-bold mb-2 shimmer-text">
+            Engitaqus
+          </h1>
+          <p className="text-slate-500 text-sm uppercase tracking-widest">Gestão de Trabalho</p>
         </div>
 
-        {/* Formulário */}
-        <div className="login-glass rounded-3xl p-8" style={{ animation: 'loginFadeIn 0.8s ease-out 0.2s both' }}>
-          <h2 className="text-2xl font-bold text-center mb-6" style={{
-            background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text'
-          }}>
-            Bem-vindo de volta! 👋
-          </h2>
+        {/* Form Card */}
+        <div className="login-card rounded-3xl p-8">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">
+              Bem-vindo de volta
+            </h2>
+            <p className="text-slate-500 text-sm">
+              Faça login para continuar
+            </p>
+          </div>
 
           <form className="space-y-5" onSubmit={submit}>
-            <div style={{ animation: 'loginSlide 0.6s ease-out 0.3s both' }}>
-              <label className="block text-sm font-medium mb-2 text-slate-700">
-                <Icon name="user" className="w-4 h-4 inline mr-2" />
+            {/* Email */}
+            <div>
+              <label className="block text-sm font-semibold mb-2 text-slate-700">
                 Email
               </label>
-              <input
-                className="login-input w-full rounded-xl border-2 border-slate-200 p-3 focus:outline-none focus:border-[#00A9B8] bg-white"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-                required
-              />
+              <div className="relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                  <Icon name="user" className="w-5 h-5" />
+                </div>
+                <input
+                  className="input-field w-full rounded-2xl border-2 border-slate-200 pl-12 pr-4 py-3 focus:outline-none focus:border-[#00A9B8] bg-white text-slate-800"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                  required
+                />
+              </div>
             </div>
 
-            <div style={{ animation: 'loginSlide 0.6s ease-out 0.4s both' }}>
-              <label className="block text-sm font-medium mb-2 text-slate-700">
-                <Icon name="lock" className="w-4 h-4 inline mr-2" />
+            {/* Password */}
+            <div>
+              <label className="block text-sm font-semibold mb-2 text-slate-700">
                 Password
               </label>
               <div className="relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                  <Icon name="lock" className="w-5 h-5" />
+                </div>
                 <input
-                  className="login-input w-full rounded-xl border-2 border-slate-200 p-3 pr-12 focus:outline-none focus:border-[#00A9B8] bg-white"
+                  className="input-field w-full rounded-2xl border-2 border-slate-200 pl-12 pr-12 py-3 focus:outline-none focus:border-[#00A9B8] bg-white text-slate-800"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -12655,58 +12702,56 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#00A9B8] transition-colors"
                 >
                   <Icon name={showPassword ? "eye-off" : "eye"} className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
+            {/* Error */}
             {error && (
-              <div
-                className="rounded-xl p-3 bg-red-50 border-2 border-red-200 text-red-600 text-sm font-medium flex items-center gap-2"
-                style={{ animation: 'loginSlide 0.4s ease-out' }}
-              >
-                <span className="text-lg">⚠️</span>
-                {error}
+              <div className="rounded-2xl p-4 bg-red-50 border-2 border-red-200 text-red-700 text-sm font-medium flex items-center gap-3">
+                <span className="text-xl">⚠️</span>
+                <span>{error}</span>
               </div>
             )}
 
+            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-xl p-4 font-semibold text-white transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full rounded-2xl py-4 font-bold text-white text-lg transition-all duration-300 transform hover:scale-[1.02] hover:shadow-2xl active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
-                background: loading ? '#6B7280' : 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)',
-                boxShadow: loading ? 'none' : '0 10px 30px -5px rgba(0, 103, 127, 0.5)',
-                animation: 'loginSlide 0.6s ease-out 0.5s both'
+                background: loading ? '#94a3b8' : 'linear-gradient(135deg, #00677F 0%, #00A9B8 50%, #00C4D6 100%)',
+                boxShadow: loading ? 'none' : '0 20px 40px rgba(0, 103, 127, 0.3)',
               }}
             >
               {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full" style={{
-                    animation: 'loginRotate 0.8s linear infinite'
-                  }} />
+                <span className="flex items-center justify-center gap-3">
+                  <div className="w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin" />
                   A entrar...
                 </span>
               ) : (
                 <span className="flex items-center justify-center gap-2">
                   Entrar
-                  <span>→</span>
+                  <span className="text-xl">→</span>
                 </span>
               )}
             </button>
           </form>
 
           {/* Footer */}
-          <div className="mt-6 text-center text-sm text-slate-500" style={{ animation: 'loginSlide 0.6s ease-out 0.6s both' }}>
-            <p>Precisa de ajuda? Contacte o administrador</p>
+          <div className="mt-8 pt-6 border-t border-slate-200 text-center">
+            <p className="text-slate-500 text-sm">
+              Precisa de ajuda? <span className="text-[#00A9B8] font-semibold cursor-pointer hover:underline">Contacte-nos</span>
+            </p>
           </div>
         </div>
 
-        {/* Versão */}
-        <div className="mt-6 text-center text-white/60 text-sm" style={{ animation: 'loginFadeIn 1s ease-out 0.8s both' }}>
-          <p>© 2026 Engitaqus • v2.0</p>
+        {/* Version */}
+        <div className="mt-6 text-center text-slate-400 text-xs">
+          <p>© 2026 Engitaqus • Gestão de Trabalho v2.0</p>
         </div>
       </div>
     </div>
