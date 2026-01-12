@@ -12592,20 +12592,35 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
             className="relative bg-white rounded-3xl p-12 shadow-2xl"
             style={{ animation: 'splashFloat 4s ease-in-out infinite' }}
           >
-            {/* Logo SVG da Engitaqus */}
-            <svg width="200" height="80" viewBox="0 0 200 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-              {/* Seta */}
-              <path d="M0 40 L30 40 M30 25 L50 40 L30 55 M50 40 L30 40" stroke="#00677F" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round"/>
+            {/* Logo SVG da Engitagus - Design Moderno */}
+            <svg width="280" height="100" viewBox="0 0 280 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              {/* Ícone: Engrenagem estilizada com símbolo de construção */}
+              <g transform="translate(20, 20)">
+                {/* Círculo externo da engrenagem */}
+                <circle cx="30" cy="30" r="28" fill="#00677F" opacity="0.1"/>
 
-              {/* Espiral */}
-              <path d="M 70 25 Q 85 25 85 40 Q 85 50 80 55 Q 75 60 65 60 Q 50 60 50 45" stroke="#00677F" strokeWidth="6" fill="none" strokeLinecap="round"/>
-              <circle cx="85" cy="40" r="3" fill="#00677F"/>
+                {/* Engrenagem principal */}
+                <path d="M 30 8 L 33 12 L 38 10 L 40 15 L 45 15 L 45 20 L 50 22 L 48 27 L 52 30 L 48 33 L 50 38 L 45 40 L 45 45 L 40 45 L 38 50 L 33 48 L 30 52 L 27 48 L 22 50 L 20 45 L 15 45 L 15 40 L 10 38 L 12 33 L 8 30 L 12 27 L 10 22 L 15 20 L 15 15 L 20 15 L 22 10 L 27 12 Z" fill="#00677F"/>
 
-              {/* Texto "engitaqus" */}
-              <text x="0" y="75" fontFamily="Arial, sans-serif" fontSize="16" fontWeight="300" fill="#999">
-                <tspan fill="#00677F" fontWeight="bold">engit</tspan>
-                <tspan fill="#999">aqus</tspan>
+                {/* Círculo interno */}
+                <circle cx="30" cy="30" r="12" fill="white"/>
+
+                {/* Detalhe central - letra E estilizada */}
+                <path d="M 26 24 L 34 24 L 34 26 L 28 26 L 28 29 L 33 29 L 33 31 L 28 31 L 28 34 L 34 34 L 34 36 L 26 36 Z" fill="#00677F" fontWeight="bold"/>
+              </g>
+
+              {/* Texto "ENGITAGUS" - Moderno e clean */}
+              <text x="75" y="45" fontFamily="system-ui, -apple-system, sans-serif" fontSize="28" fontWeight="700" fill="#00677F" letterSpacing="1">
+                ENGITAGUS
               </text>
+
+              {/* Subtítulo */}
+              <text x="75" y="65" fontFamily="system-ui, -apple-system, sans-serif" fontSize="11" fontWeight="400" fill="#64748b" letterSpacing="2">
+                GESTÃO DE TRABALHO
+              </text>
+
+              {/* Linha decorativa */}
+              <line x1="75" y1="52" x2="190" y2="52" stroke="#00A9B8" strokeWidth="2" opacity="0.4"/>
             </svg>
           </div>
         </div>
@@ -12613,7 +12628,7 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
         {/* Texto */}
         <div className="relative z-10 mt-12 text-center" style={{ animation: 'splashFadeIn 1s ease-out 0.3s both' }}>
           <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">
-            Engitaqus
+            Engitagus
           </h1>
           <p className="text-white/80 text-lg mb-8">
             Gestão de Trabalho
@@ -12626,7 +12641,7 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
 
         {/* Footer */}
         <div className="absolute bottom-8 text-center text-white/60 text-sm">
-          <p>© 2026 Engitaqus • Gestão de Trabalho v2.0</p>
+          <p>© 2026 Engitagus • Gestão de Trabalho v2.0</p>
         </div>
       </div>
     );
@@ -12742,7 +12757,7 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
             <span className="text-5xl">🏗️</span>
           </div>
           <h1 className="text-5xl font-bold mb-2 shimmer-text">
-            Engitaqus
+            Engitagus
           </h1>
           <p className="text-slate-500 text-sm uppercase tracking-widest">Gestão de Trabalho</p>
         </div>
@@ -12847,7 +12862,7 @@ function LoginView({ onLogin }: { onLogin: (u: any) => void }) {
 
         {/* Version */}
         <div className="mt-6 text-center text-slate-400 text-xs">
-          <p>© 2026 Engitaqus • Gestão de Trabalho v2.0</p>
+          <p>© 2026 Engitagus • Gestão de Trabalho v2.0</p>
         </div>
       </div>
     </div>
