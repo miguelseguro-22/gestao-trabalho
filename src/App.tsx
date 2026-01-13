@@ -5144,6 +5144,19 @@ const VacationsView = ({ vacations, setVacations, people, setTimeEntries, addToa
             return;
           }
 
+          // 🔍 DEDUPLICAÇÃO: Verificar se já existe este período para este colaborador
+          const isDuplicate = newVacations.some(v =>
+            v.worker === finalWorkerName &&
+            v.startDate === startDate &&
+            v.endDate === endDate
+          );
+
+          if (isDuplicate) {
+            console.log(`⚠️ Duplicado ignorado: ${finalWorkerName} - ${startDate} → ${endDate}`);
+            skipped++;
+            return;
+          }
+
           // Adicionar férias com o nome do colaborador identificado
           newVacations.push({
             id: uid(),
@@ -5178,11 +5191,33 @@ const VacationsView = ({ vacations, setVacations, people, setTimeEntries, addToa
             setVacations(newVacations);
             message = `✅ Importação concluída (SUBSTITUIÇÃO)!\n\n📥 Importados: ${imported}\n⏭️ Ignorados: ${skipped}\n🗓️ Dias registados: ${totalTimeEntries}\n\n⚠️ Todos os registos anteriores foram removidos.`;
           } else {
-            // Adicionar novos time entries
-            setTimeEntries(list => [...allTimeEntries, ...list]);
+            // 🔍 DEDUPLICAÇÃO: Filtrar férias que já existem
+            const uniqueVacations = newVacations.filter(newVac => {
+              const exists = vacations.some(existingVac =>
+                existingVac.worker === newVac.worker &&
+                existingVac.startDate === newVac.startDate &&
+                existingVac.endDate === newVac.endDate
+              );
+              if (exists) {
+                console.log(`⚠️ Férias já existem, não adicionadas: ${newVac.worker} - ${newVac.startDate} → ${newVac.endDate}`);
+              }
+              return !exists;
+            });
 
-            setVacations(list => [...newVacations, ...list]);
-            message = `✅ Importação concluída (JUNTAR)!\n\n📥 Importados: ${imported}\n⏭️ Ignorados: ${skipped}\n🗓️ Dias registados: ${totalTimeEntries}\n\n✓ Registos adicionados aos existentes.`;
+            // Apenas criar time entries para férias únicas
+            const uniqueTimeEntries = [];
+            uniqueVacations.forEach(vacation => {
+              const entries = createVacationTimeEntries(vacation);
+              uniqueTimeEntries.push(...entries);
+            });
+
+            // Adicionar novos time entries únicos
+            setTimeEntries(list => [...uniqueTimeEntries, ...list]);
+
+            setVacations(list => [...uniqueVacations, ...list]);
+            const actualImported = uniqueVacations.length;
+            const duplicatesSkipped = newVacations.length - actualImported;
+            message = `✅ Importação concluída (JUNTAR)!\n\n📥 Importados: ${actualImported}\n⏭️ Ignorados: ${skipped}${duplicatesSkipped > 0 ? ` (${duplicatesSkipped} duplicados)` : ''}\n🗓️ Dias registados: ${uniqueTimeEntries.length}\n\n✓ Registos adicionados aos existentes.`;
           }
 
           // Adicionar aviso sobre colaboradores desconhecidos
