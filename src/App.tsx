@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { supabase, supabaseReady } from './lib/supabaseClient'
+import { supabase, supabaseReady } from './lib/supabase'
 import { Chart, registerables } from 'chart.js';
 import * as XLSX from 'xlsx';
 
