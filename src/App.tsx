@@ -2912,10 +2912,51 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
       return;
     }
 
-    // TODO: Implementar consolidação real nos timeEntries
-    alert(`Consolidação: ${selectedObras.length} obras → "${consolidatedName}"\n\nFuncionalidade completa será implementada na próxima iteração.`);
+    const finalName = consolidatedName.trim();
+
+    // Calcular totais antes de consolidar (para feedback)
+    const totalStats = selectedObras.reduce((acc, obraName) => {
+      const obra = obrasFromTimesheet.find(o => o.name === obraName);
+      if (obra) {
+        return {
+          entries: acc.entries + obra.entries,
+          hours: acc.hours + obra.totalHours,
+          cost: acc.cost + obra.totalCost
+        };
+      }
+      return acc;
+    }, { entries: 0, hours: 0, cost: 0 });
+
+    // Confirmação com preview
+    if (!confirm(`Consolidar ${selectedObras.length} obras em "${finalName}"?\n\n📊 Total:\n• ${Math.round(totalStats.entries)} registos\n• ${Math.round(totalStats.hours)}h\n• €${totalStats.cost.toFixed(2)}\n\n⚠️ ATENÇÃO: Todas as obras selecionadas serão renomeadas para "${finalName}".\nEsta ação não pode ser desfeita!`)) {
+      return;
+    }
+
+    // ✅ Renomear todas as obras selecionadas nos time entries
+    let updatedCount = 0;
+    const updatedEntries = timeEntries.map(entry => {
+      // Verificar se o project contém alguma das obras selecionadas
+      // Suporta obras separadas por " e ", ",", ou "/"
+      if (entry.project) {
+        const projectParts = entry.project.split(/\s+e\s+|,|\//).map(p => p.trim());
+
+        // Se qualquer parte do project está nas selectedObras, renomear TUDO para o finalName
+        if (projectParts.some(part => selectedObras.includes(part))) {
+          updatedCount++;
+          return { ...entry, project: finalName };
+        }
+      }
+      return entry;
+    });
+
+    setTimeEntries(updatedEntries);
+
+    // Limpar seleção
     setSelectedObras([]);
     setConsolidatedName('');
+
+    // Feedback
+    addToast(`✅ ${selectedObras.length} obras consolidadas em "${finalName}"!\n\n📊 ${updatedCount} registos atualizados`, 'success');
   };
 
   return (
