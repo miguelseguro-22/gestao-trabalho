@@ -5398,8 +5398,20 @@ const VacationsView = ({ vacations, setVacations, people, setTimeEntries, addToa
     }
   };
 
+  // ✅ DEDUPLICAR FÉRIAS (remover duplicados)
+  const uniqueVacations = useMemo(() => {
+    const seen = new Map();
+    vacations.forEach(v => {
+      const key = `${v.worker}|${v.startDate}|${v.endDate}`;
+      if (!seen.has(key)) {
+        seen.set(key, v);
+      }
+    });
+    return Array.from(seen.values());
+  }, [vacations]);
+
   // Filtrar férias do ano selecionado
-  const yearVacations = vacations.filter(v => {
+  const yearVacations = uniqueVacations.filter(v => {
     const year = new Date(v.startDate).getFullYear();
     return year === selectedYear;
   });
@@ -5779,6 +5791,27 @@ const VacationsView = ({ vacations, setVacations, people, setTimeEntries, addToa
               title="Exportar relatório completo em Excel"
             >
               📥 Exportar Relatório
+            </button>
+            <button
+              onClick={() => {
+                const before = vacations.length;
+                const seen = new Map();
+                const unique = [];
+                vacations.forEach(v => {
+                  const key = `${v.worker}|${v.startDate}|${v.endDate}`;
+                  if (!seen.has(key)) {
+                    seen.set(key, true);
+                    unique.push(v);
+                  }
+                });
+                setVacations(unique);
+                const removed = before - unique.length;
+                addToast(`🧹 ${removed} duplicados removidos! (${unique.length} férias únicas mantidas)`, 'ok');
+              }}
+              className="px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700 transition-all"
+              title="Remover todos os duplicados permanentemente"
+            >
+              🧹 Limpar Duplicados
             </button>
           </div>
         }
