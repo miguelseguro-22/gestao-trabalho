@@ -5224,6 +5224,12 @@ const VacationsView = ({ vacations, setVacations, people }) => {
 
   const associateWorker = (workerName) => {
     if (associatingVacation && workerName) {
+      console.log('🔗 Associando férias:', {
+        vacationId: associatingVacation.id,
+        periodo: `${associatingVacation.startDate} → ${associatingVacation.endDate}`,
+        nomeAnterior: associatingVacation.worker,
+        novoNome: workerName
+      });
       setVacations(list => list.map(v =>
         v.id === associatingVacation.id
           ? { ...v, worker: workerName }
@@ -9049,6 +9055,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
   const [detailModal, setDetailModal] = useState(null);
   const [showAdminDashboard, setShowAdminDashboard] = useState(auth?.role === 'admin');
   const [infoModal, setInfoModal] = useState(null); // 📊 Modal para detalhes dos cards clicáveis
+  const [showDebugPanel, setShowDebugPanel] = useState(false); // 🐛 Painel de debug de férias
 
   // 🔔 ALERTAS DE TAREFAS DA AGENDA
   const todayString = new Date().toISOString().slice(0, 10);
@@ -9095,13 +9102,41 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       return first1 === first2 && last1 === last2;
     };
 
-    return (vacations || [])
-      .filter(v => namesMatch(v.worker, auth?.name))
+    console.log('🏖️ [DEBUG] Filtrando férias para:', auth?.name);
+    console.log('🏖️ [DEBUG] Total de férias no sistema:', (vacations || []).length);
+    console.log('🏖️ [DEBUG] Ano selecionado:', selectedYear);
+
+    const filtered = (vacations || [])
+      .map(v => {
+        const matches = namesMatch(v.worker, auth?.name);
+        if (!matches) {
+          console.log('❌ [DEBUG] Férias rejeitadas (nome não corresponde):', {
+            worker: v.worker,
+            authName: auth?.name,
+            periodo: `${v.startDate} → ${v.endDate}`
+          });
+        }
+        return { ...v, _matches: matches };
+      })
+      .filter(v => v._matches)
       .filter(v => {
         const year = new Date(v.startDate).getFullYear();
-        return year === selectedYear;
+        const matchesYear = year === selectedYear;
+        if (!matchesYear) {
+          console.log('❌ [DEBUG] Férias rejeitadas (ano diferente):', {
+            worker: v.worker,
+            periodo: `${v.startDate} → ${v.endDate}`,
+            ano: year,
+            anoSelecionado: selectedYear
+          });
+        }
+        return matchesYear;
       })
       .sort((a, b) => a.startDate.localeCompare(b.startDate));
+
+    console.log('✅ [DEBUG] Total de férias filtradas para', auth?.name, ':', filtered.length);
+
+    return filtered;
   }, [vacations, auth?.name, selectedYear]);
 
   // Calcular estatísticas das férias importadas
@@ -10296,9 +10331,20 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
         {/* 🏖️ Períodos de Férias Registados (do sistema de férias) */}
         {myVacations.length > 0 && (
           <Card className="p-6">
-            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
-              <span>🏖️</span> Períodos de Férias em {selectedYear}
-            </h3>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                <span>🏖️</span> Períodos de Férias em {selectedYear}
+              </h3>
+              {auth?.role === 'admin' && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowDebugPanel(!showDebugPanel)}
+                >
+                  🐛 {showDebugPanel ? 'Ocultar' : 'Debug'}
+                </Button>
+              )}
+            </div>
             <div className="space-y-3">
               {vacationStats.periods.map((period, idx) => (
                 <div
@@ -10338,6 +10384,102 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                     </div>
                   </div>
                   <div className="text-4xl">🏖️</div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* 🐛 PAINEL DE DEBUG DE FÉRIAS */}
+        {showDebugPanel && auth?.role === 'admin' && (
+          <Card className="p-6 border-2 border-yellow-500 dark:border-yellow-600">
+            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+              <span>🐛</span> Debug de Férias - Informações Detalhadas
+            </h3>
+
+            <div className="space-y-4">
+              {/* Informações gerais */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                <div className="text-sm font-semibold mb-2">📊 Informações Gerais</div>
+                <div className="text-xs space-y-1 text-slate-600 dark:text-slate-400">
+                  <div><strong>Utilizador autenticado:</strong> {auth?.name}</div>
+                  <div><strong>Ano selecionado:</strong> {selectedYear}</div>
+                  <div><strong>Total de férias no sistema:</strong> {(vacations || []).length}</div>
+                  <div><strong>Férias filtradas para este utilizador:</strong> {myVacations.length}</div>
+                </div>
+              </div>
+
+              {/* Lista completa de férias */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-lg max-h-96 overflow-auto">
+                <div className="text-sm font-semibold mb-2">📋 Todas as Férias no Sistema ({(vacations || []).length})</div>
+                <div className="space-y-2">
+                  {(vacations || []).map((v, idx) => {
+                    const normalizeName = (name) => {
+                      if (!name) return '';
+                      return String(name).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+                    };
+                    const namesMatch = (name1, name2) => {
+                      if (!name1 || !name2) return false;
+                      if (name1 === name2) return true;
+                      const norm1 = normalizeName(name1);
+                      const norm2 = normalizeName(name2);
+                      if (norm1 === norm2) return true;
+                      const parts1 = norm1.split(/\s+/).filter(Boolean);
+                      const parts2 = norm2.split(/\s+/).filter(Boolean);
+                      if (parts1.length === 0 || parts2.length === 0) return false;
+                      const first1 = parts1[0];
+                      const last1 = parts1[parts1.length - 1];
+                      const first2 = parts2[0];
+                      const last2 = parts2[parts2.length - 1];
+                      return first1 === first2 && last1 === last2;
+                    };
+                    const matches = namesMatch(v.worker, auth?.name);
+                    const year = new Date(v.startDate).getFullYear();
+                    const matchesYear = year === selectedYear;
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`p-2 rounded border text-xs ${
+                          matches && matchesYear
+                            ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
+                            : 'bg-red-50 dark:bg-red-900/20 border-red-500'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{matches && matchesYear ? '✅' : '❌'}</span>
+                          <div className="flex-1">
+                            <div className="font-semibold">{v.worker || '(sem nome)'}</div>
+                            <div className="text-slate-600 dark:text-slate-400">
+                              {new Date(v.startDate).toLocaleDateString('pt-PT')} → {new Date(v.endDate).toLocaleDateString('pt-PT')}
+                              <span className="ml-2 text-slate-500">({year})</span>
+                            </div>
+                            {!matches && (
+                              <div className="text-red-600 dark:text-red-400 mt-1">
+                                ❌ Nome não corresponde a "{auth?.name}"
+                              </div>
+                            )}
+                            {matches && !matchesYear && (
+                              <div className="text-orange-600 dark:text-orange-400 mt-1">
+                                ⚠️ Ano diferente ({year} ≠ {selectedYear})
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Instruções */}
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <div className="text-sm font-semibold mb-2">💡 Como usar este debug</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1">
+                  <div>• <strong>Verde (✅):</strong> Férias que aparecem no perfil (nome e ano correspondem)</div>
+                  <div>• <strong>Vermelho (❌):</strong> Férias que NÃO aparecem (nome não corresponde ou ano diferente)</div>
+                  <div>• Se vês muitas férias vermelhas com o nome correto, pode haver um problema de formatação nos nomes</div>
+                  <div>• Abre a consola do navegador (F12) para ver logs mais detalhados</div>
                 </div>
               </div>
             </div>
