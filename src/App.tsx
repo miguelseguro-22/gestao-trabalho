@@ -1975,7 +1975,8 @@ const handleCatalog = (file) => {
       project = pickNormalProject();
       supervisor = val('supervisorNormal') || val('supervisor');
 
-      hours = hours || 0;
+      // 🔧 GARANTIR 8 HORAS NORMAIS POR PADRÃO PARA REGISTOS IMPORTADOS
+      hours = toNumber(val('hours')) || 8;
       overtime = extraHours || toNumber(val('overtimeStart') && val('overtimeEnd') ? calculateHoursDiff(val('overtimeStart'), val('overtimeEnd')) : 0);
 
     } else if (template.includes('Fim') || template.includes('FDS') || template.includes('semana') || template.includes('Feriado')) {
@@ -2011,7 +2012,8 @@ const handleCatalog = (file) => {
       project = pickShiftedProject();
       supervisor = val('supervisorShifted') || val('supervisorNormal') || val('supervisor');
 
-      hours = hours || 0;
+      // 🔧 GARANTIR 8 HORAS NORMAIS POR PADRÃO PARA REGISTOS IMPORTADOS
+      hours = toNumber(val('hours')) || 8;
 
     } else if (template.includes('Férias') || template.includes('ferias')) {
       // FÉRIAS
@@ -5007,6 +5009,50 @@ const VacationsView = ({ vacations, setVacations, people }) => {
   // CRUD Functions
   const empty = () => ({ id: null, worker: '', startDate: todayISO(), endDate: todayISO(), status: 'approved', notes: '' });
 
+  // 🔍 Função auxiliar para reconhecer colaborador por primeiro e último nome
+  const findWorkerByFirstLastName = (inputName, knownWorkers) => {
+    if (!inputName || !knownWorkers || knownWorkers.length === 0) return null;
+
+    // Normalizar e separar o nome fornecido
+    const normalize = (str) => String(str).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const inputParts = normalize(inputName).split(/\s+/).filter(Boolean);
+
+    if (inputParts.length === 0) return null;
+
+    // Extrair primeiro e último nome do input
+    const inputFirst = inputParts[0];
+    const inputLast = inputParts[inputParts.length - 1];
+
+    // Procurar match nos colaboradores conhecidos
+    for (const knownName of knownWorkers) {
+      const knownParts = normalize(knownName).split(/\s+/).filter(Boolean);
+
+      if (knownParts.length === 0) continue;
+
+      const knownFirst = knownParts[0];
+      const knownLast = knownParts[knownParts.length - 1];
+
+      // Match perfeito: primeiro E último nome coincidem
+      if (inputFirst === knownFirst && inputLast === knownLast) {
+        return knownName; // Retorna o nome completo conhecido
+      }
+    }
+
+    // Se não encontrou match, tentar match apenas por último nome (fallback)
+    for (const knownName of knownWorkers) {
+      const knownParts = normalize(knownName).split(/\s+/).filter(Boolean);
+      if (knownParts.length === 0) continue;
+      const knownLast = knownParts[knownParts.length - 1];
+
+      if (inputLast === knownLast && inputParts.length === 1) {
+        return knownName;
+      }
+    }
+
+    // Se não encontrou nenhum match, retornar null
+    return null;
+  };
+
   // 📤 Importação de Excel - Abrir modal de escolha
   const handleImportExcel = (e) => {
     const file = e.target.files?.[0];
@@ -5053,11 +5099,17 @@ const VacationsView = ({ vacations, setVacations, people }) => {
             return;
           }
 
-          // Normalizar nome (remover espaços extras, capitalizar)
+          // Normalizar nome (remover espaços extras)
           const normalizedName = String(nome).trim().replace(/\s+/g, ' ');
 
-          // Verificar se o colaborador existe (apenas aviso, não bloqueia importação)
-          if (knownWorkers.length > 0 && !knownWorkers.includes(normalizedName)) {
+          // 🔍 Tentar identificar colaborador por primeiro e último nome
+          const matchedWorker = findWorkerByFirstLastName(normalizedName, knownWorkers);
+
+          // Usar o nome completo conhecido se encontrou match, senão usar o nome fornecido
+          const finalWorkerName = matchedWorker || normalizedName;
+
+          // Verificar se o colaborador foi identificado (apenas aviso, não bloqueia importação)
+          if (knownWorkers.length > 0 && !matchedWorker) {
             unknownWorkers.add(normalizedName);
           }
 
@@ -5093,11 +5145,11 @@ const VacationsView = ({ vacations, setVacations, people }) => {
           // Adicionar férias com o nome do colaborador identificado
           newVacations.push({
             id: uid(),
-            worker: normalizedName,
+            worker: finalWorkerName, // 🔍 Usa o nome completo identificado
             startDate,
             endDate,
             status: 'approved',
-            notes: 'Importado de Excel'
+            notes: matchedWorker ? `Importado de Excel (identificado como ${matchedWorker})` : 'Importado de Excel'
           });
           imported++;
         });
@@ -6654,7 +6706,12 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
     });
 
     const holidaySet = getHolidayDatesInRange(entriesInMonth, startDate, endDate);
-    const workDays = countWeekdaysInclusive(startDate, endDate, holidaySet);
+
+    // 🔧 CALCULAR DIAS ÚTEIS ATÉ HOJE (não todo o período)
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    const effectiveEndDate = today < endDate ? today : endDate;
+    const workDays = countWeekdaysInclusive(startDate, effectiveEndDate, holidaySet);
 
     // ✅ DEBUG: Mostrar templates encontrados
     console.log('📊 Templates no mês:', {
@@ -11903,6 +11960,136 @@ const MultiWorkTimesheetForm = ({
                       ))}
                     </div>
                   </div>
+
+                  {/* 🆕 Horas Extra */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+                      ⚡ Horas Extra
+                    </label>
+
+                    {/* Opção 1: Horário de início/fim */}
+                    <div className="space-y-2">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 px-1">
+                        Opção 1: Horário de Início/Fim
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <input
+                            type="time"
+                            value={work.extraStartTime}
+                            onChange={(e) => {
+                              updateWork(work.id, 'extraStartTime', e.target.value);
+                              // Se usar horário, limpar o campo direto
+                              if (e.target.value && work.extraEndTime) {
+                                updateWork(work.id, 'overtime', 0);
+                              }
+                            }}
+                            placeholder="Início"
+                            className="w-full rounded-lg border-2 p-2 text-center text-sm font-semibold dark:bg-slate-800 focus:ring-2"
+                            style={{ borderColor: '#BE8A3A', color: '#BE8A3A' }}
+                          />
+                        </div>
+                        <div>
+                          <input
+                            type="time"
+                            value={work.extraEndTime}
+                            onChange={(e) => {
+                              updateWork(work.id, 'extraEndTime', e.target.value);
+                              // Se usar horário, limpar o campo direto
+                              if (e.target.value && work.extraStartTime) {
+                                updateWork(work.id, 'overtime', 0);
+                              }
+                            }}
+                            placeholder="Fim"
+                            className="w-full rounded-lg border-2 p-2 text-center text-sm font-semibold dark:bg-slate-800 focus:ring-2"
+                            style={{ borderColor: '#BE8A3A', color: '#BE8A3A' }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Mostrar horas calculadas */}
+                      {work.extraStartTime && work.extraEndTime && (
+                        <div className="rounded-lg p-2 text-center" style={{ background: 'rgba(190, 138, 58, 0.1)' }}>
+                          <div className="text-xs font-medium" style={{ color: '#BE8A3A' }}>
+                            = {diffHours(work.extraStartTime, work.extraEndTime).toFixed(1)}h extra
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Separador */}
+                    <div className="flex items-center gap-2 my-2">
+                      <div className="flex-1 border-t border-slate-200 dark:border-slate-700"></div>
+                      <span className="text-[10px] text-slate-400">OU</span>
+                      <div className="flex-1 border-t border-slate-200 dark:border-slate-700"></div>
+                    </div>
+
+                    {/* Opção 2: Valor direto */}
+                    <div className="space-y-2">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 px-1">
+                        Opção 2: Valor Direto
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => updateWork(work.id, 'overtime', Math.max(0, Number(work.overtime) - 0.5))}
+                          className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg transition-all hover:scale-110"
+                          style={{ background: 'linear-gradient(135deg, #E5ECEF 0%, #CDD5D9 100%)', color: '#BE8A3A' }}
+                        >
+                          −
+                        </button>
+                        <div className="flex-1 relative">
+                          <input
+                            type="number"
+                            min="0"
+                            max="16"
+                            step="0.5"
+                            value={work.overtime}
+                            onChange={(e) => {
+                              updateWork(work.id, 'overtime', e.target.value);
+                              // Se usar campo direto, limpar horários
+                              if (Number(e.target.value) > 0) {
+                                updateWork(work.id, 'extraStartTime', '');
+                                updateWork(work.id, 'extraEndTime', '');
+                              }
+                            }}
+                            className="w-full rounded-lg border-2 p-2 text-center text-lg font-bold dark:bg-slate-800 focus:ring-2"
+                            style={{ borderColor: '#BE8A3A', color: '#BE8A3A' }}
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: '#64748b' }}>h</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => updateWork(work.id, 'overtime', Math.min(16, Number(work.overtime) + 0.5))}
+                          className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg transition-all hover:scale-110"
+                          style={{ background: 'linear-gradient(135deg, #BE8A3A 0%, #D4A04D 100%)', color: '#fff' }}
+                        >
+                          +
+                        </button>
+                      </div>
+                      {/* Botões rápidos */}
+                      <div className="flex gap-1">
+                        {[1, 2, 4].map(h => (
+                          <button
+                            key={h}
+                            type="button"
+                            onClick={() => {
+                              updateWork(work.id, 'overtime', h);
+                              updateWork(work.id, 'extraStartTime', '');
+                              updateWork(work.id, 'extraEndTime', '');
+                            }}
+                            className="flex-1 px-2 py-1 rounded text-xs font-medium transition-colors"
+                            style={{
+                              background: Number(work.overtime) === h ? '#BE8A3A' : '#E5ECEF',
+                              color: Number(work.overtime) === h ? '#fff' : '#64748b'
+                            }}
+                          >
+                            +{h}h
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -11913,7 +12100,10 @@ const MultiWorkTimesheetForm = ({
               >
                 <div className="text-xs text-slate-600 dark:text-slate-400">Subtotal</div>
                 <div className="text-lg font-bold" style={{ color: '#00677F' }}>
-                  {(Number(work.hours) + Number(work.overtime)).toFixed(1)}h
+                  {isWeekend
+                    ? diffHours(work.weekendStartTime, work.weekendEndTime).toFixed(1)
+                    : (Number(work.hours) + (work.extraStartTime && work.extraEndTime ? diffHours(work.extraStartTime, work.extraEndTime) : Number(work.overtime))).toFixed(1)
+                  }h
                 </div>
               </div>
             </div>
@@ -13758,11 +13948,31 @@ const visibleTimeEntries = useMemo(() => {
     "Hélder Pinto",
   ];
 
-  const projectNames = useMemo(
-    () =>
-      Array.from(new Set(projects.map((p) => p.name))).sort(),
-    [projects]
-  );
+  const projectNames = useMemo(() => {
+    const names = new Set();
+
+    // 1. Adicionar projetos cadastrados
+    projects.forEach(p => {
+      if (p.name) names.add(p.name);
+    });
+
+    // 2. Adicionar TODAS as obras dos registos de trabalho (não apenas do período)
+    timeEntries.forEach(entry => {
+      if (entry.project) {
+        // Se o projeto contém separadores, dividir em múltiplas obras
+        if (entry.project.match(/\s+e\s+|,|\//)) {
+          entry.project.split(/\s+e\s+|,|\//).forEach(part => {
+            const trimmed = part.trim();
+            if (trimmed) names.add(trimmed);
+          });
+        } else {
+          names.add(entry.project);
+        }
+      }
+    });
+
+    return Array.from(names).sort();
+  }, [projects, timeEntries]);
 
   const { start: cycStart, end: cycEnd } = getCycle(0);
 
