@@ -6592,7 +6592,7 @@ const AgendaView = ({ agenda, setAgenda, peopleNames, projectNames }) => {
 // ============================================================
 // 📊 RELATÓRIO MENSAL DE COLABORADORES (ADMIN)
 // ============================================================
-const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
+const MonthlyReportView = ({ timeEntries, people, setPeople, setModal, vacations = [] }) => {
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -7040,6 +7040,82 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
       worker.totalOvertime += overtime;
     });
 
+    // 🏖️ PROCESSAR FÉRIAS DO ARRAY VACATIONS (importadas da página de Férias)
+    // Criar função para normalizar nomes (matching robusto)
+    const normalizeName = (name) => {
+      if (!name) return '';
+      return String(name).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+    };
+
+    const namesMatch = (name1, name2) => {
+      if (!name1 || !name2) return false;
+      if (name1 === name2) return true;
+
+      const norm1 = normalizeName(name1);
+      const norm2 = normalizeName(name2);
+      if (norm1 === norm2) return true;
+
+      const parts1 = norm1.split(/\s+/).filter(Boolean);
+      const parts2 = norm2.split(/\s+/).filter(Boolean);
+      if (parts1.length === 0 || parts2.length === 0) return false;
+
+      const first1 = parts1[0];
+      const last1 = parts1[parts1.length - 1];
+      const first2 = parts2[0];
+      const last2 = parts2[parts2.length - 1];
+
+      return first1 === first2 && last1 === last2;
+    };
+
+    // Processar férias do array vacations
+    (vacations || []).forEach(vacation => {
+      if (!vacation.startDate || !vacation.endDate || !vacation.worker) return;
+
+      const vStart = new Date(vacation.startDate);
+      const vEnd = new Date(vacation.endDate);
+
+      // Verificar se as férias estão dentro do período do mês
+      if (vEnd < startDate || vStart > endDate) return;
+
+      // Encontrar o colaborador correspondente usando matching robusto
+      let targetWorker = null;
+      for (const worker of byWorker.values()) {
+        if (namesMatch(worker.name, vacation.worker)) {
+          targetWorker = worker;
+          break;
+        }
+      }
+
+      // Se não encontrou o worker, criar um novo
+      if (!targetWorker) {
+        targetWorker = ensureWorker(vacation.worker);
+      }
+
+      // Contar dias úteis das férias dentro do período do mês
+      // e evitar duplicados com registos já contados
+      for (let d = new Date(Math.max(vStart.getTime(), startDate.getTime()));
+           d <= new Date(Math.min(vEnd.getTime(), endDate.getTime()));
+           d.setDate(d.getDate() + 1)) {
+        const ymd = d.toISOString().slice(0, 10);
+        const dow = d.getDay();
+
+        // Verificar se já existe um registo de férias para este dia
+        const alreadyCounted = targetWorker.entries.some(e => {
+          if (e.template !== 'Férias') return false;
+          const eStart = new Date(e.periodStart || e.date);
+          const eEnd = new Date(e.periodEnd || e.date);
+          const eDate = new Date(ymd);
+          return eDate >= eStart && eDate <= eEnd;
+        });
+
+        // Só contar se for dia útil, estiver no período, não for feriado e não estiver já contado
+        if (dow !== 0 && dow !== 6 && !holidaySet.has(ymd) && !alreadyCounted) {
+          targetWorker.diasFerias++;
+          targetWorker.holidays++; // Manter legacy
+        }
+      }
+    });
+
     // Converter para array e calcular presença
     return Array.from(byWorker.values())
       .map((worker) => {
@@ -7094,7 +7170,7 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal }) => {
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [timeEntries, selectedMonth]);
+  }, [timeEntries, selectedMonth, vacations]);
 
   // 🚨 SISTEMA DE ANÁLISE DE ALERTAS E ANOMALIAS
   const alerts = useMemo(() => {
@@ -8984,8 +9060,43 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
 
   // 🏖️ FÉRIAS DO COLABORADOR (do state vacations)
   const myVacations = useMemo(() => {
+    // Função para normalizar nomes para comparação
+    const normalizeName = (name) => {
+      if (!name) return '';
+      return String(name).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+    };
+
+    // Função para verificar se dois nomes correspondem (primeiro + último nome)
+    const namesMatch = (name1, name2) => {
+      if (!name1 || !name2) return false;
+
+      // Comparação exata primeiro (mais rápido)
+      if (name1 === name2) return true;
+
+      // Normalizar nomes
+      const norm1 = normalizeName(name1);
+      const norm2 = normalizeName(name2);
+
+      // Comparação normalizada
+      if (norm1 === norm2) return true;
+
+      // Comparação por primeiro e último nome
+      const parts1 = norm1.split(/\s+/).filter(Boolean);
+      const parts2 = norm2.split(/\s+/).filter(Boolean);
+
+      if (parts1.length === 0 || parts2.length === 0) return false;
+
+      const first1 = parts1[0];
+      const last1 = parts1[parts1.length - 1];
+      const first2 = parts2[0];
+      const last2 = parts2[parts2.length - 1];
+
+      // Match se primeiro E último nome coincidirem
+      return first1 === first2 && last1 === last2;
+    };
+
     return (vacations || [])
-      .filter(v => v.worker === auth?.name)
+      .filter(v => namesMatch(v.worker, auth?.name))
       .filter(v => {
         const year = new Date(v.startDate).getFullYear();
         return year === selectedYear;
@@ -19013,7 +19124,7 @@ function TableMaterials() {
           )}
 
           {view === "monthly-report" && auth?.role === "admin" && (
-            <MonthlyReportView timeEntries={timeEntries} people={people} setPeople={setPeople} setModal={setModal} />
+            <MonthlyReportView timeEntries={timeEntries} people={people} setPeople={setPeople} setModal={setModal} vacations={vacations} />
           )}
 
           {view === "timesheets" && <TimesheetsView />}
