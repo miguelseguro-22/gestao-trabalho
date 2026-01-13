@@ -19655,7 +19655,6 @@ function TableMaterials() {
       </Modal>
 
       {/* Modais */}
-      // ✅ DEPOIS
 <Modal 
   open={modal?.name === "add-time"} 
   title="Registar Tempo" 
