@@ -5159,13 +5159,30 @@ const VacationsView = ({ vacations, setVacations, people }) => {
         // Adicionar ou substituir conforme o modo
         if (newVacations.length > 0) {
           let message = '';
+          let totalTimeEntries = 0;
+
+          // 🏖️ Criar time entries para cada férias importada
+          const allTimeEntries = [];
+          newVacations.forEach(vacation => {
+            const entries = createVacationTimeEntries(vacation);
+            allTimeEntries.push(...entries);
+            totalTimeEntries += entries.length;
+          });
 
           if (mode === 'replace') {
+            // Remover todos os time entries de férias anteriores
+            setTimeEntries(list => list.filter(entry => entry.template !== 'Férias'));
+            // Adicionar novos time entries
+            setTimeEntries(list => [...allTimeEntries, ...list]);
+
             setVacations(newVacations);
-            message = `✅ Importação concluída (SUBSTITUIÇÃO)!\n\n📥 Importados: ${imported}\n⏭️ Ignorados: ${skipped}\n\n⚠️ Todos os registos anteriores foram removidos.`;
+            message = `✅ Importação concluída (SUBSTITUIÇÃO)!\n\n📥 Importados: ${imported}\n⏭️ Ignorados: ${skipped}\n🗓️ Dias registados: ${totalTimeEntries}\n\n⚠️ Todos os registos anteriores foram removidos.`;
           } else {
+            // Adicionar novos time entries
+            setTimeEntries(list => [...allTimeEntries, ...list]);
+
             setVacations(list => [...newVacations, ...list]);
-            message = `✅ Importação concluída (JUNTAR)!\n\n📥 Importados: ${imported}\n⏭️ Ignorados: ${skipped}\n\n✓ Registos adicionados aos existentes.`;
+            message = `✅ Importação concluída (JUNTAR)!\n\n📥 Importados: ${imported}\n⏭️ Ignorados: ${skipped}\n🗓️ Dias registados: ${totalTimeEntries}\n\n✓ Registos adicionados aos existentes.`;
           }
 
           // Adicionar aviso sobre colaboradores desconhecidos
@@ -5187,6 +5204,47 @@ const VacationsView = ({ vacations, setVacations, people }) => {
     setPendingFile(null);
   };
 
+  // 🏖️ Função auxiliar para criar time entries de férias
+  const createVacationTimeEntries = (vacation) => {
+    const { worker, startDate, endDate } = vacation;
+    const entries = [];
+
+    const start = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T00:00:00');
+    const current = new Date(start);
+
+    // Iterar por cada dia do período
+    while (current <= end) {
+      const dayOfWeek = current.getDay();
+
+      // Apenas dias úteis (segunda a sexta)
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        const dateISO = current.toISOString().split('T')[0];
+
+        entries.push({
+          id: uid(),
+          worker: worker,
+          date: dateISO,
+          template: 'Férias',
+          hours: 8, // 8 horas por dia de férias
+          overtime: 0,
+          project: '',
+          supervisor: '',
+          displacement: 'Não',
+          status: 'approved',
+          periodStart: startDate,
+          periodEnd: endDate,
+          notes: `Férias: ${startDate} → ${endDate}`
+        });
+      }
+
+      // Avançar para o próximo dia
+      current.setDate(current.getDate() + 1);
+    }
+
+    return entries;
+  };
+
   const save = () => {
     if (!form.worker || !form.startDate || !form.endDate) return;
     if (new Date(form.endDate) < new Date(form.startDate)) {
@@ -5195,14 +5253,38 @@ const VacationsView = ({ vacations, setVacations, people }) => {
     }
 
     if (editing) {
+      // 🏖️ Ao editar, remover time entries antigos e criar novos
+      const vacation = vacations.find(v => v.id === form.id);
+      if (vacation) {
+        // Remover time entries antigos deste período de férias
+        setTimeEntries(list => list.filter(entry =>
+          !(entry.template === 'Férias' &&
+            entry.worker === vacation.worker &&
+            entry.periodStart === vacation.startDate &&
+            entry.periodEnd === vacation.endDate)
+        ));
+      }
+
+      // Criar novos time entries
+      const newEntries = createVacationTimeEntries(form);
+      setTimeEntries(list => [...newEntries, ...list]);
+
       setVacations(list => list.map(v => v.id === form.id ? { ...form } : v));
       setForm(empty());
       setEditing(false);
+      addToast(`✅ Férias atualizadas e ${newEntries.length} dias registados em timesheets`);
     } else {
-      // Ao adicionar novo registo, manter o colaborador selecionado
+      // 🏖️ Ao criar novo registo, criar time entries automaticamente
       const currentWorker = form.worker;
-      setVacations(list => [{ ...form, id: uid() }, ...list]);
+      const newVacation = { ...form, id: uid() };
+
+      // Criar time entries para cada dia do período
+      const newEntries = createVacationTimeEntries(newVacation);
+      setTimeEntries(list => [...newEntries, ...list]);
+
+      setVacations(list => [newVacation, ...list]);
       setForm({ ...empty(), worker: currentWorker });
+      addToast(`✅ Férias guardadas e ${newEntries.length} dias registados em timesheets`);
     }
   };
 
@@ -5213,6 +5295,21 @@ const VacationsView = ({ vacations, setVacations, people }) => {
 
   const remove = (id) => {
     if (confirm('Tem certeza que deseja remover estas férias?')) {
+      // 🏖️ Encontrar as férias antes de remover
+      const vacation = vacations.find(v => v.id === id);
+
+      if (vacation) {
+        // Remover time entries associados a este período de férias
+        setTimeEntries(list => list.filter(entry =>
+          !(entry.template === 'Férias' &&
+            entry.worker === vacation.worker &&
+            entry.periodStart === vacation.startDate &&
+            entry.periodEnd === vacation.endDate)
+        ));
+
+        addToast('✅ Férias e registos de timesheet removidos');
+      }
+
       setVacations(list => list.filter(v => v.id !== id));
     }
   };
