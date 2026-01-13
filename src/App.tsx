@@ -19120,7 +19120,7 @@ function TimesheetsView() {
       </div>
 
       {/* 🌊 ATIVIDADE RECENTE */}
-      <div style={{ animation: 'slideUp 0.6s ease-out 0.9s both' }}>
+      <div style={anim(0.9)}>
         <h2 className="text-xl font-bold mb-4 dark:text-white flex items-center gap-2">
           <span>🕐</span> Atividade Recente
         </h2>
@@ -19136,7 +19136,7 @@ function TimesheetsView() {
                 <div
                   key={t.id}
                   className="p-4 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all cursor-pointer"
-                  style={{ animation: `slideUp 0.4s ease-out ${0.9 + idx * 0.1}s both` }}
+                  style={anim(0.9 + idx * 0.1)}
                   onClick={() => setModal({ name: "add-time", initial: t })}
                 >
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{
