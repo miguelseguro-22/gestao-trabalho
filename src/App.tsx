@@ -5087,6 +5087,9 @@ const VacationsView = ({ vacations, setVacations, people, setTimeEntries, addToa
         // Obter lista de colaboradores existentes (se disponível)
         const knownWorkers = people ? Object.keys(people) : [];
 
+        // ✅ DEDUPLICAÇÃO ROBUSTA: Usar Map para garantir unicidade
+        const vacationMap = new Map(); // Chave: worker|startDate|endDate
+
         // Processar linhas (começar da linha 1 para saltar cabeçalho se existir)
         rows.forEach((row, index) => {
           if (index === 0) return; // Saltar primeira linha (cabeçalhos)
@@ -5144,23 +5147,20 @@ const VacationsView = ({ vacations, setVacations, people, setTimeEntries, addToa
             return;
           }
 
-          // 🔍 DEDUPLICAÇÃO: Verificar se já existe este período para este colaborador
-          const isDuplicate = newVacations.some(v =>
-            v.worker === finalWorkerName &&
-            v.startDate === startDate &&
-            v.endDate === endDate
-          );
+          // ✅ Criar chave única para deduplicação
+          const key = `${finalWorkerName}|${startDate}|${endDate}`;
 
-          if (isDuplicate) {
-            console.log(`⚠️ Duplicado ignorado: ${finalWorkerName} - ${startDate} → ${endDate}`);
+          // ✅ Se já existe no Map, ignorar (duplicado)
+          if (vacationMap.has(key)) {
+            console.log(`⚠️ Duplicado ignorado (linha ${index + 1}): ${finalWorkerName} - ${startDate} → ${endDate}`);
             skipped++;
             return;
           }
 
-          // Adicionar férias com o nome do colaborador identificado
-          newVacations.push({
+          // ✅ Adicionar ao Map (garante unicidade)
+          vacationMap.set(key, {
             id: uid(),
-            worker: finalWorkerName, // 🔍 Usa o nome completo identificado
+            worker: finalWorkerName,
             startDate,
             endDate,
             status: 'approved',
@@ -5168,6 +5168,9 @@ const VacationsView = ({ vacations, setVacations, people, setTimeEntries, addToa
           });
           imported++;
         });
+
+        // ✅ Converter Map para Array
+        newVacations.push(...Array.from(vacationMap.values()));
 
         // Adicionar ou substituir conforme o modo
         if (newVacations.length > 0) {
