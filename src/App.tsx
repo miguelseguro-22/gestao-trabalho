@@ -846,11 +846,19 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
   <div className="font-medium dark:text-slate-100">
-    Ciclo: {start.toLocaleDateString('pt-PT')} – {end.toLocaleDateString('pt-PT')} · {dayTypes.size}/{wd} dias úteis
+    <div className="flex flex-col md:flex-row md:items-center md:gap-2">
+      <span className="text-sm text-slate-500 dark:text-slate-400 mb-1 md:mb-0">Ciclo:</span>
+      <span className="text-base">
+        {start.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' })} – {end.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+      </span>
+    </div>
+    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 md:mt-0 md:ml-2">
+      {dayTypes.size}/{wd} dias úteis
+    </div>
   </div>
-  <div className="flex gap-2">
+  <div className="flex gap-2 flex-wrap">
     {/* Botões de navegação existentes */}
     <Button variant="secondary" onClick={() => setOffset(o => o - 1)}>
       <Icon name="chev-left" />
@@ -922,7 +930,7 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
               onClick={() => click(d)}
               title={has ? primary : ''}
               className={[
-                'text-left rounded-2xl p-2 min-h-[72px] w-full transition ring-focus',
+                'text-left rounded-2xl p-2 md:p-3 min-h-[80px] md:min-h-[72px] w-full transition ring-focus active:scale-95',
                 inCycle
                   ? (has ? 'text-white hover:brightness-110 border-0'
                          : weekendClass || 'bg-white border hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800')
@@ -19081,19 +19089,19 @@ function TimesheetsView() {
 
       {/* 📅 CALENDÁRIO */}
       <div style={anim(0.8)}>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
           <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
             <span>📅</span> Calendário de Registos
           </h2>
           {/* 👤 Dropdown de Colaborador */}
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-slate-600 dark:text-slate-400">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+            <label className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
               Filtrar por colaborador:
             </label>
             <select
               value={selectedWorkerFilter}
               onChange={(e) => setSelectedWorkerFilter(e.target.value)}
-              className="px-4 py-2 rounded-xl border dark:border-slate-700 dark:bg-slate-800 text-sm"
+              className="px-4 py-2 rounded-xl border dark:border-slate-700 dark:bg-slate-800 text-sm w-full sm:w-auto"
             >
               <option value="all">📊 Todos os colaboradores</option>
               {Object.keys(people || {}).sort().map(name => (
