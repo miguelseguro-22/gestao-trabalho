@@ -18835,15 +18835,15 @@ function DashboardView() {
 // ---------------------------------------------------------------
 function TimesheetsView() {
   // ✅ Controlar animação apenas no primeiro load
-  const [hasAnimated, setHasAnimated] = useState(false);
+  const [shouldAnimate, setShouldAnimate] = useState(true);
   // 👤 Filtro de colaborador para o calendário
   const [selectedWorkerFilter, setSelectedWorkerFilter] = useState('all');
 
   useEffect(() => {
-    if (!hasAnimated) {
-      setHasAnimated(true);
-    }
-  }, [hasAnimated]);
+    const animationTimeoutMs = 2200;
+    const timer = setTimeout(() => setShouldAnimate(false), animationTimeoutMs);
+    return () => clearTimeout(timer);
+  }, []);
 
   // 🔒 Verificação de segurança
   if (!auth) {
@@ -18887,7 +18887,7 @@ function TimesheetsView() {
 
   // ✅ Helper para animação condicional (só no primeiro load)
   const anim = (delay = 0) => {
-    return !hasAnimated ? { animation: `slideUp 0.6s ease-out ${delay}s both` } : {};
+    return shouldAnimate ? { animation: `slideUp 0.6s ease-out ${delay}s both` } : {};
   };
 
   return (
