@@ -85,33 +85,6 @@ function parseCatalogCSV(text){const lines=text.replace(/\r\n/g,'\n').replace(/\
 
 
 
-<<<<<<< HEAD
-function printOrderHTML(o, priceOf, codeOf){
-  const rows = o.items.map(it=>{
-    const p   = priceOf(it.name);
-    const c   = codeOf(it.name, o.project) || '—';
-    const qty = Number(it.qty)||0;
-    const sub = p*qty;
-    return `<tr>
-      <td>${it.name}</td><td>${c}</td>
-      <td style="text-align:right">${qty}</td>
-      <td style="text-align:right">${p.toFixed(2)} €</td>
-      <td style="text-align:right">${sub.toFixed(2)} €</td>
-    </tr>`;
-  }).join('');
-
-  function orderToEmailText(o, priceOf, codeOf) {
-  const linhas = o.items.map(it=>{
-    const p = priceOf(it.name);
-    const c = codeOf(it.name, o.project) || '';
-    const sub = p * (Number(it.qty)||0);
-    return `- ${it.name}${c?` [${c}]`:''} × ${it.qty} @ ${p.toFixed(2)}€ = ${sub.toFixed(2)}€`;
-  });
-  const total = o.items.reduce((s,it)=> s + priceOf(it.name)*(Number(it.qty)||0), 0);
-  return [
-    `Pedido de Material — ${o.project}`,
-    `Requisitante: ${o.requestedBy||'—'} · Data: ${o.requestedAt}`,
-=======
 // ---------- Impressão de Pedidos ----------
 function orderToEmailText(o, priceOf, codeOf) {
   const linhas = o.items.map(it => {
@@ -124,7 +97,6 @@ function orderToEmailText(o, priceOf, codeOf) {
   return [
     `Pedido de Material — ${o.project}`,
     `Requisitante: ${o.requestedBy || '—'} · Data: ${o.requestedAt}`,
->>>>>>> origin/main
     ``,
     ...linhas,
     ``,
@@ -144,28 +116,18 @@ function openPrintWindow(html) {
       return true;
     }
   } catch {}
-<<<<<<< HEAD
-  // Fallback: descarrega o HTML se a popup for bloqueada
-=======
->>>>>>> origin/main
   try {
     const blob = new Blob([html], { type: 'text/html' });
     const url  = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-<<<<<<< HEAD
-    a.download = `relatorio_timesheets_${todayISO()}.html`;
-=======
     a.download = `pedido_material_${todayISO()}.html`;
->>>>>>> origin/main
     a.click();
     URL.revokeObjectURL(url);
   } catch {}
   return false;
 }
 
-<<<<<<< HEAD
-=======
 function printOrderHTML(o, priceOf, codeOf) {
   const rows = o.items.map(it => {
     const p   = priceOf(it.name);
@@ -217,7 +179,6 @@ function printOrder(o, priceOf, codeOf) {
 }
 
 
->>>>>>> origin/main
 
 
 function buildTimesheetCycleRows({ worker, timeEntries, cycle }) {
@@ -350,12 +311,7 @@ function exportTimesheetCycleCSV(entries = []) {
   download(`relatorio_timesheets_${todayISO()}.csv`, csv);
 }
 
-<<<<<<< HEAD
-
-// ---- RELATÓRIO: Registo de horas do ciclo 21→20 ----
-=======
 // HTML imprimível — esta é a que o botão deve chamar
->>>>>>> origin/main
 function printTimesheetCycleReport(entries = []) {
   const { start, end } = getCycle(0);
   const inRange = (iso) => {
@@ -366,12 +322,7 @@ function printTimesheetCycleReport(entries = []) {
     return d >= a && d <= b;
   };
 
-<<<<<<< HEAD
-  // só “Trabalho Normal” (ajusta se quiseres incluir Férias/Baixa/Falta)
-  const rows = entries
-=======
   const rows = (entries||[])
->>>>>>> origin/main
     .filter(t => t.template === 'Trabalho Normal' && inRange(t.date))
     .sort((a,b) =>
       (a.date||'').localeCompare(b.date||'') ||
@@ -417,44 +368,7 @@ function printTimesheetCycleReport(entries = []) {
     </table>
   </body></html>`;
 
-<<<<<<< HEAD
-  const w = window.open('', '_blank');
-  w.document.write(html);
-  w.document.close();
-  w.focus?.();
-  setTimeout(()=>{ try{ w.print(); }catch{} }, 100);
-}
-
-  <title>Pedido ${o.id}</title>
-  <style>/* estilos iguais aos de cima */</style>
-  </head><body>
-    <!-- conteúdo igual ao de cima, sem a tag <script> -->
-    <h1>Pedido de Material</h1>
-    <div class="meta">
-      <div><b>Projeto:</b> ${o.project}</div>
-      <div><b>Requisitante:</b> ${o.requestedBy||'—'}</div>
-      <div><b>Data:</b> ${o.requestedAt}</div>
-      <div><b>ID:</b> ${o.id}</div>
-      ${o.notes?`<div><b>Notas:</b> ${o.notes}</div>`:''}
-    </div>
-    <table>
-      <tr><th>Item</th><th>Código</th><th class="right">Qtd</th><th class="right">Preço</th><th class="right">Subtotal</th></tr>
-      ${rows}
-      <tr><th colspan="4" class="right">Total</th><th class="right">${total.toFixed(2)} €</th></tr>
-    </table>
-  </body></html>`;
-}
-
-function printOrder(o, priceOf, codeOf){
-  const w = window.open('', '_blank');
-  w.document.write(printOrderHTML(o, priceOf, codeOf));
-  w.document.close();
-  // dá um microtempo para render e imprime
-  w.focus?.();
-  setTimeout(() => { try { w.print(); } catch {} }, 100);
-=======
   openPrintWindow(html);
->>>>>>> origin/main
 }
 
 
@@ -686,6 +600,7 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
 
   const SEC_FIELDS={
     timesheets:[
+      {k:'worker',label:'colaborador/técnico'},
       {k:'template',label:'template (Trabalho Normal/Férias/Baixa/Falta)',opt:true},
       {k:'date',label:'data (yyyy-mm-dd)'},
       {k:'project',label:'projeto/obra',opt:true},
@@ -708,6 +623,7 @@ const ImportCenter=({onClose,setters,addToast,log})=>{
     ]
   };
   const AUTO_KEYS={ date:['data','date','dia'], requestedAt:['data','pedido','data pedido','request date'],
+    worker:['colaborador','tecnico','técnico','worker','nome','funcionario','funcionário','empregado'],
     project:['projeto','project','obra','site'], supervisor:['encarregado','supervisor','chefe','lider'],
     hours:['horas','hours'], overtime:['extra','overtime','horas extra'], item:['item','material','produto'],
     qty:['quantidade','qty','qtd','quantity'], requestedBy:['requisitante','solicitante','quem pediu','requested by'],
@@ -970,7 +886,7 @@ const handleCatalog = (file) => {
       const date=normalizeDate(val('date'));
       const periodStart=normalizeDate(val('periodStart'));
       const periodEnd=normalizeDate(val('periodEnd'));
-      return {id:uid(),template,date,project:val('project'),supervisor:val('supervisor'),hours:toNumber(val('hours')),overtime:toNumber(val('overtime')),periodStart,periodEnd,notes:val('notes')};
+      return {id:uid(),template,date,worker:val('worker'),project:val('project'),supervisor:val('supervisor'),hours:toNumber(val('hours')),overtime:toNumber(val('overtime')),periodStart,periodEnd,notes:val('notes')};
     }
     if(section==='materials'){
       return { requestedAt:normalizeDate(val('requestedAt'))||todayISO(), project:val('project'),
@@ -980,7 +896,7 @@ const handleCatalog = (file) => {
     return {};
   };
 
-  const validateMapped=(o)=>{const errs=[]; if(section==='timesheets'){ if(['Férias','Baixa'].includes(o.template)){ if(!o.periodStart||!o.periodEnd) errs.push('período'); } else if(o.template==='Falta'){ if(!o.date) errs.push('data'); } else { if(!o.date) errs.push('data'); if(!o.project) errs.push('projeto'); if(!o.supervisor) errs.push('encarregado'); }} if(section==='materials'){ if(!o.project) errs.push('projeto'); if(!o.item) errs.push('item'); } return errs;};
+  const validateMapped=(o)=>{const errs=[]; if(section==='timesheets'){ if(!o.worker) errs.push('colaborador'); if(['Férias','Baixa'].includes(o.template)){ if(!o.periodStart||!o.periodEnd) errs.push('período'); } else if(o.template==='Falta'){ if(!o.date) errs.push('data'); } else { if(!o.date) errs.push('data'); if(!o.project) errs.push('projeto'); if(!o.supervisor) errs.push('encarregado'); }} if(section==='materials'){ if(!o.project) errs.push('projeto'); if(!o.item) errs.push('item'); } return errs;};
 
   const importCSV=(mode)=>{
     const mapped=csvPreview.rows.map(mapRow);
@@ -2540,39 +2456,6 @@ const defaultViewForRole = (role) =>
 ];
 
 const LoginView = ({ onLogin }) => {
-<<<<<<< HEAD
-  const [email,setEmail] = React.useState('');
-  const [password,setPassword] = React.useState('');
-  const [loading,setLoading] = React.useState(false);
-  const [error,setError] = React.useState('');
-  const [showRegister,setShowRegister] = React.useState(false);
-  const [role,setRole] = React.useState('tecnico'); // só usado no registo
-
-  const handleLogin = async () => {
-    setLoading(true); setError('');
-    try{
-      const u = await Auth.login(email.trim(), password);
-      onLogin(u);
-    }catch(e){
-      setError(e?.message || 'Falha no login.');
-    }finally{
-      setLoading(false);
-    }
-  };
-
-  const handleRegister = async () => {
-    setLoading(true); setError('');
-    try{
-      const u = await Auth.register(email.trim(), password, role);
-      // Opcional: podes pedir confirmação de email no Supabase (Auth > Email confirmations)
-      onLogin(u);
-    }catch(e){
-      setError(e?.message || 'Falha no registo.');
-    }finally{
-      setLoading(false);
-    }
-  };
-=======
   const [username, setUsername] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [role, setRole] = React.useState('tecnico');
@@ -2585,7 +2468,6 @@ const LoginView = ({ onLogin }) => {
    window.Auth?.login(username || 'Utilizador', '***', effectiveRole);
    onLogin(window.Auth?.user());
  };
->>>>>>> origin/main
 
   return (
     <div className="min-h-screen grid place-items-center p-4 bg-slate-50 dark:bg-slate-950">
@@ -2602,85 +2484,26 @@ const LoginView = ({ onLogin }) => {
 
         <div className="space-y-3">
           <label className="text-sm">
-<<<<<<< HEAD
-            Email
-            <input
-              type="email"
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              placeholder="nome@empresa.com"
-              value={email}
-              onChange={e=>setEmail(e.target.value)}
-=======
             Nome de Utilizador
             <input
               className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
               placeholder="Digite seu usuário"
               value={username}
               onChange={e=>setUsername(e.target.value)}
->>>>>>> origin/main
             />
           </label>
 
           <label className="text-sm">
-<<<<<<< HEAD
-            Palavra-passe
-            <input
-              type="password"
-              className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-              placeholder="••••••••"
-=======
             Senha
             <input
               type="password"
               className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
               placeholder="Digite sua senha"
->>>>>>> origin/main
               value={password}
               onChange={e=>setPassword(e.target.value)}
             />
           </label>
 
-<<<<<<< HEAD
-          {showRegister && (
-            <label className="text-sm">
-              Papel do utilizador
-              <select
-                className="mt-1 w-full rounded-xl border p-2 dark:bg-slate-900 dark:border-slate-700"
-                value={role}
-                onChange={e=>setRole(e.target.value)}
-              >
-                <option value="tecnico">Técnico</option>
-                <option value="encarregado">Encarregado</option>
-                <option value="diretor">Diretor de Obra</option>
-                <option value="logistica">Gestor de Logística</option>
-                <option value="admin">Administrador</option>
-              </select>
-            </label>
-          )}
-
-          {error && <div className="text-xs text-rose-500">{error}</div>}
-
-          {!showRegister ? (
-            <Button className="w-full justify-center" onClick={handleLogin} disabled={loading}>
-              {loading ? 'A entrar…' : 'Entrar'}
-            </Button>
-          ) : (
-            <Button className="w-full justify-center" onClick={handleRegister} disabled={loading}>
-              {loading ? 'A registar…' : 'Criar conta'}
-            </Button>
-          )}
-
-          <div className="text-xs text-center text-slate-500 dark:text-slate-400">
-            {showRegister ? 'Já tens conta?' : 'Ainda não tens conta?'}{' '}
-            <button
-              className="underline"
-              onClick={()=>setShowRegister(v=>!v)}
-              type="button"
-            >
-              {showRegister ? 'Entrar' : 'Criar conta'}
-            </button>
-          </div>
-=======
           <label className="text-sm">
             Tipo de Utilizador (apenas para demo sem password)
             <select
@@ -2731,17 +2554,12 @@ const LoginView = ({ onLogin }) => {
             </div>
           </div>
           {/* === fim do bloco === */}
->>>>>>> origin/main
         </div>
       </Card>
     </div>
   );
 };
 
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/main
 const JOB_TYPES = ['Instalação','Manutenção','Visita Técnica','Reunião'];
 
 function AgendaQuickForm({ initial, setAgenda, onClose, peopleNames=[], projectNames=[] }) {
@@ -3418,8 +3236,6 @@ const DashboardView = () => (
   </div>
 </Modal>
 
-<<<<<<< HEAD
-=======
 {/* Escolha rápida: registar horas / agendar (apenas hoje+futuro) */}
 <Modal
   open={modal?.name==='day-actions'}
@@ -3445,7 +3261,6 @@ const DashboardView = () => (
   </div>
 </Modal>
 
->>>>>>> origin/main
 {/* Agendamento rápido (formulário compacto) */}
 <Modal open={modal?.name==='agenda-add'} title="Agendar Trabalho" onClose={()=>setModal(null)}>
   <AgendaQuickForm initial={modal?.initial}
