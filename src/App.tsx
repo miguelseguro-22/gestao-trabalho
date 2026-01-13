@@ -4988,6 +4988,8 @@ const VacationsView = ({ vacations, setVacations, people }) => {
   const fileInputRef = useRef(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [pendingFile, setPendingFile] = useState(null);
+  const [associatingVacation, setAssociatingVacation] = useState(null); // Para modal de associação
+  const [showAssociateModal, setShowAssociateModal] = useState(false);
 
   const peopleNames = Object.keys(people || {}).sort();
 
@@ -5212,6 +5214,23 @@ const VacationsView = ({ vacations, setVacations, people }) => {
   const remove = (id) => {
     if (confirm('Tem certeza que deseja remover estas férias?')) {
       setVacations(list => list.filter(v => v.id !== id));
+    }
+  };
+
+  const openAssociateModal = (vacation) => {
+    setAssociatingVacation(vacation);
+    setShowAssociateModal(true);
+  };
+
+  const associateWorker = (workerName) => {
+    if (associatingVacation && workerName) {
+      setVacations(list => list.map(v =>
+        v.id === associatingVacation.id
+          ? { ...v, worker: workerName }
+          : v
+      ));
+      setShowAssociateModal(false);
+      setAssociatingVacation(null);
     }
   };
 
@@ -5507,6 +5526,50 @@ const VacationsView = ({ vacations, setVacations, people }) => {
         </Modal>
       )}
 
+      {/* Modal de associação de colaborador */}
+      {showAssociateModal && associatingVacation && (
+        <Modal open={true} onClose={() => { setShowAssociateModal(false); setAssociatingVacation(null); }}>
+          <div className="p-6">
+            <h3 className="text-xl font-bold mb-4">Associar Colaborador</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+              Seleciona o colaborador correto para este registo de férias:
+            </p>
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <div className="text-sm font-semibold mb-1">Registo atual:</div>
+              <div className="text-sm">{associatingVacation.worker}</div>
+              <div className="text-xs text-slate-500 mt-1">
+                {new Date(associatingVacation.startDate).toLocaleDateString('pt-PT')} → {new Date(associatingVacation.endDate).toLocaleDateString('pt-PT')}
+              </div>
+            </div>
+            <div className="mb-4">
+              <label className="text-sm font-semibold mb-2 block">Escolher Colaborador:</label>
+              <select
+                className="w-full rounded-xl border p-3 dark:bg-slate-900 dark:border-slate-700"
+                onChange={(e) => {
+                  if (e.target.value) {
+                    associateWorker(e.target.value);
+                  }
+                }}
+                defaultValue=""
+              >
+                <option value="">Selecionar colaborador...</option>
+                {peopleNames.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="secondary"
+                onClick={() => { setShowAssociateModal(false); setAssociatingVacation(null); }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       <PageHeader
         icon="sun"
         title="Gestão de Férias"
@@ -5693,6 +5756,7 @@ const VacationsView = ({ vacations, setVacations, people }) => {
                         </div>
                       </div>
                       <div className="flex gap-2">
+                        <Button variant="secondary" size="sm" onClick={() => openAssociateModal(v)}>👤 Associar</Button>
                         <Button variant="secondary" size="sm" onClick={() => edit(v)}>Editar</Button>
                         <Button variant="danger" size="sm" onClick={() => remove(v.id)}>Apagar</Button>
                       </div>
