@@ -2933,6 +2933,9 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
     }
 
     // ✅ Renomear todas as obras selecionadas nos time entries
+    // Normalizar obras selecionadas para comparação robusta (case-insensitive, sem acentos)
+    const normalizedSelectedObras = selectedObras.map(o => normText(o));
+
     let updatedCount = 0;
     const updatedEntries = timeEntries.map(entry => {
       // Verificar se o project contém alguma das obras selecionadas
@@ -2940,13 +2943,22 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
       if (entry.project) {
         const projectParts = entry.project.split(/\s+e\s+|,|\//).map(p => p.trim());
 
-        // Se qualquer parte do project está nas selectedObras, renomear TUDO para o finalName
-        if (projectParts.some(part => selectedObras.includes(part))) {
+        // Se qualquer parte do project está nas selectedObras (comparação normalizada), renomear TUDO para o finalName
+        if (projectParts.some(part => normalizedSelectedObras.includes(normText(part)))) {
           updatedCount++;
           return { ...entry, project: finalName };
         }
       }
       return entry;
+    });
+
+    // 🐛 DEBUG: Log para verificar consolidação
+    console.log('🔄 CONSOLIDAÇÃO:', {
+      'Obras selecionadas': selectedObras,
+      'Obras normalizadas': normalizedSelectedObras,
+      'Nome final': finalName,
+      'Registos atualizados': updatedCount,
+      'Total de registos': timeEntries.length
     });
 
     setTimeEntries(updatedEntries);
@@ -2956,7 +2968,11 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
     setConsolidatedName('');
 
     // Feedback
-    addToast(`✅ ${selectedObras.length} obras consolidadas em "${finalName}"!\n\n📊 ${updatedCount} registos atualizados`, 'success');
+    if (updatedCount === 0) {
+      addToast(`⚠️ Nenhum registo foi encontrado com as obras selecionadas.\n\nVerifica se os nomes estão corretos.`, 'warning');
+    } else {
+      addToast(`✅ ${selectedObras.length} obras consolidadas em "${finalName}"!\n\n📊 ${updatedCount} registos atualizados`, 'success');
+    }
   };
 
   return (
