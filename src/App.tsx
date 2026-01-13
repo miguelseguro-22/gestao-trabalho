@@ -11967,10 +11967,10 @@ const MultiWorkTimesheetForm = ({
                       ⚡ Horas Extra
                     </label>
 
-                    {/* Opção 1: Horário de início/fim */}
+                    {/* Horário de início/fim */}
                     <div className="space-y-2">
                       <div className="text-[10px] text-slate-500 dark:text-slate-400 px-1">
-                        Opção 1: Horário de Início/Fim
+                        Horário de Início/Fim
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -12015,79 +12015,6 @@ const MultiWorkTimesheetForm = ({
                           </div>
                         </div>
                       )}
-                    </div>
-
-                    {/* Separador */}
-                    <div className="flex items-center gap-2 my-2">
-                      <div className="flex-1 border-t border-slate-200 dark:border-slate-700"></div>
-                      <span className="text-[10px] text-slate-400">OU</span>
-                      <div className="flex-1 border-t border-slate-200 dark:border-slate-700"></div>
-                    </div>
-
-                    {/* Opção 2: Valor direto */}
-                    <div className="space-y-2">
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400 px-1">
-                        Opção 2: Valor Direto
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => updateWork(work.id, 'overtime', Math.max(0, Number(work.overtime) - 0.5))}
-                          className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg transition-all hover:scale-110"
-                          style={{ background: 'linear-gradient(135deg, #E5ECEF 0%, #CDD5D9 100%)', color: '#BE8A3A' }}
-                        >
-                          −
-                        </button>
-                        <div className="flex-1 relative">
-                          <input
-                            type="number"
-                            min="0"
-                            max="16"
-                            step="0.5"
-                            value={work.overtime}
-                            onChange={(e) => {
-                              updateWork(work.id, 'overtime', e.target.value);
-                              // Se usar campo direto, limpar horários
-                              if (Number(e.target.value) > 0) {
-                                updateWork(work.id, 'extraStartTime', '');
-                                updateWork(work.id, 'extraEndTime', '');
-                              }
-                            }}
-                            className="w-full rounded-lg border-2 p-2 text-center text-lg font-bold dark:bg-slate-800 focus:ring-2"
-                            style={{ borderColor: '#BE8A3A', color: '#BE8A3A' }}
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: '#64748b' }}>h</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => updateWork(work.id, 'overtime', Math.min(16, Number(work.overtime) + 0.5))}
-                          className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg transition-all hover:scale-110"
-                          style={{ background: 'linear-gradient(135deg, #BE8A3A 0%, #D4A04D 100%)', color: '#fff' }}
-                        >
-                          +
-                        </button>
-                      </div>
-                      {/* Botões rápidos */}
-                      <div className="flex gap-1">
-                        {[1, 2, 4].map(h => (
-                          <button
-                            key={h}
-                            type="button"
-                            onClick={() => {
-                              updateWork(work.id, 'overtime', h);
-                              updateWork(work.id, 'extraStartTime', '');
-                              updateWork(work.id, 'extraEndTime', '');
-                            }}
-                            className="flex-1 px-2 py-1 rounded text-xs font-medium transition-colors"
-                            style={{
-                              background: Number(work.overtime) === h ? '#BE8A3A' : '#E5ECEF',
-                              color: Number(work.overtime) === h ? '#fff' : '#64748b'
-                            }}
-                          >
-                            +{h}h
-                          </button>
-                        ))}
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -18626,7 +18553,15 @@ function TimesheetsView() {
                   <div className="flex-1">
                     <div className="font-semibold dark:text-white">{t.project || t.template}</div>
                     <div className="text-sm text-slate-500 dark:text-slate-400">
-                      {t.date} • {t.hours}h {t.overtime > 0 && `+ ${t.overtime}h extra`}
+                      {t.date} • {
+                        t.template === 'Trabalho Normal'
+                          ? `${t.hours || 0}h${(t.overtime > 0) ? ` + ${t.overtime}h extra` : ''}`
+                          : t.template === 'Férias' || t.template === 'Baixa'
+                            ? `${t.periodStart} → ${t.periodEnd}`
+                            : t.template === 'Falta'
+                              ? `${t.hours || 8}h falta`
+                              : `${t.hours || 0}h`
+                      }
                     </div>
                   </div>
                   <div className="text-slate-400">
