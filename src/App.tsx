@@ -9458,10 +9458,21 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
     let sickDays = 0;
     let absenceDays = 0;
     const projectHours = new Map();
-    
+
     const holidayEntries = [];
     const sickEntries = [];
     const absenceEntries = [];
+
+    // ✅ DEDUPLICAR períodos de férias/baixas ANTES de processar
+    const uniquePeriods = new Map(); // Chave: worker|template|start|end
+    myEntries.forEach(entry => {
+      if (entry.template === 'Férias' || entry.template === 'Baixa') {
+        const key = `${entry.worker}|${entry.template}|${entry.periodStart}|${entry.periodEnd}`;
+        if (!uniquePeriods.has(key)) {
+          uniquePeriods.set(key, entry);
+        }
+      }
+    });
 
     myEntries.forEach((entry) => {
       if (isNormalWork(entry.template)) { // ⬅️ USA A FUNÇÃO HELPER
@@ -9474,45 +9485,53 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
         projectHours.set(project, (projectHours.get(project) || 0) + hours);
         
       } else if (entry.template === 'Férias') {
-        const start = new Date(entry.periodStart || entry.date);
-        const end = new Date(entry.periodEnd || entry.date);
-        let days = 0;
-        
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dow = d.getDay();
-          if (dow !== 0 && dow !== 6) {
-            holidayDays++;
-            days++;
+        // ✅ Só processa se for período único (evita duplicados)
+        const key = `${entry.worker}|${entry.template}|${entry.periodStart}|${entry.periodEnd}`;
+        if (uniquePeriods.has(key) && uniquePeriods.get(key) === entry) {
+          const start = new Date(entry.periodStart || entry.date);
+          const end = new Date(entry.periodEnd || entry.date);
+          let days = 0;
+
+          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dow = d.getDay();
+            if (dow !== 0 && dow !== 6) {
+              holidayDays++;
+              days++;
+            }
           }
+
+          holidayEntries.push({
+            start: entry.periodStart || entry.date,
+            end: entry.periodEnd || entry.date,
+            days,
+            notes: entry.notes || '',
+          });
         }
-        
-        holidayEntries.push({
-          start: entry.periodStart || entry.date,
-          end: entry.periodEnd || entry.date,
-          days,
-          notes: entry.notes || '',
-        });
-        
+
       } else if (entry.template === 'Baixa') {
-        const start = new Date(entry.periodStart || entry.date);
-        const end = new Date(entry.periodEnd || entry.date);
-        let days = 0;
-        
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dow = d.getDay();
-          if (dow !== 0 && dow !== 6) {
-            sickDays++;
-            days++;
+        // ✅ Só processa se for período único (evita duplicados)
+        const key = `${entry.worker}|${entry.template}|${entry.periodStart}|${entry.periodEnd}`;
+        if (uniquePeriods.has(key) && uniquePeriods.get(key) === entry) {
+          const start = new Date(entry.periodStart || entry.date);
+          const end = new Date(entry.periodEnd || entry.date);
+          let days = 0;
+
+          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dow = d.getDay();
+            if (dow !== 0 && dow !== 6) {
+              sickDays++;
+              days++;
+            }
           }
+
+          sickEntries.push({
+            start: entry.periodStart || entry.date,
+            end: entry.periodEnd || entry.date,
+            days,
+            notes: entry.notes || '',
+          });
         }
-        
-        sickEntries.push({
-          start: entry.periodStart || entry.date,
-          end: entry.periodEnd || entry.date,
-          days,
-          notes: entry.notes || '',
-        });
-        
+
       } else if (entry.template === 'Falta') {
         absenceDays++;
         
