@@ -2757,7 +2757,7 @@ const PriceCompareModal = ({ open, onClose, suppliers }) => {
 // ============================================================
 // 🏗️ GESTÃO AVANÇADA DE OBRAS - Centro de Controlo
 // ============================================================
-const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntries, people }) => {
+const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntries, setTimeEntries, people, addToast }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('consolidated'); // 'consolidated', 'all', 'manual'
   const [workTypeFilter, setWorkTypeFilter] = useState('all'); // 'all', 'maintenance', 'projects'
@@ -19691,7 +19691,9 @@ function TableMaterials() {
               uniqueFamilies={uniqueFamilies}
               openReport={openReport}
               timeEntries={timeEntries}
+              setTimeEntries={setTimeEntries}
               people={people}
+              addToast={addToast}
             />
           )}
 
