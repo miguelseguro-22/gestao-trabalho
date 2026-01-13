@@ -18836,6 +18836,8 @@ function DashboardView() {
 function TimesheetsView() {
   // ✅ Controlar animação apenas no primeiro load
   const [hasAnimated, setHasAnimated] = useState(false);
+  // 👤 Filtro de colaborador para o calendário
+  const [selectedWorkerFilter, setSelectedWorkerFilter] = useState('all');
 
   useEffect(() => {
     if (!hasAnimated) {
@@ -19059,19 +19061,42 @@ function TimesheetsView() {
       </div>
 
       {/* 📅 CALENDÁRIO */}
-      <div style={{ animation: 'slideUp 0.6s ease-out 0.8s both' }}>
-        <h2 className="text-xl font-bold mb-4 dark:text-white flex items-center gap-2">
-          <span>📅</span> Calendário de Registos
-        </h2>
+      <div style={anim(0.8)}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
+            <span>📅</span> Calendário de Registos
+          </h2>
+          {/* 👤 Dropdown de Colaborador */}
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-slate-600 dark:text-slate-400">
+              Filtrar por colaborador:
+            </label>
+            <select
+              value={selectedWorkerFilter}
+              onChange={(e) => setSelectedWorkerFilter(e.target.value)}
+              className="px-4 py-2 rounded-xl border dark:border-slate-700 dark:bg-slate-800 text-sm"
+            >
+              <option value="all">📊 Todos os colaboradores</option>
+              {Object.keys(people || {}).sort().map(name => (
+                <option key={name} value={name}>👤 {name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
         <CycleCalendar
-          timeEntries={visibleTimeEntries || []}
+          timeEntries={(selectedWorkerFilter === 'all' ? visibleTimeEntries : visibleTimeEntries.filter(t => t.worker === selectedWorkerFilter)) || []}
           offset={cycleOffset}
           setOffset={setCycleOffset}
           onDayClick={(iso) => {
             const [year, month, day] = iso.split('-').map(Number);
             const target = new Date(year, month - 1, day, 0, 0, 0, 0);
 
-            const hasEntries = visibleTimeEntries.some(t => {
+            // ✅ Filtrar por colaborador antes de verificar entradas
+            const filteredEntries = selectedWorkerFilter === 'all'
+              ? visibleTimeEntries
+              : visibleTimeEntries.filter(t => t.worker === selectedWorkerFilter);
+
+            const hasEntries = filteredEntries.some(t => {
               if (t.template === 'Férias' || t.template === 'Baixa') {
                 const [y1, m1, d1] = (t.periodStart || t.date).split('-').map(Number);
                 const start = new Date(y1, m1 - 1, d1, 0, 0, 0, 0);
