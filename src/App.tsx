@@ -18861,15 +18861,21 @@ function DashboardView() {
 // ⏰ TIMESHEETS VIEW (COM BOTÃO DE REMOVER)
 // ---------------------------------------------------------------
 function TimesheetsView() {
-  // ✅ Controlar animação apenas no primeiro load
-  const [shouldAnimate, setShouldAnimate] = useState(true);
+  // ✅ Controlar animação apenas no primeiro load (usa ref para persistir entre re-renders)
+  const hasAnimated = useRef(false);
+  const [shouldAnimate, setShouldAnimate] = useState(!hasAnimated.current);
   // 👤 Filtro de colaborador para o calendário
   const [selectedWorkerFilter, setSelectedWorkerFilter] = useState('all');
 
   useEffect(() => {
-    const animationTimeoutMs = 2200;
-    const timer = setTimeout(() => setShouldAnimate(false), animationTimeoutMs);
-    return () => clearTimeout(timer);
+    if (!hasAnimated.current) {
+      hasAnimated.current = true;
+      const animationTimeoutMs = 2200;
+      const timer = setTimeout(() => setShouldAnimate(false), animationTimeoutMs);
+      return () => clearTimeout(timer);
+    } else {
+      setShouldAnimate(false);
+    }
   }, []);
 
   // 🔒 Verificação de segurança
