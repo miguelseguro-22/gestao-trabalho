@@ -18834,6 +18834,15 @@ function DashboardView() {
 // ⏰ TIMESHEETS VIEW (COM BOTÃO DE REMOVER)
 // ---------------------------------------------------------------
 function TimesheetsView() {
+  // ✅ Controlar animação apenas no primeiro load
+  const [hasAnimated, setHasAnimated] = useState(false);
+
+  useEffect(() => {
+    if (!hasAnimated) {
+      setHasAnimated(true);
+    }
+  }, [hasAnimated]);
+
   // 🔒 Verificação de segurança
   if (!auth) {
     return (
@@ -18873,6 +18882,11 @@ function TimesheetsView() {
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
       .slice(0, 5);
   }, [visibleTimeEntries]);
+
+  // ✅ Helper para animação condicional (só no primeiro load)
+  const anim = (delay = 0) => {
+    return !hasAnimated ? { animation: `slideUp 0.6s ease-out ${delay}s both` } : {};
+  };
 
   return (
     <section className="space-y-6">
@@ -18915,7 +18929,7 @@ function TimesheetsView() {
         `}</style>
 
         <div className="relative z-10 text-white">
-          <div className="flex items-center gap-3 mb-3" style={{ animation: 'slideUp 0.6s ease-out' }}>
+          <div className="flex items-center gap-3 mb-3" style={anim(0)}>
             <div className="text-4xl" style={{ animation: 'float 3s ease-in-out infinite' }}>
               👋
             </div>
@@ -18923,12 +18937,12 @@ function TimesheetsView() {
               Olá, {auth?.name?.split(' ')[0] || 'Utilizador'}!
             </h1>
           </div>
-          <p className="text-xl text-white/90 mb-6" style={{ animation: 'slideUp 0.6s ease-out 0.1s both' }}>
+          <p className="text-xl text-white/90 mb-6" style={anim(0.1)}>
             Pronto para mais um dia produtivo? 🚀
           </p>
 
           {/* Quick Stats na Hero */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-8" style={{ animation: 'slideUp 0.6s ease-out 0.2s both' }}>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-8" style={anim(0.2)}>
             <div className="glass-card rounded-2xl p-4 hover-lift cursor-pointer">
               <div className="text-3xl font-bold">{stats.todayHours}h</div>
               <div className="text-sm text-white/80 mt-1">Hoje</div>
@@ -18958,7 +18972,7 @@ function TimesheetsView() {
         {/* Card 1 */}
         <div className="hover-lift rounded-3xl p-6 cursor-pointer" style={{
           background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)',
-          animation: 'slideUp 0.6s ease-out 0.3s both'
+          ...anim(0.3)
         }}>
           <div className="flex items-start justify-between">
             <div className="text-white">
@@ -18976,7 +18990,7 @@ function TimesheetsView() {
         {/* Card 2 */}
         <div className="hover-lift rounded-3xl p-6 cursor-pointer" style={{
           background: 'linear-gradient(135deg, #2C3134 0%, #00677F 100%)',
-          animation: 'slideUp 0.6s ease-out 0.5s both'
+          ...anim(0.5)
         }}>
           <div className="flex items-start justify-between">
             <div className="text-white">
@@ -18999,7 +19013,7 @@ function TimesheetsView() {
       </div>
 
       {/* ⚡ QUICK ACTIONS */}
-      <div style={{ animation: 'slideUp 0.6s ease-out 0.6s both' }}>
+      <div style={anim(0.6)}>
         <h2 className="text-xl font-bold mb-4 dark:text-white flex items-center gap-2">
           <span>⚡</span> Ações Rápidas
         </h2>
