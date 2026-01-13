@@ -5327,11 +5327,34 @@ const VacationsView = ({ vacations, setVacations, people }) => {
         nomeAnterior: associatingVacation.worker,
         novoNome: workerName
       });
+
+      // ✅ CORREÇÃO: Atualizar férias E time entries correspondentes
+      const oldWorker = associatingVacation.worker;
+      const startDate = associatingVacation.startDate;
+      const endDate = associatingVacation.endDate;
+
+      // Atualizar array de férias
       setVacations(list => list.map(v =>
         v.id === associatingVacation.id
           ? { ...v, worker: workerName }
           : v
       ));
+
+      // 🔥 BILATERAL: Atualizar time entries correspondentes
+      setTimeEntries(list => list.map(entry => {
+        // Verificar se é um time entry de férias deste período
+        if (
+          entry.template === 'Férias' &&
+          entry.worker === oldWorker &&
+          entry.periodStart === startDate &&
+          entry.periodEnd === endDate
+        ) {
+          return { ...entry, worker: workerName };
+        }
+        return entry;
+      }));
+
+      addToast(`✅ Férias associadas a ${workerName} e timesheets atualizados`);
       setShowAssociateModal(false);
       setAssociatingVacation(null);
     }
@@ -14382,6 +14405,45 @@ const visibleTimeEntries = useMemo(() => {
   // ---------------------------------------------------------------
 // 📝 FUNÇÕES DE MANIPULAÇÃO DE DADOS
 // ---------------------------------------------------------------
+
+// 🔥 SINCRONIZAÇÃO BILATERAL: Timesheet → Férias
+const syncVacationFromTimeEntry = (timeEntry: any) => {
+  if (timeEntry.template !== 'Férias' || !timeEntry.periodStart || !timeEntry.periodEnd) {
+    return; // Apenas sincronizar entries de férias com período definido
+  }
+
+  const { worker, periodStart, periodEnd } = timeEntry;
+
+  // Verificar se já existe uma férias para este período e trabalhador
+  const existingVacation = vacations.find(v =>
+    v.worker === worker &&
+    v.startDate === periodStart &&
+    v.endDate === periodEnd
+  );
+
+  if (!existingVacation) {
+    // Criar nova férias se não existe
+    const newVacation = {
+      id: uid(),
+      worker: worker,
+      startDate: periodStart,
+      endDate: periodEnd,
+      createdFromTimesheet: true // Flag para identificar origem
+    };
+
+    console.log('🔄 Sincronização bilateral: criando férias a partir de timesheet', {
+      worker,
+      periodo: `${periodStart} → ${periodEnd}`
+    });
+
+    setVacations(list => [newVacation, ...list]);
+    addToast('✅ Férias sincronizadas a partir do timesheet');
+  } else {
+    // Já existe, não fazer nada
+    console.log('✓ Férias já existente para este período, sem sincronização necessária');
+  }
+};
+
 const addTimeEntry = (entry: any) => {
   // ⬇️ GARANTIR QUE WORKER É SEMPRE PREENCHIDO
   const workerName = entry.worker || auth?.name || 'Desconhecido';
@@ -14406,6 +14468,12 @@ const addTimeEntry = (entry: any) => {
   });
 
   setTimeEntries((prev) => [completeEntry, ...prev]);
+
+  // 🔥 SINCRONIZAÇÃO BILATERAL: Se for férias, sincronizar com array de vacations
+  if (completeEntry.template === 'Férias' && completeEntry.periodStart && completeEntry.periodEnd) {
+    syncVacationFromTimeEntry(completeEntry);
+  }
+
   addToast("Timesheet registado com sucesso");
 };
 
@@ -14418,6 +14486,12 @@ const updateTimeEntry = (entry: any) => {
   }
 
   setTimeEntries((prev) => prev.map((t) => (t.id === entry.id ? entry : t)));
+
+  // 🔥 SINCRONIZAÇÃO BILATERAL: Se for férias, sincronizar com array de vacations
+  if (entry.template === 'Férias' && entry.periodStart && entry.periodEnd) {
+    syncVacationFromTimeEntry(entry);
+  }
+
   addToast("Timesheet atualizado");
 };
 
