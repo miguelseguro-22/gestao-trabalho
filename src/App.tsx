@@ -4977,7 +4977,7 @@ const VehiclesView = ({ vehicles, setVehicles, peopleNames }) => {
 // ============================================================
 // 🏖️ GESTÃO DE FÉRIAS E ANÁLISE DE IMPACTO
 // ============================================================
-const VacationsView = ({ vacations, setVacations, people }) => {
+const VacationsView = ({ vacations, setVacations, people, setTimeEntries, addToast }) => {
   const [form, setForm] = useState({ id: null, worker: '', startDate: todayISO(), endDate: todayISO(), status: 'approved', notes: '' });
   const [editing, setEditing] = useState(false);
   const [viewMode, setViewMode] = useState('list'); // 'list', 'calendar', 'report', 'detailed-report'
@@ -19480,6 +19480,8 @@ function TableMaterials() {
               vacations={vacations}
               setVacations={setVacations}
               people={people}
+              setTimeEntries={setTimeEntries}
+              addToast={addToast}
             />
           )}
           {view === "obras" && (
