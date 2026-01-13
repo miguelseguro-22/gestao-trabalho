@@ -3292,12 +3292,30 @@ const MaterialForm=({onSubmit,catalogMaps,projects,auth})=>{ // ⬅️ ADICIONA 
   };
 
   const suggestProjects=(q)=>{
-    const s=normText(q);
-    const out=[];
-    for(const p of projects){
-      if(normText(p.name).startsWith(s)){ out.push(p.name); if(out.length>=8) break; }
+    if (!q || q.trim().length === 0) {
+      // Se não houver query, mostrar as 10 obras mais recentes
+      return projects.slice(0, 10).map(p => p.name);
     }
-    return out;
+
+    const s=normText(q);
+    const startsWithMatches = [];
+    const containsMatches = [];
+
+    for(const p of projects){
+      const normalized = normText(p.name);
+
+      if(normalized.startsWith(s)){
+        startsWithMatches.push(p.name);
+      } else if(normalized.includes(s)){
+        containsMatches.push(p.name);
+      }
+
+      // Limitar a 15 sugestões no total
+      if(startsWithMatches.length + containsMatches.length >= 15) break;
+    }
+
+    // Priorizar resultados que começam com o texto
+    return [...startsWithMatches, ...containsMatches].slice(0, 15);
   };
 
   const onTypeItem = (i, raw) => {
@@ -5016,6 +5034,10 @@ const VacationsView = ({ vacations, setVacations, people }) => {
         let imported = 0;
         let skipped = 0;
         const newVacations = [];
+        const unknownWorkers = new Set();
+
+        // Obter lista de colaboradores existentes (se disponível)
+        const knownWorkers = people ? Object.keys(people) : [];
 
         // Processar linhas (começar da linha 1 para saltar cabeçalho se existir)
         rows.forEach((row, index) => {
@@ -5029,6 +5051,14 @@ const VacationsView = ({ vacations, setVacations, people }) => {
           if (!nome || !dataInicio || !dataFim) {
             skipped++;
             return;
+          }
+
+          // Normalizar nome (remover espaços extras, capitalizar)
+          const normalizedName = String(nome).trim().replace(/\s+/g, ' ');
+
+          // Verificar se o colaborador existe (apenas aviso, não bloqueia importação)
+          if (knownWorkers.length > 0 && !knownWorkers.includes(normalizedName)) {
+            unknownWorkers.add(normalizedName);
           }
 
           // Converter datas do formato Excel para ISO (YYYY-MM-DD)
@@ -5060,10 +5090,10 @@ const VacationsView = ({ vacations, setVacations, people }) => {
             return;
           }
 
-          // Adicionar férias
+          // Adicionar férias com o nome do colaborador identificado
           newVacations.push({
             id: uid(),
-            worker: String(nome).trim(),
+            worker: normalizedName,
             startDate,
             endDate,
             status: 'approved',
@@ -5074,13 +5104,22 @@ const VacationsView = ({ vacations, setVacations, people }) => {
 
         // Adicionar ou substituir conforme o modo
         if (newVacations.length > 0) {
+          let message = '';
+
           if (mode === 'replace') {
             setVacations(newVacations);
-            alert(`✅ Importação concluída (SUBSTITUIÇÃO)!\n\n📥 Importados: ${imported}\n⏭️ Ignorados: ${skipped}\n\n⚠️ Todos os registos anteriores foram removidos.`);
+            message = `✅ Importação concluída (SUBSTITUIÇÃO)!\n\n📥 Importados: ${imported}\n⏭️ Ignorados: ${skipped}\n\n⚠️ Todos os registos anteriores foram removidos.`;
           } else {
             setVacations(list => [...newVacations, ...list]);
-            alert(`✅ Importação concluída (JUNTAR)!\n\n📥 Importados: ${imported}\n⏭️ Ignorados: ${skipped}\n\n✓ Registos adicionados aos existentes.`);
+            message = `✅ Importação concluída (JUNTAR)!\n\n📥 Importados: ${imported}\n⏭️ Ignorados: ${skipped}\n\n✓ Registos adicionados aos existentes.`;
           }
+
+          // Adicionar aviso sobre colaboradores desconhecidos
+          if (unknownWorkers.size > 0) {
+            message += `\n\n⚠️ Colaboradores não encontrados na base de dados:\n${Array.from(unknownWorkers).join(', ')}\n\nAs férias foram importadas, mas verifica se os nomes estão corretos.`;
+          }
+
+          alert(message);
         }
       } catch (error) {
         console.error('Erro ao importar:', error);
@@ -9595,6 +9634,56 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                     </div>
                   </div>
                 ))}
+              </div>
+            </Card>
+          )}
+
+          {/* 🚨 ALERTAS DE DIAS NÃO REGISTADOS */}
+          {monthlyStats.registeredDays < monthlyStats.workingDays && (
+            <Card className="p-4 mb-4 border-2 border-red-500 bg-red-50 dark:bg-red-900/20">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="text-3xl">⚠️</div>
+                  <div>
+                    <h3 className="font-bold text-lg text-red-800 dark:text-red-300">
+                      Dias em Falta
+                    </h3>
+                    <p className="text-sm text-red-600 dark:text-red-400">
+                      Faltam registar {monthlyStats.workingDays - monthlyStats.registeredDays} {monthlyStats.workingDays - monthlyStats.registeredDays === 1 ? 'dia útil' : 'dias úteis'} neste período ({monthlyStats.registeredDays}/{monthlyStats.workingDays} dias registados)
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setView('timesheets')}
+                  className="px-3 py-1 text-sm rounded-lg bg-red-500 text-white hover:bg-red-600 transition-all"
+                >
+                  Registar Agora
+                </button>
+              </div>
+              <div className="mt-3 p-3 rounded-lg bg-white dark:bg-slate-800 border border-red-200 dark:border-red-700">
+                <div className="flex items-center gap-2">
+                  <span className="text-red-500 text-xl">💡</span>
+                  <div className="text-sm text-slate-700 dark:text-slate-300">
+                    <strong>Dica:</strong> Mantém os teus registos em dia para um melhor controlo das tuas horas e desempenho!
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* ✅ MENSAGEM DE SUCESSO - TUDO EM DIA */}
+          {monthlyStats.registeredDays === monthlyStats.workingDays && monthlyStats.workingDays > 0 && (
+            <Card className="p-4 mb-4 border-2 border-green-500 bg-green-50 dark:bg-green-900/20">
+              <div className="flex items-center gap-3">
+                <div className="text-3xl">✅</div>
+                <div>
+                  <h3 className="font-bold text-lg text-green-800 dark:text-green-300">
+                    Parabéns! Registos em Dia
+                  </h3>
+                  <p className="text-sm text-green-600 dark:text-green-400">
+                    Tens todos os {monthlyStats.workingDays} dias úteis registados neste período. Excelente trabalho! 🎉
+                  </p>
+                </div>
               </div>
             </Card>
           )}
@@ -18169,7 +18258,7 @@ function TimesheetsView() {
       </div>
 
       {/* 📊 KPIS PRINCIPAIS - Design Moderno ENGITAQUS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Card 1 */}
         <div className="hover-lift rounded-3xl p-6 cursor-pointer" style={{
           background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)',
@@ -18189,30 +18278,6 @@ function TimesheetsView() {
         </div>
 
         {/* Card 2 */}
-        <div className="hover-lift rounded-3xl p-6 cursor-pointer" style={{
-          background: 'linear-gradient(135deg, #00A9B8 0%, #00C4D6 100%)',
-          animation: 'slideUp 0.6s ease-out 0.4s both'
-        }}>
-          <div className="flex items-start justify-between">
-            <div className="text-white">
-              <div className="text-sm font-medium text-white/80 mb-2">Horas Extra Hoje</div>
-              <div className="text-4xl font-bold mb-1">{stats.todayOT}h</div>
-              <div className="text-sm text-white/70">{stats.todayOT > 0 ? '💪 Dedicação extra!' : '✨ Trabalho regular'}</div>
-            </div>
-            <div className="text-5xl opacity-20">⚡</div>
-          </div>
-          <div className="mt-4 flex gap-1">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="flex-1 h-2 rounded-full" style={{
-                background: i < Math.ceil(stats.todayOT / 2) ? 'white' : 'rgba(255,255,255,0.2)',
-                transition: 'background 0.5s ease-out',
-                transitionDelay: `${i * 0.1}s`
-              }} />
-            ))}
-          </div>
-        </div>
-
-        {/* Card 3 */}
         <div className="hover-lift rounded-3xl p-6 cursor-pointer" style={{
           background: 'linear-gradient(135deg, #2C3134 0%, #00677F 100%)',
           animation: 'slideUp 0.6s ease-out 0.5s both'
