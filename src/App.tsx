@@ -2763,6 +2763,8 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
   const [workTypeFilter, setWorkTypeFilter] = useState('all'); // 'all', 'maintenance', 'projects'
   const [selectedObras, setSelectedObras] = useState([]);
   const [consolidatedName, setConsolidatedName] = useState('');
+  const [selectedObraForView, setSelectedObraForView] = useState(null);
+  const [showEntriesModal, setShowEntriesModal] = useState(false);
 
   // Guardar overrides de classificação manual (obra → 'maintenance' | 'project')
   const [manualClassifications, setManualClassifications] = useState(() => {
@@ -2973,6 +2975,31 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
     } else {
       addToast(`✅ ${selectedObras.length} obras consolidadas em "${finalName}"!\n\n📊 ${updatedCount} registos atualizados`, 'success');
     }
+  };
+
+  // Função para obter registos de uma obra específica
+  const getEntriesForObra = (obraName) => {
+    return timeEntries.filter(entry => {
+      if (!entry.project) {
+        return obraName === 'Sem Obra';
+      }
+
+      // Verificar se a obra está presente no campo project
+      const projectParts = entry.project.split(/\s+e\s+|,|\//).map(p => p.trim());
+      return projectParts.some(part => part === obraName);
+    }).sort((a, b) => b.date.localeCompare(a.date)); // Ordenar por data (mais recente primeiro)
+  };
+
+  // Handler para abrir modal de visualização de registos
+  const handleViewObraEntries = (obraName) => {
+    setSelectedObraForView(obraName);
+    setShowEntriesModal(true);
+  };
+
+  // Handler para fechar modal
+  const handleCloseEntriesModal = () => {
+    setShowEntriesModal(false);
+    setSelectedObraForView(null);
   };
 
   return (
@@ -3212,7 +3239,13 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">{obra.name}</span>
+                      <button
+                        onClick={() => handleViewObraEntries(obra.name)}
+                        className="font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer text-left"
+                        title="Clique para ver os registos desta obra"
+                      >
+                        {obra.name}
+                      </button>
                       {obra.isMaintenance ? (
                         <button
                           onClick={() => toggleClassification(obra.name, obra.isMaintenance)}
@@ -3263,6 +3296,86 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
           </table>
         </div>
       </Card>
+
+      {/* Modal de Visualização de Registos */}
+      <Modal
+        open={showEntriesModal}
+        title={`Registos: ${selectedObraForView || ''}`}
+        onClose={handleCloseEntriesModal}
+        wide={true}
+      >
+        {selectedObraForView && (() => {
+          const entries = getEntriesForObra(selectedObraForView);
+          return (
+            <div>
+              <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                <div className="text-sm text-slate-600 dark:text-slate-400">
+                  <strong>{entries.length}</strong> {entries.length === 1 ? 'registo encontrado' : 'registos encontrados'}
+                </div>
+              </div>
+
+              {entries.length === 0 ? (
+                <div className="text-center py-10 text-slate-500">
+                  Nenhum registo encontrado para esta obra.
+                </div>
+              ) : (
+                <div className="overflow-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-slate-50 dark:bg-slate-900/50 sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Data</th>
+                        <th className="px-3 py-2 text-left">Colaborador</th>
+                        <th className="px-3 py-2 text-left">Tipo</th>
+                        <th className="px-3 py-2 text-right">Horas</th>
+                        <th className="px-3 py-2 text-right">Extras</th>
+                        <th className="px-3 py-2 text-left">Encarregado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entries.map((entry, idx) => (
+                        <tr key={entry.id || idx} className="border-t dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                          <td className="px-3 py-2 text-slate-600 dark:text-slate-400">
+                            {fmtDate(entry.date)}
+                          </td>
+                          <td className="px-3 py-2 font-medium">
+                            {entry.worker}
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+                              entry.template === 'Férias'
+                                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                                : entry.template === 'Baixa'
+                                ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                : entry.template === 'Falta'
+                                ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                                : entry.template === 'Trabalho FDS'
+                                ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
+                                : entry.template === 'Trabalho Deslocado'
+                                ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
+                                : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                            }`}>
+                              {entry.template}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right font-medium">
+                            {entry.hours || 0}h
+                          </td>
+                          <td className="px-3 py-2 text-right font-medium text-orange-600 dark:text-orange-400">
+                            {entry.overtime ? `${entry.overtime}h` : '-'}
+                          </td>
+                          <td className="px-3 py-2 text-slate-600 dark:text-slate-400">
+                            {entry.supervisor || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </Modal>
     </section>
   );
 };
