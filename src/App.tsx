@@ -8847,36 +8847,36 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal, vacations
       <Card className="p-4">
         <div className="overflow-auto rounded-xl border dark:border-slate-800">
           <table className="min-w-full text-xs">
-            <thead className="bg-slate-50 dark:bg-slate-900/50">
-              <tr>
-                <th rowSpan={2} className="px-2 py-2 text-center border-r dark:border-slate-700">Nº</th>
-                <th rowSpan={2} className="px-2 py-2 text-left border-r dark:border-slate-700 sticky left-0 bg-slate-50 dark:bg-slate-900/50 z-10">NOME</th>
+            <thead className="bg-slate-50 dark:bg-slate-900/50 sticky top-0 z-20">
+              <tr className="bg-slate-50 dark:bg-slate-900/50">
+                <th rowSpan={2} className="px-2 py-2 text-center border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Nº</th>
+                <th rowSpan={2} className="px-2 py-2 text-left border-r dark:border-slate-700 sticky left-0 bg-slate-50 dark:bg-slate-900/50 z-30">NOME</th>
                 <th colSpan={5} className="px-2 py-1 text-center border-r dark:border-slate-700 bg-blue-50 dark:bg-blue-900/20">HORAS</th>
                 <th colSpan={5} className="px-2 py-1 text-center border-r dark:border-slate-700 bg-amber-50 dark:bg-amber-900/20">DESLOCADO</th>
                 <th colSpan={7} className="px-2 py-1 text-center border-r dark:border-slate-700 bg-rose-50 dark:bg-rose-900/20">DEDUÇÕES</th>
-                <th rowSpan={2} className="px-2 py-2"></th>
+                <th rowSpan={2} className="px-2 py-2 bg-slate-50 dark:bg-slate-900/50"></th>
               </tr>
-              <tr>
+              <tr className="bg-slate-50 dark:bg-slate-900/50">
                 {/* HORAS */}
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Dia</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Noite</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Extra</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">FDS (h)</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Feriado (h)</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Dia</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Noite</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Extra</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">FDS (h)</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Feriado (h)</th>
                 {/* DESLOCADO */}
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Dia</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Noite</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Extra</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Sáb.</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Dom.</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Dia</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Noite</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Extra</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Sáb.</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Dom.</th>
                 {/* DEDUÇÕES */}
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">Nº DIAS</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">FÉRIAS</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">FALTAS s/REMUN</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">FALTAS c/REMUN</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">FALTAS INJUSTIF</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">BAIXA</th>
-                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700">ALMOÇO</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Nº DIAS</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">FÉRIAS</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">FALTAS s/REMUN</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">FALTAS c/REMUN</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">FALTAS INJUSTIF</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">BAIXA</th>
+                <th className="px-2 py-1 text-center text-[10px] border-r dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">ALMOÇO</th>
               </tr>
             </thead>
             <tbody>
@@ -19893,7 +19893,15 @@ function TableMaterials() {
         <aside
           className={`lg:sticky lg:top-4 h-fit lg:block ${
             sidebarOpen ? "block" : "hidden"
-          } glass rounded-2xl border shadow-sm p-3 dark:border-slate-800`}
+          } glass rounded-2xl border shadow-sm p-3 dark:border-slate-800
+          max-lg:fixed max-lg:top-0 max-lg:left-0 max-lg:right-0 max-lg:z-50
+          max-lg:max-h-screen max-lg:overflow-y-auto max-lg:m-4`}
+          ref={(el) => {
+            // 🆕 Auto-scroll para o topo quando o sidebar abre no mobile
+            if (el && sidebarOpen && window.innerWidth < 1024) {
+              el.scrollTop = 0;
+            }
+          }}
         >
           <div className="flex items-center justify-between px-2 py-2">
             <div className="flex items-center gap-2">
