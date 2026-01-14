@@ -20065,13 +20065,16 @@ function TableMaterials() {
             </div>
 
             <div className="mt-3 space-y-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setModal({ name: "import" })}
-              >
-                <Icon name="download" /> Importar/Exportar
-              </Button>
+              {/* 🔒 IMPORTAR/EXPORTAR - APENAS ADMIN */}
+              {auth?.role === "admin" && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setModal({ name: "import" })}
+                >
+                  <Icon name="download" /> Importar/Exportar
+                </Button>
+              )}
 
               {/* 💾 BOTÃO DE BACKUP COMPLETO - TODOS OS UTILIZADORES */}
               <Button
@@ -20639,9 +20642,12 @@ function TableMaterials() {
         <TableSimple columns={["Data/Período","Tipo","Obra","Encarregado","Horas","Extra"]} rows={visibleTimeEntries.map(t=>[t.template==='Trabalho Normal'?t.date:`${t.periodStart}→${t.periodEnd}`,t.template,t.project||'-',t.supervisor||'-',t.hours||0,t.overtime||0])}/>
       </Modal>
 
-      <Modal open={modal?.name==='import'} title="Importar / Exportar Dados" onClose={()=>setModal(null)} wide>
-        <ImportCenter onClose={()=>setModal(null)} setters={setters} addToast={addToast} log={(m)=>addToast(m)} people={people}/>
-      </Modal>
+      {/* 🔒 MODAL DE IMPORTAÇÃO - APENAS ADMIN */}
+      {auth?.role === "admin" && (
+        <Modal open={modal?.name==='import'} title="Importar / Exportar Dados" onClose={()=>setModal(null)} wide>
+          <ImportCenter onClose={()=>setModal(null)} setters={setters} addToast={addToast} log={(m)=>addToast(m)} people={people}/>
+        </Modal>
+      )}
 
       {/* 💾 MODAL DE BACKUP COMPLETO */}
       <Modal open={modal?.name==='full-backup'} title="💾 Backup Completo" onClose={()=>setModal(null)} wide>
