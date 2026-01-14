@@ -307,6 +307,109 @@ const downloadFullBackup = (backupData) => {
   download(filename, content, 'application/json');
 };
 
+// ✅ VALIDAR BACKUP
+const validateBackup = (backupData) => {
+  try {
+    // Verificar estrutura básica
+    if (!backupData || typeof backupData !== 'object') {
+      return { valid: false, error: 'Ficheiro inválido: não é um objeto JSON válido' };
+    }
+
+    // Verificar metadata
+    if (!backupData.metadata || !backupData.metadata.backupType) {
+      return { valid: false, error: 'Ficheiro inválido: falta metadata do backup' };
+    }
+
+    // Verificar se é um backup completo
+    if (backupData.metadata.backupType !== 'FULL_BACKUP_ALL_DATA') {
+      return { valid: false, error: 'Este não é um backup completo válido' };
+    }
+
+    // Verificar applicationData
+    if (!backupData.applicationData) {
+      return { valid: false, error: 'Ficheiro inválido: falta dados da aplicação' };
+    }
+
+    return { valid: true };
+  } catch (error) {
+    return { valid: false, error: `Erro ao validar backup: ${error.message}` };
+  }
+};
+
+// 🔄 RESTAURAR BACKUP COMPLETO
+const restoreFullBackup = async (backupData, callbacks) => {
+  const {
+    setTimeEntries,
+    setPeople,
+    setVehicles,
+    setAgenda,
+    setVacations,
+    setSuppliers,
+    setPrefs,
+    setProjectFocus,
+    setOrders,
+    setProjects,
+    setActivity,
+    setCatalog,
+    setTheme,
+    setDensity,
+    addToast
+  } = callbacks;
+
+  try {
+    const data = backupData.applicationData;
+
+    // Restaurar estados da aplicação
+    if (data.timeEntries) setTimeEntries(data.timeEntries);
+    if (data.people) setPeople(data.people);
+    if (data.vehicles) setVehicles(data.vehicles);
+    if (data.agenda) setAgenda(data.agenda);
+    if (data.vacations) setVacations(data.vacations);
+    if (data.suppliers) setSuppliers(data.suppliers);
+    if (data.prefs) setPrefs(data.prefs);
+    if (data.projectFocus !== undefined) setProjectFocus(data.projectFocus);
+    if (data.orders) setOrders(data.orders);
+    if (data.projects) setProjects(data.projects);
+    if (data.activity) setActivity(data.activity);
+    if (data.catalog) setCatalog(data.catalog);
+    if (data.theme) setTheme(data.theme);
+    if (data.density) setDensity(data.density);
+
+    // Restaurar localStorage
+    if (backupData.localStorage) {
+      const ls = backupData.localStorage;
+
+      if (ls.obrasManualClassifications) {
+        localStorage.setItem('obras_manual_classifications', JSON.stringify(ls.obrasManualClassifications));
+      }
+
+      if (ls.monthlyReportWorkerOrder) {
+        localStorage.setItem('monthlyReport_workerOrder', JSON.stringify(ls.monthlyReportWorkerOrder));
+      }
+
+      if (ls.monthlyReportManualWorkers) {
+        localStorage.setItem('monthlyReport_manualWorkers', JSON.stringify(ls.monthlyReportManualWorkers));
+      }
+
+      if (ls.costAnalysisStartDate) {
+        localStorage.setItem('costAnalysis_startDate', ls.costAnalysisStartDate);
+      }
+
+      if (ls.costAnalysisEndDate) {
+        localStorage.setItem('costAnalysis_endDate', ls.costAnalysisEndDate);
+      }
+    }
+
+    const stats = backupData.stats || {};
+    addToast(`✅ Backup restaurado com sucesso! ${stats.totalTimeEntries || 0} registos, ${stats.totalPeople || 0} colaboradores, ${stats.totalVehicles || 0} veículos`, 'success');
+
+    return { success: true };
+  } catch (error) {
+    addToast(`❌ Erro ao restaurar backup: ${error.message}`, 'error');
+    return { success: false, error: error.message };
+  }
+};
+
 function orderToEmailText(o, priceOf, codeOf) {
   const linhas = o.items.map(it => {
     const p   = priceOf(it.name);
@@ -19867,27 +19970,7 @@ function TableMaterials() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => {
-                  const backupData = createFullBackup({
-                    auth,
-                    timeEntries,
-                    people,
-                    vehicles,
-                    agenda,
-                    vacations,
-                    suppliers,
-                    prefs,
-                    projectFocus,
-                    orders,
-                    projects,
-                    activity,
-                    catalog,
-                    theme,
-                    density
-                  });
-                  downloadFullBackup(backupData);
-                  addToast('✅ Backup completo criado com sucesso!', 'success');
-                }}
+                onClick={() => setModal({ name: "full-backup" })}
                 className="w-full"
               >
                 <Icon name="download" /> 💾 Backup Completo
@@ -20452,10 +20535,167 @@ function TableMaterials() {
       <Modal open={modal?.name==='import'} title="Importar / Exportar Dados" onClose={()=>setModal(null)} wide>
         <ImportCenter onClose={()=>setModal(null)} setters={setters} addToast={()=>{}} log={(m)=>addToast(m)} people={people}/>
       </Modal>
+
+      {/* 💾 MODAL DE BACKUP COMPLETO */}
+      <Modal open={modal?.name==='full-backup'} title="💾 Backup Completo" onClose={()=>setModal(null)} wide>
+        <div className="space-y-6">
+          {/* Informações do Backup */}
+          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+            <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">📦 O que está incluído no backup?</h3>
+            <div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+              <div>✅ Todos os registos de tempo ({timeEntries.length} registos)</div>
+              <div>✅ Todos os colaboradores ({Object.keys(people).length} pessoas)</div>
+              <div>✅ Todos os veículos ({vehicles.length} veículos)</div>
+              <div>✅ Agenda completa ({agenda.length} itens)</div>
+              <div>✅ Férias ({vacations.length} registos)</div>
+              <div>✅ Encomendas ({orders.length} pedidos)</div>
+              <div>✅ Projetos ({projects.length} projetos)</div>
+              <div>✅ Catálogo ({catalog.length} itens)</div>
+              <div>✅ Configurações e preferências</div>
+            </div>
+          </div>
+
+          {/* Exportar Backup */}
+          <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">
+            <h3 className="font-semibold mb-3">📥 Exportar Backup</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+              Cria um ficheiro JSON com todos os dados da aplicação. Guarda este ficheiro num local seguro!
+            </p>
+            <Button
+              onClick={() => {
+                const backupData = createFullBackup({
+                  auth,
+                  timeEntries,
+                  people,
+                  vehicles,
+                  agenda,
+                  vacations,
+                  suppliers,
+                  prefs,
+                  projectFocus,
+                  orders,
+                  projects,
+                  activity,
+                  catalog,
+                  theme,
+                  density
+                });
+                downloadFullBackup(backupData);
+                addToast('✅ Backup criado com sucesso!', 'success');
+              }}
+              className="w-full"
+            >
+              <Icon name="download" /> Exportar Backup Completo
+            </Button>
+          </div>
+
+          {/* Importar Backup */}
+          <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">
+            <h3 className="font-semibold mb-3">📤 Importar Backup</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+              Restaura todos os dados de um ficheiro de backup. ⚠️ <strong>ATENÇÃO:</strong> Isto vai substituir TODOS os dados atuais!
+            </p>
+            <div className="space-y-3">
+              <input
+                type="file"
+                accept=".json"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+
+                  const reader = new FileReader();
+                  reader.onload = async (event) => {
+                    try {
+                      const backupData = JSON.parse(event.target?.result as string);
+
+                      // Validar backup
+                      const validation = validateBackup(backupData);
+                      if (!validation.valid) {
+                        addToast(`❌ ${validation.error}`, 'error');
+                        return;
+                      }
+
+                      // Confirmar antes de restaurar
+                      const confirmRestore = window.confirm(
+                        `⚠️ ATENÇÃO!\n\n` +
+                        `Vai restaurar um backup criado em ${new Date(backupData.metadata.timestamp).toLocaleString('pt-PT')} por ${backupData.metadata.createdBy}.\n\n` +
+                        `Isto vai SUBSTITUIR todos os dados atuais:\n` +
+                        `- ${backupData.stats.totalTimeEntries} registos de tempo\n` +
+                        `- ${backupData.stats.totalPeople} colaboradores\n` +
+                        `- ${backupData.stats.totalVehicles} veículos\n` +
+                        `- E todos os outros dados\n\n` +
+                        `Tem a certeza que quer continuar?`
+                      );
+
+                      if (!confirmRestore) {
+                        addToast('❌ Restauro cancelado', 'info');
+                        return;
+                      }
+
+                      // Restaurar backup
+                      await restoreFullBackup(backupData, {
+                        setTimeEntries,
+                        setPeople,
+                        setVehicles,
+                        setAgenda,
+                        setVacations,
+                        setSuppliers,
+                        setPrefs,
+                        setProjectFocus,
+                        setOrders,
+                        setProjects,
+                        setActivity,
+                        setCatalog,
+                        setTheme,
+                        setDensity,
+                        addToast
+                      });
+
+                      setModal(null);
+
+                      // Recarregar página após 2 segundos para aplicar todas as mudanças
+                      setTimeout(() => {
+                        window.location.reload();
+                      }, 2000);
+
+                    } catch (error) {
+                      addToast(`❌ Erro ao ler ficheiro: ${error.message}`, 'error');
+                    }
+
+                    // Limpar input
+                    e.target.value = '';
+                  };
+                  reader.readAsText(file);
+                }}
+                className="w-full text-sm text-slate-600 dark:text-slate-400
+                  file:mr-4 file:py-2 file:px-4
+                  file:rounded-xl file:border-0
+                  file:text-sm file:font-semibold
+                  file:bg-blue-500 file:text-white
+                  hover:file:bg-blue-600
+                  file:cursor-pointer cursor-pointer"
+              />
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                Selecione um ficheiro de backup (.json) criado anteriormente
+              </div>
+            </div>
+          </div>
+
+          {/* Aviso Final */}
+          <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+            <div className="flex gap-3">
+              <div className="text-2xl">⚠️</div>
+              <div className="text-sm text-amber-800 dark:text-amber-200">
+                <strong>Importante:</strong> Faça backups regulares dos seus dados! Guarde os ficheiros de backup em locais seguros e diferentes (computador, cloud, pen drive).
+              </div>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
-  );     
+  );
 }
-    
+
 
 // ---------------------------------------------------------------
 export default App;
