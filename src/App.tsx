@@ -20640,7 +20640,7 @@ function TableMaterials() {
       </Modal>
 
       <Modal open={modal?.name==='import'} title="Importar / Exportar Dados" onClose={()=>setModal(null)} wide>
-        <ImportCenter onClose={()=>setModal(null)} setters={setters} addToast={()=>{}} log={(m)=>addToast(m)} people={people}/>
+        <ImportCenter onClose={()=>setModal(null)} setters={setters} addToast={addToast} log={(m)=>addToast(m)} people={people}/>
       </Modal>
 
       {/* 💾 MODAL DE BACKUP COMPLETO */}
