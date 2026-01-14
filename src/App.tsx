@@ -198,6 +198,114 @@ const guessDelimiter=line=>{const sc=(line.match(/;/g)||[]).length,cc=(line.matc
 function splitCSVLine(line,delim){const cells=[];let cur='',inQ=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch=='"'){ if(inQ&&line[i+1]=='"'){cur+='"';i++;} else inQ=!inQ; } else if(ch===delim && !inQ){cells.push(cur);cur='';} else cur+=ch;}cells.push(cur);return cells.map(c=>c.trim());}
 function parseCatalogCSV(text){const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l=>l.trim());if(!lines.length)return[];const delim=guessDelimiter(lines[0]);return lines.map(ln=>splitCSVLine(ln,delim));}
 
+// 💾 BACKUP COMPLETO DE TODOS OS DADOS
+const createFullBackup = ({
+  auth,
+  timeEntries,
+  people,
+  vehicles,
+  agenda,
+  vacations,
+  suppliers,
+  prefs,
+  projectFocus,
+  orders,
+  projects,
+  activity,
+  catalog,
+  theme,
+  density
+}) => {
+  // Coletar dados do localStorage
+  const localStorageData = {};
+  try {
+    // Classificações manuais de obras
+    const obrasManualClassifications = localStorage.getItem('obras_manual_classifications');
+    if (obrasManualClassifications) {
+      localStorageData.obrasManualClassifications = JSON.parse(obrasManualClassifications);
+    }
+
+    // Ordem dos trabalhadores no relatório mensal
+    const monthlyReportWorkerOrder = localStorage.getItem('monthlyReport_workerOrder');
+    if (monthlyReportWorkerOrder) {
+      localStorageData.monthlyReportWorkerOrder = JSON.parse(monthlyReportWorkerOrder);
+    }
+
+    // Trabalhadores adicionados manualmente
+    const monthlyReportManualWorkers = localStorage.getItem('monthlyReport_manualWorkers');
+    if (monthlyReportManualWorkers) {
+      localStorageData.monthlyReportManualWorkers = JSON.parse(monthlyReportManualWorkers);
+    }
+
+    // Datas da análise de custos
+    const costAnalysisStartDate = localStorage.getItem('costAnalysis_startDate');
+    if (costAnalysisStartDate) {
+      localStorageData.costAnalysisStartDate = costAnalysisStartDate;
+    }
+
+    const costAnalysisEndDate = localStorage.getItem('costAnalysis_endDate');
+    if (costAnalysisEndDate) {
+      localStorageData.costAnalysisEndDate = costAnalysisEndDate;
+    }
+
+    // Estado completo da app (se existir)
+    const appState = localStorage.getItem(LS_KEY);
+    if (appState) {
+      localStorageData.appState = JSON.parse(appState);
+    }
+  } catch (error) {
+    console.error('Erro ao coletar dados do localStorage:', error);
+  }
+
+  // Criar objeto de backup completo
+  const backup = {
+    metadata: {
+      version: '1.0.0',
+      timestamp: new Date().toISOString(),
+      createdBy: auth?.name || 'Desconhecido',
+      userEmail: auth?.email || 'Desconhecido',
+      userRole: auth?.role || 'Desconhecido',
+      backupType: 'FULL_BACKUP_ALL_DATA'
+    },
+    applicationData: {
+      timeEntries: timeEntries || [],
+      people: people || {},
+      vehicles: vehicles || [],
+      agenda: agenda || [],
+      vacations: vacations || [],
+      suppliers: suppliers || {},
+      prefs: prefs || {},
+      projectFocus: projectFocus || null,
+      orders: orders || [],
+      projects: projects || [],
+      activity: activity || [],
+      catalog: catalog || [],
+      theme: theme || 'light',
+      density: density || 'comfy'
+    },
+    localStorage: localStorageData,
+    stats: {
+      totalTimeEntries: (timeEntries || []).length,
+      totalPeople: Object.keys(people || {}).length,
+      totalVehicles: (vehicles || []).length,
+      totalAgendaItems: (agenda || []).length,
+      totalVacations: (vacations || []).length,
+      totalOrders: (orders || []).length,
+      totalProjects: (projects || []).length,
+      totalCatalogItems: (catalog || []).length
+    }
+  };
+
+  return backup;
+};
+
+// 📥 FAZER DOWNLOAD DO BACKUP
+const downloadFullBackup = (backupData) => {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const filename = `BACKUP_COMPLETO_GESTAO_TRABALHO_${timestamp}.json`;
+  const content = JSON.stringify(backupData, null, 2);
+  download(filename, content, 'application/json');
+};
 
 function orderToEmailText(o, priceOf, codeOf) {
   const linhas = o.items.map(it => {
@@ -19746,13 +19854,43 @@ function TableMaterials() {
               </Button>
             </div>
 
-            <div className="mt-3">
+            <div className="mt-3 space-y-2">
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => setModal({ name: "import" })}
               >
                 <Icon name="download" /> Importar/Exportar
+              </Button>
+
+              {/* 💾 BOTÃO DE BACKUP COMPLETO - TODOS OS UTILIZADORES */}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const backupData = createFullBackup({
+                    auth,
+                    timeEntries,
+                    people,
+                    vehicles,
+                    agenda,
+                    vacations,
+                    suppliers,
+                    prefs,
+                    projectFocus,
+                    orders,
+                    projects,
+                    activity,
+                    catalog,
+                    theme,
+                    density
+                  });
+                  downloadFullBackup(backupData);
+                  addToast('✅ Backup completo criado com sucesso!', 'success');
+                }}
+                className="w-full"
+              >
+                <Icon name="download" /> 💾 Backup Completo
               </Button>
             </div>
           </div>
