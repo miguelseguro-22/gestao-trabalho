@@ -1303,7 +1303,8 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,auth}
 
   // 🆕 Calcular horas automáticas para Trabalho Normal baseado em deslocação
   const listWithCalculatedHours = list.map(t => {
-    if (t.template !== 'Trabalho Normal') return t;
+    // ✅ Incluir também registos de fim de semana
+    if (t.template !== 'Trabalho Normal' && t.template !== 'Trabalho - Fim de Semana/Feriado') return t;
 
     // Verifica se é deslocado
     const displacementValue = String(t.displacement || '').toLowerCase().trim();
@@ -1320,7 +1321,7 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,auth}
 
     // Conta registos do mesmo tipo (deslocado/não deslocado) no mesmo dia
     const sameTypeCount = list.filter(entry =>
-      entry.template === 'Trabalho Normal' &&
+      (entry.template === 'Trabalho Normal' || entry.template === 'Trabalho - Fim de Semana/Feriado') &&
       ((entry.displacement || '').toLowerCase().trim() === 'sim') === isDisplaced
     ).length;
 
@@ -1438,7 +1439,8 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,auth}
         ) : (
           <>
             {listWithCalculatedHours.map((t, index) => {
-              const isWork = t.template === 'Trabalho Normal';
+              // ✅ Incluir registos de fim de semana como trabalho
+              const isWork = t.template === 'Trabalho Normal' || t.template === 'Trabalho - Fim de Semana/Feriado';
               const isHoliday = t.template === 'Férias';
               const isSick = t.template === 'Baixa';
               const isAbsence = t.template === 'Falta';
