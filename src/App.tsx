@@ -669,13 +669,42 @@ function openPrintWindow(html) {
 
 
 // (opcional) CSV — renomeada para não colidir
-function exportTimesheetCycleCSV(entries = []) {
+function exportTimesheetCycleCSV(entries = [], people = {}, manualClassifications = {}) {
   const { start, end } = getCycle(0);
   const inRange = (iso) => iso && (() => { const d=new Date(iso); d.setHours(0,0,0,0); return d>=start && d<=end; })();
+
+  // Função auxiliar para determinar o tipo de trabalho de uma obra
+  const getWorkType = (projectName, workerName) => {
+    if (!projectName || projectName === 'Sem Obra') return 'Obra';
+
+    // Se há classificação manual, usar essa
+    if (manualClassifications[projectName]) {
+      const type = manualClassifications[projectName];
+      if (type === 'maintenance') return 'Manutenção';
+      if (type === 'small_jobs') return 'Pequenos Trabalhos';
+      return 'Obra';
+    }
+
+    // Caso contrário, usar classificação automática baseada no trabalhador
+    const worker = people[workerName];
+    if (worker && worker.isMaintenance) {
+      return 'Manutenção';
+    }
+
+    return 'Obra';
+  };
+
   const rows = (entries||[])
     .filter(t => t.template === 'Trabalho Normal' && inRange(t.date))
-    .map(t => [t.date, t.worker || t.supervisor || '', t.project || '', Number(t.hours)||0, Number(t.overtime)||0]);
-  const csv = toCSV(['Data','Colaborador','Obra','Horas','Extra'], rows);
+    .map(t => [
+      t.date,
+      t.worker || t.supervisor || '',
+      t.project || '',
+      Number(t.hours)||0,
+      Number(t.overtime)||0,
+      getWorkType(t.project, t.worker || t.supervisor)
+    ]);
+  const csv = toCSV(['Data','Colaborador','Obra','Horas','Extra','Tipo de Trabalho'], rows);
   download(`relatorio_timesheets_${todayISO()}.csv`, csv);
 }
 
@@ -887,7 +916,7 @@ const KpiCard = ({ icon, title, value, subtitle, onClick }) => (
 const CalendarLegend = () => {
   const items = [
     { color: '#00A9B8', label: 'Trabalho Normal' },
-    { color: '#BE8A3A', label: 'Férias' },
+    { color: '#10B981', label: 'Férias' },
     { color: '#00677F', label: 'Baixa' },
     { color: '#2C3134', label: 'Falta' },
   ];
@@ -911,12 +940,12 @@ const CalendarLegend = () => {
 
 const TYPE_FILL_COLORS = {
   'Trabalho Normal': '#00A9B8',  // Electric Teal
-  'Férias': '#8B5CF6',           // Violet
+  'Férias': '#10B981',           // Emerald Green
   'Baixa': '#00677F',            // Lux Blue
   'Falta': '#2C3134',            // Metal Graphite
   'Feriado': '#E74C3C'           // Vermelho vibrante para feriados
 };
-const TYPE_FILL_BG = { 'Trabalho Normal':'bg-emerald-600','Férias':'bg-violet-600','Baixa':'bg-rose-600','Falta':'bg-amber-600' };
+const TYPE_FILL_BG = { 'Trabalho Normal':'bg-emerald-600','Férias':'bg-emerald-500','Baixa':'bg-rose-600','Falta':'bg-amber-600' };
 const TYPE_COLORS = TYPE_FILL_BG;
 const getHolidayDatesInRange = (entries = [], start, end) => {
   if (!start || !end) return new Set();
@@ -20474,12 +20503,24 @@ function TableMaterials() {
           </div>
         </Card>
 
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
           <Button onClick={() => printTimesheetCycleReport(visibleTimeEntries)}>
   Exportar Relatório de Horas
 </Button>
-        {/* ✅ NOVO BOTÃO */}
-          <Button 
+          {/* ✅ NOVO BOTÃO CSV */}
+          <Button
+            variant="secondary"
+            onClick={() => {
+              // Obter classificações manuais do localStorage
+              const savedClassifications = localStorage.getItem('obras_manual_classifications');
+              const manualClassifications = savedClassifications ? JSON.parse(savedClassifications) : {};
+              exportTimesheetCycleCSV(visibleTimeEntries, people, manualClassifications);
+            }}
+          >
+            <Icon name="download" /> Exportar CSV
+          </Button>
+        {/* ✅ RELATÓRIO PESSOAL */}
+          <Button
             variant="secondary"
             onClick={() => {
               const html = generatePersonalTimesheetReport({
