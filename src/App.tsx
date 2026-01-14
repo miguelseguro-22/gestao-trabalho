@@ -942,7 +942,9 @@ const getHolidayDatesInRange = (entries = [], start, end) => {
     '2025-11-01', // Todos os Santos
     '2025-12-01', // Restauração da Independência
     '2025-12-08', // Imaculada Conceição
+    '2025-12-24', // Véspera de Natal (Feriado da Empresa)
     '2025-12-25', // Natal
+    '2025-12-31', // Véspera de Ano Novo (Feriado da Empresa)
   ];
 
   // Adicionar feriados hardcoded que estão no range
