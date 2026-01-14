@@ -2997,17 +2997,39 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
     localStorage.setItem('obras_manual_classifications', JSON.stringify(manualClassifications));
   }, [manualClassifications]);
 
-  // Função para alternar classificação manual
-  const toggleClassification = (obraName, currentIsMaintenance) => {
+  // 🆕 Função para alternar classificação manual (agora com 3 categorias)
+  const toggleClassification = (obraName, currentClassification) => {
+    // Ciclo: maintenance → projects → small_jobs → maintenance
+    let nextClassification;
+    if (currentClassification === 'maintenance') {
+      nextClassification = 'projects';
+    } else if (currentClassification === 'projects') {
+      nextClassification = 'small_jobs';
+    } else {
+      nextClassification = 'maintenance';
+    }
+
     setManualClassifications(prev => ({
       ...prev,
-      [obraName]: currentIsMaintenance ? 'project' : 'maintenance'
+      [obraName]: nextClassification
     }));
   };
 
   // Extrair todas as obras dos timeEntries
   const obrasFromTimesheet = useMemo(() => {
     const obrasMap = new Map();
+
+    // 🆕 MELHORIA 1: Agrupar registos por trabalhador + data para dividir horas corretamente
+    // quando há múltiplos registos do mesmo trabalhador no mesmo dia
+    const workerDayRegistos = new Map();
+
+    timeEntries.forEach(entry => {
+      const key = `${entry.worker}||${entry.date}`;
+      if (!workerDayRegistos.has(key)) {
+        workerDayRegistos.set(key, []);
+      }
+      workerDayRegistos.get(key).push(entry);
+    });
 
     // Função para separar obras quando há separadores
     const splitObraNames = (projectName) => {
@@ -3023,6 +3045,21 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
 
     timeEntries.forEach(entry => {
       const obraNames = splitObraNames(entry.project);
+
+      // 🆕 CALCULAR DIVISOR BASEADO EM REGISTOS DO MESMO DIA
+      const dayKey = `${entry.worker}||${entry.date}`;
+      const dayRegistos = workerDayRegistos.get(dayKey) || [entry];
+
+      // Contar quantas obras DIFERENTES o trabalhador tem neste dia
+      const uniqueObrasThisDay = new Set();
+      dayRegistos.forEach(r => {
+        const names = splitObraNames(r.project);
+        names.forEach(n => uniqueObrasThisDay.add(n));
+      });
+
+      // Divisor para este registo: número de obras no mesmo registo × número de obras diferentes no mesmo dia
+      const divisorIntraEntry = obraNames.length; // Divisão dentro do próprio registo (se tiver "Obra A e Obra B")
+      const divisorInterDay = uniqueObrasThisDay.size; // Divisão entre registos do mesmo dia
 
       // Processar cada obra separadamente
       obraNames.forEach(obraName => {
@@ -3045,15 +3082,17 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
         const hours = Number(entry.hours) || 0;
         const overtime = Number(entry.overtime) || 0;
 
-        // Dividir horas e custo proporcionalmente pelo número de obras
-        const divisor = obraNames.length;
-        obra.totalHours += (hours + overtime) / divisor;
-        obra.entries += 1 / divisor;
+        // 🆕 DIVISÃO MELHORADA: dividir por obras no mesmo registo E por obras no mesmo dia
+        const totalDivisor = divisorIntraEntry * divisorInterDay;
+        const adjustedHours = (hours + overtime) / totalDivisor;
+
+        obra.totalHours += adjustedHours;
+        obra.entries += 1 / divisorIntraEntry;
         obra.workers.add(entry.worker);
 
         // Calcular custo
         const rates = personRates(people, entry.worker, {});
-        obra.totalCost += ((hours * rates.normal + overtime * rates.extra) / divisor);
+        obra.totalCost += ((hours * rates.normal + overtime * rates.extra) / totalDivisor);
       });
     });
 
@@ -3064,12 +3103,12 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
       const maintenanceWorkers = workersList.filter(w => people?.[w]?.isMaintenance).length;
       const autoIsMaintenance = maintenanceWorkers > workersList.length / 2; // Maioria é técnico
 
-      // ✅ OVERRIDE MANUAL TEM PRIORIDADE
-      let isMaintenance = autoIsMaintenance;
+      // ✅ OVERRIDE MANUAL TEM PRIORIDADE (agora com 3 categorias)
+      let classificationType = autoIsMaintenance ? 'maintenance' : 'projects';
       let isManual = false;
 
       if (manualClassifications[obra.name]) {
-        isMaintenance = manualClassifications[obra.name] === 'maintenance';
+        classificationType = manualClassifications[obra.name]; // Pode ser 'maintenance', 'projects', ou 'small_jobs'
         isManual = true;
       }
 
@@ -3077,7 +3116,10 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
         ...obra,
         workers: workersList,
         workersCount: workersList.length,
-        isMaintenance,
+        isMaintenance: classificationType === 'maintenance',
+        isSmallJob: classificationType === 'small_jobs',
+        isProject: classificationType === 'projects',
+        classificationType,
         isManualClassification: isManual
       };
     }).sort((a, b) => b.totalCost - a.totalCost);
@@ -3087,11 +3129,13 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
   const filteredObras = useMemo(() => {
     let filtered = obrasFromTimesheet;
 
-    // Filtro por tipo de trabalho
+    // 🆕 Filtro por tipo de trabalho (agora com 3 categorias)
     if (workTypeFilter === 'maintenance') {
       filtered = filtered.filter(o => o.isMaintenance);
     } else if (workTypeFilter === 'projects') {
-      filtered = filtered.filter(o => !o.isMaintenance);
+      filtered = filtered.filter(o => o.isProject);
+    } else if (workTypeFilter === 'small_jobs') {
+      filtered = filtered.filter(o => o.isSmallJob);
     }
 
     // Filtro por pesquisa
@@ -3103,17 +3147,22 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
     return filtered;
   }, [obrasFromTimesheet, searchTerm, workTypeFilter]);
 
-  // Estatísticas gerais
+  // 🆕 Estatísticas gerais (agora com 3 categorias)
   const stats = useMemo(() => {
     const maintenanceObras = obrasFromTimesheet.filter(o => o.isMaintenance);
-    const projectObras = obrasFromTimesheet.filter(o => !o.isMaintenance);
+    const projectObras = obrasFromTimesheet.filter(o => o.isProject);
+    const smallJobsObras = obrasFromTimesheet.filter(o => o.isSmallJob);
 
     return {
       total: obrasFromTimesheet.length,
       totalMaintenance: maintenanceObras.length,
       totalProjects: projectObras.length,
+      totalSmallJobs: smallJobsObras.length,
       totalHours: obrasFromTimesheet.reduce((sum, o) => sum + o.totalHours, 0),
       totalCost: obrasFromTimesheet.reduce((sum, o) => sum + o.totalCost, 0),
+      maintenanceCost: maintenanceObras.reduce((sum, o) => sum + o.totalCost, 0),
+      projectsCost: projectObras.reduce((sum, o) => sum + o.totalCost, 0),
+      smallJobsCost: smallJobsObras.reduce((sum, o) => sum + o.totalCost, 0),
       activeObras: obrasFromTimesheet.filter(o => {
         const lastDate = new Date(o.lastDate);
         const now = new Date();
@@ -3227,7 +3276,7 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
       <PageHeader
         icon="wrench"
         title="Gestão de Obras"
-        subtitle={`${stats.total} obras · ${stats.totalMaintenance} manutenções · ${stats.totalProjects} projetos · ${currency(stats.totalCost)} faturado`}
+        subtitle={`${stats.total} obras · ${stats.totalMaintenance} manutenções · ${stats.totalProjects} projetos · ${stats.totalSmallJobs} pequenos trabalhos · ${currency(stats.totalCost)} faturado`}
         actions={
           <div className="flex gap-2">
             <button
@@ -3246,14 +3295,14 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
         }
       />
 
-      {/* Filtros de Tipo de Trabalho */}
+      {/* 🆕 Filtros de Tipo de Trabalho (agora com 3 categorias) */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">
             Filtrar por:
           </div>
           <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
-            💡 <span>Clique nos badges 🔧/🏗️ para mudar classificação · ✏️ = manual</span>
+            💡 <span>Clique nos badges 🔧/🏗️/🔨 para mudar classificação · ✏️ = manual</span>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -3287,6 +3336,16 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
               }`}
             >
               🏗️ Obras ({stats.totalProjects})
+            </button>
+            <button
+              onClick={() => setWorkTypeFilter('small_jobs')}
+              className={`px-4 py-2 rounded-xl transition-all font-medium ${
+                workTypeFilter === 'small_jobs'
+                  ? 'bg-purple-500 text-white shadow-md'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              🔨 Pequenos Trabalhos ({stats.totalSmallJobs})
             </button>
           </div>
           {workTypeFilter !== 'all' && (
@@ -3362,8 +3421,8 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
             </Card>
           </div>
 
-          {/* Segmentação Manutenções vs Obras */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* 🆕 Segmentação Manutenções vs Obras vs Pequenos Trabalhos */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="p-5 border-2 border-orange-500">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
@@ -3374,8 +3433,11 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
                   <div className="text-3xl font-bold text-orange-600">{stats.totalMaintenance}</div>
                 </div>
               </div>
-              <div className="text-sm text-slate-500">
+              <div className="text-sm text-slate-500 mb-1">
                 {((stats.totalMaintenance / stats.total) * 100).toFixed(1)}% do total
+              </div>
+              <div className="text-xs font-semibold text-orange-600">
+                {currency(stats.maintenanceCost)}
               </div>
             </Card>
 
@@ -3389,8 +3451,29 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
                   <div className="text-3xl font-bold text-green-600">{stats.totalProjects}</div>
                 </div>
               </div>
-              <div className="text-sm text-slate-500">
+              <div className="text-sm text-slate-500 mb-1">
                 {((stats.totalProjects / stats.total) * 100).toFixed(1)}% do total
+              </div>
+              <div className="text-xs font-semibold text-green-600">
+                {currency(stats.projectsCost)}
+              </div>
+            </Card>
+
+            <Card className="p-5 border-2 border-purple-500">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                  🔨
+                </div>
+                <div>
+                  <div className="text-sm text-slate-600 dark:text-slate-400 font-medium">Pequenos Trabalhos</div>
+                  <div className="text-3xl font-bold text-purple-600">{stats.totalSmallJobs}</div>
+                </div>
+              </div>
+              <div className="text-sm text-slate-500 mb-1">
+                {((stats.totalSmallJobs / stats.total) * 100).toFixed(1)}% do total
+              </div>
+              <div className="text-xs font-semibold text-purple-600">
+                {currency(stats.smallJobsCost)}
               </div>
             </Card>
           </div>
@@ -3466,27 +3549,40 @@ const ObrasView = ({ projects, setProjects, uniqueFamilies, openReport, timeEntr
                       >
                         {obra.name}
                       </button>
+                      {/* 🆕 Badge com 3 categorias */}
                       {obra.isMaintenance ? (
                         <button
-                          onClick={() => toggleClassification(obra.name, obra.isMaintenance)}
+                          onClick={() => toggleClassification(obra.name, obra.classificationType)}
                           className={`px-2 py-0.5 text-xs rounded-full font-semibold transition-all hover:scale-105 active:scale-95 ${
                             obra.isManualClassification
                               ? 'bg-orange-200 dark:bg-orange-800/50 text-orange-800 dark:text-orange-200 ring-2 ring-orange-400'
                               : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200'
                           }`}
-                          title={obra.isManualClassification ? 'Classificação manual - clique para alternar para Obra' : 'Classificação automática - clique para forçar como Obra'}
+                          title={`Manutenção ${obra.isManualClassification ? '(manual) - clique para alternar para Obra' : '(automática) - clique para mudar'}`}
                         >
                           🔧 Manutenção{obra.isManualClassification && ' ✏️'}
                         </button>
+                      ) : obra.isSmallJob ? (
+                        <button
+                          onClick={() => toggleClassification(obra.name, obra.classificationType)}
+                          className={`px-2 py-0.5 text-xs rounded-full font-semibold transition-all hover:scale-105 active:scale-95 ${
+                            obra.isManualClassification
+                              ? 'bg-purple-200 dark:bg-purple-800/50 text-purple-800 dark:text-purple-200 ring-2 ring-purple-400'
+                              : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 hover:bg-purple-200'
+                          }`}
+                          title={`Pequeno Trabalho ${obra.isManualClassification ? '(manual) - clique para alternar para Manutenção' : '(automática) - clique para mudar'}`}
+                        >
+                          🔨 Pequeno Trabalho{obra.isManualClassification && ' ✏️'}
+                        </button>
                       ) : (
                         <button
-                          onClick={() => toggleClassification(obra.name, obra.isMaintenance)}
+                          onClick={() => toggleClassification(obra.name, obra.classificationType)}
                           className={`px-2 py-0.5 text-xs rounded-full font-semibold transition-all hover:scale-105 active:scale-95 ${
                             obra.isManualClassification
                               ? 'bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-200 ring-2 ring-green-400'
                               : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200'
                           }`}
-                          title={obra.isManualClassification ? 'Classificação manual - clique para alternar para Manutenção' : 'Classificação automática - clique para forçar como Manutenção'}
+                          title={`Obra ${obra.isManualClassification ? '(manual) - clique para alternar para Pequeno Trabalho' : '(automática) - clique para mudar'}`}
                         >
                           🏗️ Obra{obra.isManualClassification && ' ✏️'}
                         </button>
