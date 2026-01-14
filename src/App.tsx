@@ -19065,22 +19065,33 @@ function DashboardView() {
 // ---------------------------------------------------------------
 // ⏰ TIMESHEETS VIEW (COM BOTÃO DE REMOVER)
 // ---------------------------------------------------------------
-function TimesheetsView({ onViewChange }: { onViewChange?: boolean }) {
+function TimesheetsView({ onViewChange, cycleOffset }: { onViewChange?: boolean; cycleOffset?: number }) {
   // ✅ Controlar animação: ativa ao navegar para a página, desativa ao clicar dentro
   const [shouldAnimate, setShouldAnimate] = useState(true);
   // 👤 Filtro de colaborador para o calendário
   const [selectedWorkerFilter, setSelectedWorkerFilter] = useState('all');
+  // 🔧 Rastrear primeira montagem para evitar desativar animação inicial
+  const isFirstMount = useRef(true);
 
   // ✅ Reativar animação quando a view muda (navegação entre páginas)
   useEffect(() => {
     if (onViewChange) {
       setShouldAnimate(true);
+      isFirstMount.current = false; // Resetar flag após primeira animação
     }
   }, [onViewChange]);
+
+  // ✅ Desativar animação quando os botões de navegação de mês são clicados
+  useEffect(() => {
+    if (!isFirstMount.current) {
+      setShouldAnimate(false);
+    }
+  }, [cycleOffset]);
 
   // ✅ Desativar animação ao clicar em qualquer elemento dentro do TimesheetsView
   const handleClick = () => {
     setShouldAnimate(false);
+    isFirstMount.current = false;
   };
 
   // 🔒 Verificação de segurança
@@ -19809,7 +19820,7 @@ function TableMaterials() {
             <MonthlyReportView timeEntries={timeEntries} people={people} setPeople={setPeople} setModal={setModal} vacations={vacations} />
           )}
 
-          {view === "timesheets" && <TimesheetsView onViewChange={timesheetsViewChanged} />}
+          {view === "timesheets" && <TimesheetsView onViewChange={timesheetsViewChanged} cycleOffset={cycleOffset} />}
           {view === "materials" && <TableMaterials />}
           {view === "logistics" && (
             <LogisticsView
