@@ -911,7 +911,7 @@ const CalendarLegend = () => {
 
 const TYPE_FILL_COLORS = {
   'Trabalho Normal': '#00A9B8',  // Electric Teal
-  'Férias': '#BE8A3A',           // Copper Gold
+  'Férias': '#8B5CF6',           // Violet
   'Baixa': '#00677F',            // Lux Blue
   'Falta': '#2C3134',            // Metal Graphite
   'Feriado': '#E74C3C'           // Vermelho vibrante para feriados
@@ -1149,7 +1149,7 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
               onClick={() => click(d)}
               title={displayTitle}
               className={[
-                'text-left rounded-2xl p-2 md:p-3 min-h-[80px] md:min-h-[72px] w-full transition ring-focus active:scale-95',
+                'relative text-left rounded-2xl p-2 md:p-3 min-h-[80px] md:min-h-[72px] w-full transition ring-focus active:scale-95',
                 inCycle
                   ? ((has || isHoliday) ? 'text-white hover:brightness-110 border-0'
                          : weekendClass || 'bg-white border hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800')
@@ -1201,6 +1201,26 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
                   {Number(dayInfo.get(iso)?.overtime || 0) > 0 && (
                     <div className="text-white font-semibold">+{Number(dayInfo.get(iso)?.overtime || 0)}h extra</div>
                   )}
+                </div>
+              )}
+              {/* Diagonal text for Férias, Baixa, Falta */}
+              {inCycle && has && (primary === 'Férias' || primary === 'Baixa' || primary === 'Falta') && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%) rotate(-45deg)',
+                    fontSize: '14px',
+                    fontWeight: '700',
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    textShadow: '1px 1px 2px rgba(0, 0, 0, 0.3)',
+                    pointerEvents: 'none',
+                    whiteSpace: 'nowrap',
+                    userSelect: 'none'
+                  }}
+                >
+                  {primary}
                 </div>
               )}
             </button>
@@ -20064,9 +20084,9 @@ function TableMaterials() {
               </Button>
             </div>
 
-            <div className="mt-3 space-y-2">
-              {/* 🔒 IMPORTAR/EXPORTAR - APENAS ADMIN */}
-              {auth?.role === "admin" && (
+            {/* 🔒 FUNCIONALIDADES ADMINISTRATIVAS - APENAS ADMIN */}
+            {auth?.role === "admin" && (
+              <div className="mt-3 space-y-2">
                 <Button
                   variant="secondary"
                   size="sm"
@@ -20074,18 +20094,17 @@ function TableMaterials() {
                 >
                   <Icon name="download" /> Importar/Exportar
                 </Button>
-              )}
 
-              {/* 💾 BOTÃO DE BACKUP COMPLETO - TODOS OS UTILIZADORES */}
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setModal({ name: "full-backup" })}
-                className="w-full"
-              >
-                <Icon name="download" /> 💾 Backup Completo
-              </Button>
-            </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setModal({ name: "full-backup" })}
+                  className="w-full"
+                >
+                  <Icon name="download" /> 💾 Backup Completo
+                </Button>
+              </div>
+            )}
           </div>
         </aside>
 
@@ -20649,8 +20668,9 @@ function TableMaterials() {
         </Modal>
       )}
 
-      {/* 💾 MODAL DE BACKUP COMPLETO */}
-      <Modal open={modal?.name==='full-backup'} title="💾 Backup Completo" onClose={()=>setModal(null)} wide>
+      {/* 💾 MODAL DE BACKUP COMPLETO - APENAS ADMIN */}
+      {auth?.role === "admin" && (
+        <Modal open={modal?.name==='full-backup'} title="💾 Backup Completo" onClose={()=>setModal(null)} wide>
         <div className="space-y-6">
           {/* Informações do Backup */}
           <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
@@ -20805,6 +20825,7 @@ function TableMaterials() {
           </div>
         </div>
       </Modal>
+      )}
     </div>
   );
 }
