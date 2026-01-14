@@ -8038,8 +8038,9 @@ const MonthlyReportView = ({ timeEntries, people, setPeople, setModal, vacations
 
   // 🆕 Aplicar ordem customizada + workers adicionados manualmente
   const sortedStats = useMemo(() => {
-    // 🆕 MOSTRAR TODOS OS COLABORADORES criados na página Colaboradores
-    const allStats = [...stats];
+    // 🆕 MOSTRAR APENAS OS COLABORADORES registados na página Colaboradores
+    // Filtrar stats para incluir apenas colaboradores que existem em people
+    const allStats = stats.filter(s => people && people[s.name]);
 
     // Adicionar TODOS os colaboradores de "people" que ainda não existem em stats
     Object.keys(people || {}).forEach(workerName => {
