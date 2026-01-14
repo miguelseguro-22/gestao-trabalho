@@ -702,7 +702,8 @@ const TYPE_FILL_COLORS = {
   'Trabalho Normal': '#00A9B8',  // Electric Teal
   'Férias': '#BE8A3A',           // Copper Gold
   'Baixa': '#00677F',            // Lux Blue
-  'Falta': '#2C3134'             // Metal Graphite
+  'Falta': '#2C3134',            // Metal Graphite
+  'Feriado': '#E74C3C'           // Vermelho vibrante para feriados
 };
 const TYPE_FILL_BG = { 'Trabalho Normal':'bg-emerald-600','Férias':'bg-violet-600','Baixa':'bg-rose-600','Falta':'bg-amber-600' };
 const TYPE_COLORS = TYPE_FILL_BG;
@@ -900,7 +901,12 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
           const types = Array.from(dayTypes.get(iso) || []);
           const has = types.length > 0;
           const primary = has ? types[0] : null;
-          const fillColor = has ? TYPE_FILL_COLORS[primary] : null;
+
+          // ✅ Verificar se é feriado e aplicar cor diferenciada
+          const isHoliday = holidays.has(iso);
+          const fillColor = isHoliday ? TYPE_FILL_COLORS['Feriado'] : (has ? TYPE_FILL_COLORS[primary] : null);
+          const displayTitle = isHoliday ? '🎉 Feriado' : (has ? primary : '');
+
           const ringToday = isToday(d) ? 'ring-2' : '';
           const ringStyle = isToday(d) ? { borderColor: '#00A9B8', borderWidth: '2px' } : {};
 
@@ -908,8 +914,8 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
           const dow = d.getDay(); // 0=Domingo, 6=Sábado
           const isWeekend = dow === 0 || dow === 6;
 
-          // Estilo para fins de semana com padrão de linhas diagonais
-          const weekendStyle = isWeekend && inCycle && !has ? {
+          // Estilo para fins de semana com padrão de linhas diagonais, feriados e registos
+          const weekendStyle = isWeekend && inCycle && !has && !isHoliday ? {
             backgroundImage: `repeating-linear-gradient(
               45deg,
               #e2e8f0 0px,
@@ -918,21 +924,21 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
               #f8fafc 6px
             )`,
             ...ringStyle
-          } : (has && inCycle ? { backgroundColor: fillColor, ...ringStyle } : ringStyle);
+          } : ((has || isHoliday) && inCycle ? { backgroundColor: fillColor, ...ringStyle } : ringStyle);
 
           // Classes base para fins de semana
-          const weekendClass = isWeekend && inCycle && !has ? 'border border-slate-300 dark:border-slate-600' : '';
+          const weekendClass = isWeekend && inCycle && !has && !isHoliday ? 'border border-slate-300 dark:border-slate-600' : '';
 
           return (
             <button
               key={i}
               type="button"
               onClick={() => click(d)}
-              title={has ? primary : ''}
+              title={displayTitle}
               className={[
                 'text-left rounded-2xl p-2 md:p-3 min-h-[80px] md:min-h-[72px] w-full transition ring-focus active:scale-95',
                 inCycle
-                  ? (has ? 'text-white hover:brightness-110 border-0'
+                  ? ((has || isHoliday) ? 'text-white hover:brightness-110 border-0'
                          : weekendClass || 'bg-white border hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800')
                   : 'bg-slate-100 dark:bg-slate-800/60 text-slate-400 cursor-not-allowed',
                 ringToday
@@ -940,7 +946,10 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
               style={weekendStyle}
             >
               <div className="flex items-start justify-between">
-                <div className={`text-xs ${has ? 'text-white' : ''}`}>{d.getDate()}</div>
+                <div className={`text-xs ${(has || isHoliday) ? 'text-white' : ''}`}>
+                  {d.getDate()}
+                  {isHoliday && <span className="ml-1">🎉</span>}
+                </div>
                 {/* 🆕 Badge de Status */}
                 {inCycle && has && dayInfo.has(iso) && (() => {
                   const info = dayInfo.get(iso);
@@ -13816,6 +13825,10 @@ function App() {
     keyof typeof CAN | "timesheets" | "obra-report"
   >(auth ? defaultViewForRole(auth.role) : "timesheets");
 
+  // ✅ Rastrear mudanças de view para controlar animação do Timesheets
+  const previousView = useRef(view);
+  const [timesheetsViewChanged, setTimesheetsViewChanged] = useState(false);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modal, setModal] = useState<any | null>(null);
   const [cycleOffset, setCycleOffset] = useState(0); // 🆕 Estado para manter o mês do calendário
@@ -13998,6 +14011,17 @@ function App() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
+
+  // -------------------------------------------------------------
+  // 🎬 DETECTAR MUDANÇA DE VIEW PARA CONTROLAR ANIMAÇÃO DO TIMESHEETS
+  // -------------------------------------------------------------
+  useEffect(() => {
+    if (view === "timesheets" && previousView.current !== "timesheets") {
+      // View mudou para timesheets - ativar animação
+      setTimesheetsViewChanged(prev => !prev);
+    }
+    previousView.current = view;
+  }, [view]);
 
   // -------------------------------------------------------------
   // ☁️ CARREGAR ESTADO NA CLOUD (SE EXISTIR)
@@ -18917,6 +18941,17 @@ const markAllNotificationsAsRead = () => {
   setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
 };
 
+// ✅ Função para remover um registo de timesheet
+const removeTimeEntry = (entryId: string) => {
+  if (!entryId) return;
+
+  // Confirmar remoção
+  if (window.confirm('Tem certeza que deseja remover este registo?')) {
+    setTimeEntries((prev) => prev.filter((entry) => entry.id !== entryId));
+    addToast('Registo removido com sucesso!', 'ok');
+  }
+};
+
 const setters = {
   setTimeEntries,
   setOrders,
@@ -19030,23 +19065,23 @@ function DashboardView() {
 // ---------------------------------------------------------------
 // ⏰ TIMESHEETS VIEW (COM BOTÃO DE REMOVER)
 // ---------------------------------------------------------------
-function TimesheetsView() {
-  // ✅ Controlar animação apenas no primeiro load (usa ref para persistir entre re-renders)
-  const hasAnimated = useRef(false);
-  const [shouldAnimate, setShouldAnimate] = useState(!hasAnimated.current);
+function TimesheetsView({ onViewChange }: { onViewChange?: boolean }) {
+  // ✅ Controlar animação: ativa ao navegar para a página, desativa ao clicar dentro
+  const [shouldAnimate, setShouldAnimate] = useState(true);
   // 👤 Filtro de colaborador para o calendário
   const [selectedWorkerFilter, setSelectedWorkerFilter] = useState('all');
 
+  // ✅ Reativar animação quando a view muda (navegação entre páginas)
   useEffect(() => {
-    if (!hasAnimated.current) {
-      hasAnimated.current = true;
-      const animationTimeoutMs = 2200;
-      const timer = setTimeout(() => setShouldAnimate(false), animationTimeoutMs);
-      return () => clearTimeout(timer);
-    } else {
-      setShouldAnimate(false);
+    if (onViewChange) {
+      setShouldAnimate(true);
     }
-  }, []);
+  }, [onViewChange]);
+
+  // ✅ Desativar animação ao clicar em qualquer elemento dentro do TimesheetsView
+  const handleClick = () => {
+    setShouldAnimate(false);
+  };
 
   // 🔒 Verificação de segurança
   if (!auth) {
@@ -19088,13 +19123,13 @@ function TimesheetsView() {
       .slice(0, 5);
   }, [visibleTimeEntries]);
 
-  // ✅ Helper para animação condicional (só no primeiro load)
+  // ✅ Helper para animação condicional (ativa ao navegar, desativa ao clicar)
   const anim = (delay = 0) => {
     return shouldAnimate ? { animation: `slideUp 0.6s ease-out ${delay}s both` } : {};
   };
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-6" onClick={handleClick}>
       {/* 🎨 HERO SECTION - Animado com Gradiente ENGITAQUS */}
       <div className="relative overflow-hidden rounded-3xl p-8 md:p-12" style={{
         background: 'linear-gradient(135deg, #00677F 0%, #00A9B8 50%, #00C4D6 100%)',
@@ -19338,9 +19373,8 @@ function TimesheetsView() {
               recentActivity.map((t, idx) => (
                 <div
                   key={t.id}
-                  className="p-4 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all cursor-pointer"
+                  className="p-4 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all"
                   style={anim(0.9 + idx * 0.1)}
-                  onClick={() => setModal({ name: "add-time", initial: t })}
                 >
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{
                     background: t.template === 'Trabalho Normal' ? 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)' :
@@ -19351,7 +19385,10 @@ function TimesheetsView() {
                      t.template === 'Férias' ? '🏖️' :
                      t.template === 'Baixa' ? '🏥' : '📝'}
                   </div>
-                  <div className="flex-1">
+                  <div
+                    className="flex-1 cursor-pointer"
+                    onClick={() => setModal({ name: "add-time", initial: t })}
+                  >
                     <div className="font-semibold dark:text-white">{t.project || t.template}</div>
                     <div className="text-sm text-slate-500 dark:text-slate-400">
                       {t.date} • {
@@ -19365,8 +19402,27 @@ function TimesheetsView() {
                       }
                     </div>
                   </div>
-                  <div className="text-slate-400">
-                    <Icon name="chev-right" />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setModal({ name: "add-time", initial: t });
+                      }}
+                      className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-all text-blue-600 dark:text-blue-400"
+                      title="Editar registo"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeTimeEntry(t.id);
+                      }}
+                      className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-all text-red-600 dark:text-red-400"
+                      title="Remover registo"
+                    >
+                      🗑️
+                    </button>
                   </div>
                 </div>
               ))
@@ -19753,7 +19809,7 @@ function TableMaterials() {
             <MonthlyReportView timeEntries={timeEntries} people={people} setPeople={setPeople} setModal={setModal} vacations={vacations} />
           )}
 
-          {view === "timesheets" && <TimesheetsView />}
+          {view === "timesheets" && <TimesheetsView onViewChange={timesheetsViewChanged} />}
           {view === "materials" && <TableMaterials />}
           {view === "logistics" && (
             <LogisticsView
