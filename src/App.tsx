@@ -940,6 +940,7 @@ const CalendarLegend = () => {
 
 const TYPE_FILL_COLORS = {
   'Trabalho Normal': '#00A9B8',  // Electric Teal
+  'Trabalho - Fim de Semana/Feriado': '#00A9B8',  // Electric Teal (mesmo que Trabalho Normal)
   'Férias': '#10B981',           // Emerald Green
   'Baixa': '#00677F',            // Lux Blue
   'Falta': '#2C3134',            // Metal Graphite
