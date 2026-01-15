@@ -1544,25 +1544,25 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,auth}
                           </div>
                         </div>
                         {/* 🆕 Hora Início/Fim para Fim de Semana */}
-                        {t.template === 'Trabalho - Fim de Semana/Feriado' && (t.startTime || t.endTime) && (
+                        {t.template === 'Trabalho - Fim de Semana/Feriado' && (t.weekendStartTime || t.weekendEndTime) && (
                           <>
-                            {t.startTime && (
+                            {t.weekendStartTime && (
                               <div>
                                 <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                                   🕐 Hora Início
                                 </div>
                                 <div className="text-lg font-semibold text-blue-600 dark:text-blue-400">
-                                  {t.startTime}
+                                  {t.weekendStartTime}
                                 </div>
                               </div>
                             )}
-                            {t.endTime && (
+                            {t.weekendEndTime && (
                               <div>
                                 <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
                                   🕐 Hora Fim
                                 </div>
                                 <div className="text-lg font-semibold text-blue-600 dark:text-blue-400">
-                                  {t.endTime}
+                                  {t.weekendEndTime}
                                 </div>
                               </div>
                             )}
