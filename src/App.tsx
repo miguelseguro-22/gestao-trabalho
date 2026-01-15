@@ -2419,6 +2419,8 @@ const handleCatalog = (file) => {
       sickDays,
       displacement, // 🆕 Campo de deslocação
       workType: autoWorkType, // 🆕 Campo de tipo de trabalho (auto-classificado)
+      weekendStartTime: val('weekendStart') || '', // 🆕 Hora início FDS
+      weekendEndTime: val('weekendEnd') || '', // 🆕 Hora fim FDS
       notes: val('notes')
     };
   }
@@ -19521,10 +19523,39 @@ function TimesheetsView({ onViewChange, cycleOffset }: { onViewChange?: boolean;
 
   // 🌊 Atividade recente
   const recentActivity = useMemo(() => {
-    return visibleTimeEntries
+    const entries = visibleTimeEntries
       .slice()
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
       .slice(0, 5);
+
+    // 🆕 Calcular horas ajustadas dividindo pelo número de obras no mesmo dia
+    return entries.map(entry => {
+      if (entry.template !== 'Trabalho Normal' && entry.template !== 'Trabalho - Fim de Semana/Feriado') {
+        return entry;
+      }
+
+      // Contar quantas obras diferentes o trabalhador tem no mesmo dia
+      const sameDay = visibleTimeEntries.filter(e =>
+        e.worker === entry.worker &&
+        e.date === entry.date &&
+        (e.template === 'Trabalho Normal' || e.template === 'Trabalho - Fim de Semana/Feriado')
+      );
+
+      // Se houver apenas um registo, manter as horas originais
+      if (sameDay.length <= 1) {
+        return entry;
+      }
+
+      // Se houver múltiplos registos, dividir as horas pelo número de registos
+      const adjustedHours = (Number(entry.hours) || 0) / sameDay.length;
+      const adjustedOvertime = (Number(entry.overtime) || 0) / sameDay.length;
+
+      return {
+        ...entry,
+        displayHours: adjustedHours,
+        displayOvertime: adjustedOvertime
+      };
+    });
   }, [visibleTimeEntries]);
 
   // ✅ Helper para animação condicional (ativa ao navegar, desativa ao clicar)
@@ -19783,11 +19814,11 @@ function TimesheetsView({ onViewChange, cycleOffset }: { onViewChange?: boolean;
                   style={anim(0.9 + idx * 0.1)}
                 >
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style={{
-                    background: t.template === 'Trabalho Normal' ? 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)' :
+                    background: (t.template === 'Trabalho Normal' || t.template === 'Trabalho - Fim de Semana/Feriado') ? 'linear-gradient(135deg, #00677F 0%, #00A9B8 100%)' :
                                t.template === 'Férias' ? 'linear-gradient(135deg, #00A9B8 0%, #00C4D6 100%)' :
                                'linear-gradient(135deg, #2C3134 0%, #00677F 100%)'
                   }}>
-                    {t.template === 'Trabalho Normal' ? '💼' :
+                    {(t.template === 'Trabalho Normal' || t.template === 'Trabalho - Fim de Semana/Feriado') ? '💼' :
                      t.template === 'Férias' ? '🏖️' :
                      t.template === 'Baixa' ? '🏥' : '📝'}
                   </div>
@@ -19798,8 +19829,8 @@ function TimesheetsView({ onViewChange, cycleOffset }: { onViewChange?: boolean;
                     <div className="font-semibold dark:text-white">{t.project || t.template}</div>
                     <div className="text-sm text-slate-500 dark:text-slate-400">
                       {t.date} • {
-                        t.template === 'Trabalho Normal'
-                          ? `${t.hours || 0}h${(t.overtime > 0) ? ` + ${t.overtime}h extra` : ''}`
+                        t.template === 'Trabalho Normal' || t.template === 'Trabalho - Fim de Semana/Feriado'
+                          ? `${t.displayHours !== undefined ? t.displayHours.toFixed(1) : (t.hours || 0)}h${((t.displayOvertime !== undefined ? t.displayOvertime : t.overtime) > 0) ? ` + ${(t.displayOvertime !== undefined ? t.displayOvertime.toFixed(1) : t.overtime)}h extra` : ''}`
                           : t.template === 'Férias' || t.template === 'Baixa'
                             ? `${t.periodStart} → ${t.periodEnd}`
                             : t.template === 'Falta'
