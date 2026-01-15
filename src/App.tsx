@@ -10210,16 +10210,11 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       // 🆕 Coletar todos os registos deste dia com detalhes
       // 🐛 FIX: Usar timeEntries diretamente em vez de myEntries (que filtra por selectedYear)
       const dayEntries = [];
-      let hours = 0;
-      let overtime = 0;
 
       timeEntries.forEach((entry) => {
         if (entry.date === dateStr && isNormalWork(entry.template)) {
           const entryHours = Number(entry.hours) || 0;
           const entryOvertime = Number(entry.overtime) || 0;
-
-          hours += entryHours;
-          overtime += entryOvertime;
 
           // 🆕 Guardar detalhes do registo
           dayEntries.push({
@@ -10227,10 +10222,49 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
             hours: entryHours,
             overtime: entryOvertime,
             total: entryHours + entryOvertime,
-            template: entry.template
+            template: entry.template,
+            worker: entry.worker
           });
         }
       });
+
+      // 🆕 Dividir horas pelo número de obras quando há múltiplos registos
+      let hours = 0;
+      let overtime = 0;
+
+      if (dayEntries.length > 0) {
+        // Agrupar por trabalhador para dividir corretamente
+        const workerEntries = new Map();
+        dayEntries.forEach(entry => {
+          const worker = entry.worker || 'Unknown';
+          if (!workerEntries.has(worker)) {
+            workerEntries.set(worker, []);
+          }
+          workerEntries.get(worker).push(entry);
+        });
+
+        // Para cada trabalhador, dividir as horas pelo número de obras
+        const adjustedEntries = [];
+        workerEntries.forEach((entries, worker) => {
+          const numWorks = entries.length;
+          entries.forEach(entry => {
+            const adjustedHours = entry.hours / numWorks;
+            const adjustedOvertime = entry.overtime / numWorks;
+            adjustedEntries.push({
+              ...entry,
+              hours: adjustedHours,
+              overtime: adjustedOvertime,
+              total: adjustedHours + adjustedOvertime
+            });
+            hours += adjustedHours;
+            overtime += adjustedOvertime;
+          });
+        });
+
+        // Substituir dayEntries pelos valores ajustados
+        dayEntries.length = 0;
+        dayEntries.push(...adjustedEntries);
+      }
 
       const total = hours + overtime;
       const isToday = date.toDateString() === now.toDateString();
@@ -10246,7 +10280,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
         isToday,
         isPast,
         isFuture,
-        entries: dayEntries, // 🆕 Lista de registos deste dia
+        entries: dayEntries, // 🆕 Lista de registos deste dia (com horas divididas)
       };
     });
 
