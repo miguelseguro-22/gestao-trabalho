@@ -10130,20 +10130,29 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
   // Para técnicos: apenas seus registos (já vem filtrado de filteredTimeEntries)
   // Para admin/encarregado/diretor: TODOS os registos do ano
   const myEntries = useMemo(() => {
+    // 🆕 Determinar período de férias baseado na DATA ATUAL (não no ano selecionado)
+    const now = new Date();
+    const currentMonth = now.getMonth(); // 0 = Janeiro, 11 = Dezembro
+    const currentYear = now.getFullYear();
+
+    // Se estamos antes de Abril (Jan/Fev/Mar), período é: ano anterior até março atual
+    // Se estamos em Abril ou depois, período é: ano atual até março seguinte
+    const vacationStartYear = currentMonth <= 2 ? currentYear - 1 : currentYear;
+    const vacationEndYear = currentMonth <= 2 ? currentYear : currentYear + 1;
+
     return timeEntries.filter((t) => {
       const entryDate = new Date(t.date || t.periodStart);
       const year = entryDate.getFullYear();
       const month = entryDate.getMonth(); // 0 = Janeiro, 11 = Dezembro
 
-      // 🆕 Para férias: incluir até março do ano seguinte
+      // 🆕 Para férias: usar período baseado na data atual
       if (t.template === 'Férias') {
-        // Incluir registos do ano selecionado OU
-        // Janeiro-Março do ano seguinte
-        return (year === selectedYear) ||
-               (year === selectedYear + 1 && month <= 2); // meses 0, 1, 2 = Jan, Fev, Mar
+        // Incluir registos do período de férias (ano início até março do ano fim)
+        return (year === vacationStartYear) ||
+               (year === vacationEndYear && month <= 2); // meses 0, 1, 2 = Jan, Fev, Mar
       }
 
-      // Para outros registos: filtrar apenas por ano
+      // Para outros registos: filtrar apenas por ano selecionado
       return year === selectedYear;
     });
   }, [timeEntries, selectedYear]);
@@ -10265,6 +10274,13 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       ? Math.round((daysWorked.size / workingDaysInYear) * 100)
       : 0;
 
+    // 🆕 Calcular período de férias baseado na data atual
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const vacationStartYear = currentMonth <= 2 ? currentYear - 1 : currentYear;
+    const vacationEndYear = currentMonth <= 2 ? currentYear : currentYear + 1;
+
     return {
       totalHours,
       totalOvertime,
@@ -10278,6 +10294,8 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       holidayEntries,
       sickEntries,
       absenceEntries,
+      vacationStartYear,
+      vacationEndYear,
     };
   }, [myEntries, selectedYear]);
 
@@ -11020,7 +11038,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
           <div className="text-sm opacity-90">Férias Gozadas</div>
           <div className="text-4xl font-bold mt-2">{stats.holidayDays}</div>
           <div className="text-sm opacity-80 mt-1">dias de férias · {stats.holidayEntries.length} períodos</div>
-          <div className="text-xs opacity-70 mt-1">{selectedYear} até Mar {selectedYear + 1}</div>
+          <div className="text-xs opacity-70 mt-1">{stats.vacationStartYear} até Mar {stats.vacationEndYear}</div>
           <div className="text-xs opacity-70 mt-1">👆 Clique para detalhes</div>
         </Card>
 
@@ -12145,10 +12163,10 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                   <div className="space-y-3">
                     <div className="text-sm text-slate-600 dark:text-slate-400 mb-4">
                       {infoModal.data.stats.holidayDays} dias de férias em {infoModal.data.stats.holidayEntries.length} períodos
-                      <div className="text-xs mt-1 opacity-70">Período: {selectedYear} até Março {selectedYear + 1}</div>
+                      <div className="text-xs mt-1 opacity-70">Período: {infoModal.data.stats.vacationStartYear} até Março {infoModal.data.stats.vacationEndYear}</div>
                     </div>
                     {infoModal.data.stats.holidayEntries.length === 0 ? (
-                      <div className="text-center text-slate-500 py-8">Sem férias registadas de {selectedYear} até Março {selectedYear + 1}</div>
+                      <div className="text-center text-slate-500 py-8">Sem férias registadas de {infoModal.data.stats.vacationStartYear} até Março {infoModal.data.stats.vacationEndYear}</div>
                     ) : (
                       infoModal.data.stats.holidayEntries.map((entry, i) => (
                         <div key={i} className="p-4 rounded-xl border dark:border-slate-800 hover:shadow-md transition-shadow">
