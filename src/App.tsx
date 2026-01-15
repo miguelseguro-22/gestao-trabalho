@@ -977,8 +977,32 @@ const getHolidayDatesInRange = (entries = [], start, end) => {
     '2025-12-31', // Véspera de Ano Novo (Feriado da Empresa)
   ];
 
+  // 🎉 Feriados de Portugal 2026 (hardcoded)
+  const HOLIDAYS_2026 = [
+    '2026-01-01', // Ano Novo
+    '2026-04-03', // Sexta-feira Santa
+    '2026-04-05', // Páscoa
+    '2026-04-25', // Dia da Liberdade
+    '2026-05-01', // Dia do Trabalhador
+    '2026-06-04', // Corpo de Deus
+    '2026-06-10', // Dia de Portugal
+    '2026-08-15', // Assunção de Nossa Senhora
+    '2026-10-05', // Implantação da República
+    '2026-11-01', // Todos os Santos
+    '2026-12-01', // Restauração da Independência
+    '2026-12-08', // Imaculada Conceição
+    '2026-12-24', // Véspera de Natal (Feriado da Empresa)
+    '2026-12-25', // Natal
+    '2026-12-31', // Véspera de Ano Novo (Feriado da Empresa)
+  ];
+
   // Adicionar feriados hardcoded que estão no range
   HOLIDAYS_2025.forEach(iso => {
+    if (inRange(iso)) {
+      holidaySet.add(iso);
+    }
+  });
+  HOLIDAYS_2026.forEach(iso => {
     if (inRange(iso)) {
       holidaySet.add(iso);
     }
@@ -1519,6 +1543,31 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,auth}
                             +{t.overtime || 0}h
                           </div>
                         </div>
+                        {/* 🆕 Hora Início/Fim para Fim de Semana */}
+                        {t.template === 'Trabalho - Fim de Semana/Feriado' && (t.startTime || t.endTime) && (
+                          <>
+                            {t.startTime && (
+                              <div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                  🕐 Hora Início
+                                </div>
+                                <div className="text-lg font-semibold text-blue-600 dark:text-blue-400">
+                                  {t.startTime}
+                                </div>
+                              </div>
+                            )}
+                            {t.endTime && (
+                              <div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                  🕐 Hora Fim
+                                </div>
+                                <div className="text-lg font-semibold text-blue-600 dark:text-blue-400">
+                                  {t.endTime}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
                         {t.notes && (
                           <div className="col-span-1 sm:col-span-2">
                             <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
@@ -19659,22 +19708,24 @@ function TimesheetsView({ onViewChange, cycleOffset }: { onViewChange?: boolean;
           <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
             <span>📅</span> Calendário de Registos
           </h2>
-          {/* 👤 Dropdown de Colaborador */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-            <label className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
-              Filtrar por colaborador:
-            </label>
-            <select
-              value={selectedWorkerFilter}
-              onChange={(e) => setSelectedWorkerFilter(e.target.value)}
-              className="px-4 py-2 rounded-xl border dark:border-slate-700 dark:bg-slate-800 text-sm w-full sm:w-auto"
-            >
-              <option value="all">📊 Todos os colaboradores</option>
-              {Object.keys(people || {}).sort().map(name => (
-                <option key={name} value={name}>👤 {name}</option>
-              ))}
-            </select>
-          </div>
+          {/* 👤 Dropdown de Colaborador - APENAS ADMIN */}
+          {auth?.role === "admin" && (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <label className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                Filtrar por colaborador:
+              </label>
+              <select
+                value={selectedWorkerFilter}
+                onChange={(e) => setSelectedWorkerFilter(e.target.value)}
+                className="px-4 py-2 rounded-xl border dark:border-slate-700 dark:bg-slate-800 text-sm w-full sm:w-auto"
+              >
+                <option value="all">📊 Todos os colaboradores</option>
+                {Object.keys(people || {}).sort().map(name => (
+                  <option key={name} value={name}>👤 {name}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
         <CycleCalendar
           timeEntries={(selectedWorkerFilter === 'all' ? visibleTimeEntries : visibleTimeEntries.filter(t => t.worker === selectedWorkerFilter)) || []}
