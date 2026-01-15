@@ -192,7 +192,22 @@ const calculateWeekendHours = (startTime, endTime) => {
   if (hasLunch) totalHours -= 1;
   if (hasDinner) totalHours -= 1;
 
-  return Math.max(0, Math.round(totalHours)); // Retorna inteiro, mínimo 0
+  // 🆕 Arredondar para 2 casas decimais (ex: 3.5h, não 3.4999h)
+  return Math.max(0, Math.round(totalHours * 100) / 100);
+};
+
+// 🆕 Formatar horas para exibição (ex: 3.5 → "3h30", 8 → "8h")
+const formatHours = (hours) => {
+  if (!hours || hours === 0) return '0h';
+
+  const h = Math.floor(hours);
+  const minutes = Math.round((hours - h) * 60);
+
+  if (minutes === 0) {
+    return `${h}h`;
+  } else {
+    return `${h}h${String(minutes).padStart(2, '0')}`;
+  }
 };
 
 const REQUESTER_SUGGESTIONS = ['Paulo Silva','Paulo Carujo','Hélder Pinto','António Sousa','André Sequeira','Alexandre Pires','Laura Luz','Márcio Batista','Cláudio Alves','José Duarte'];
@@ -1502,7 +1517,7 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,auth}
 
           <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900 p-3 text-center">
             <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
-              {totalHours}h
+              {formatHours(totalHours)}
             </div>
             <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
               Horas Normais
@@ -1511,7 +1526,7 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,auth}
 
           <div className="rounded-xl bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900 p-3 text-center">
             <div className="text-2xl font-bold text-amber-700 dark:text-amber-300">
-              +{totalOvertime}h
+              +{formatHours(totalOvertime)}
             </div>
             <div className="text-xs text-amber-600 dark:text-emerald-400 mt-1">
               Horas Extra
@@ -11044,7 +11059,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
 
           <div className="text-right">
             <div className="text-3xl font-bold" style={{ color: '#00A9B8' }}>
-              {weeklyStats.total}h
+              {formatHours(weeklyStats.total)}
             </div>
             <div className="text-xs text-slate-500 dark:text-slate-400">
               Total da semana
@@ -11091,9 +11106,9 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                                     🏗️ {entry.project}
                                   </div>
                                   <div className="flex justify-between gap-4 mt-0.5">
-                                    <span style={{ color: '#E5ECEF' }}>Horas: {entry.hours}h</span>
+                                    <span style={{ color: '#E5ECEF' }}>Horas: {formatHours(entry.hours)}</span>
                                     {entry.overtime > 0 && (
-                                      <span style={{ color: '#BE8A3A' }}>Extra: +{entry.overtime}h</span>
+                                      <span style={{ color: '#BE8A3A' }}>Extra: +{formatHours(entry.overtime)}</span>
                                     )}
                                   </div>
                                 </div>
@@ -11101,15 +11116,15 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                             </div>
                           ) : (
                             <>
-                              <div style={{ color: '#E5ECEF' }}>Normal: {dayData.hours}h</div>
+                              <div style={{ color: '#E5ECEF' }}>Normal: {formatHours(dayData.hours)}</div>
                               {dayData.overtime > 0 && (
-                                <div style={{ color: '#BE8A3A' }}>Extra: +{dayData.overtime}h</div>
+                                <div style={{ color: '#BE8A3A' }}>Extra: +{formatHours(dayData.overtime)}</div>
                               )}
                             </>
                           )}
 
                           <div className="text-white font-semibold mt-2 pt-2" style={{ borderTop: '1px solid #00677F' }}>
-                            Total: {dayData.total}h
+                            Total: {formatHours(dayData.total)}
                           </div>
                         </div>
                         {/* Seta */}
@@ -11160,7 +11175,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                                   {entry.project}
                                 </div>
                                 <div className="text-[10px] font-bold text-white mt-0.5">
-                                  {entry.total}h
+                                  {formatHours(entry.total)}
                                 </div>
                               </div>
 
@@ -11206,7 +11221,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                     {/* Valor no topo da barra */}
                     {dayData.total > 0 && (
                       <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-sm font-bold text-slate-700 dark:text-slate-300">
-                        {dayData.total}h
+                        {formatHours(dayData.total)}
                       </div>
                     )}
                   </div>
