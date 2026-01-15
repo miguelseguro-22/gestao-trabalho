@@ -10279,28 +10279,41 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
         workerEntries.forEach((entries, worker) => {
           const numWorks = entries.length;
 
-          // 🐛 FIX: Usar o primeiro registo para saber as horas reais (não somar!)
-          // Se trabalhador tem 2 obras com 8h cada, o total real é 8h (não 16h)
-          const firstEntry = entries[0];
-          const totalWorkerHours = Number(firstEntry.hours) || 0;
-          const totalWorkerOvertime = Number(firstEntry.overtime) || 0;
+          // 🔍 Verificar se TODOS os registos têm as MESMAS horas (indicando duplicados)
+          const allHoursSame = entries.every(e => e.hours === entries[0].hours);
+          const allOvertimeSame = entries.every(e => e.overtime === entries[0].overtime);
 
-          // 🆕 Distribuir horas inteiras (ex: 8h ÷ 3 = [3, 3, 2])
-          const hoursDistribution = distributeHours(totalWorkerHours, numWorks);
-          const overtimeDistribution = distributeHours(totalWorkerOvertime, numWorks);
+          if (numWorks > 1 && allHoursSame) {
+            // 🆕 Todos têm mesmas horas → são duplicados → dividir
+            const totalWorkerHours = Number(entries[0].hours) || 0;
+            const totalWorkerOvertime = Number(entries[0].overtime) || 0;
 
-          entries.forEach((entry, idx) => {
-            const adjustedHours = hoursDistribution[idx] || 0;
-            const adjustedOvertime = overtimeDistribution[idx] || 0;
-            adjustedEntries.push({
-              ...entry,
-              hours: adjustedHours,
-              overtime: adjustedOvertime,
-              total: adjustedHours + adjustedOvertime
+            // Distribuir horas inteiras (ex: 8h ÷ 3 = [3, 3, 2])
+            const hoursDistribution = distributeHours(totalWorkerHours, numWorks);
+            const overtimeDistribution = allOvertimeSame
+              ? distributeHours(totalWorkerOvertime, numWorks)
+              : entries.map(e => Number(e.overtime) || 0);
+
+            entries.forEach((entry, idx) => {
+              const adjustedHours = hoursDistribution[idx] || 0;
+              const adjustedOvertime = overtimeDistribution[idx] || 0;
+              adjustedEntries.push({
+                ...entry,
+                hours: adjustedHours,
+                overtime: adjustedOvertime,
+                total: adjustedHours + adjustedOvertime
+              });
+              hours += adjustedHours;
+              overtime += adjustedOvertime;
             });
-            hours += adjustedHours;
-            overtime += adjustedOvertime;
-          });
+          } else {
+            // ✅ Horas diferentes → manter originais (já são específicas por obra)
+            entries.forEach(entry => {
+              adjustedEntries.push(entry);
+              hours += Number(entry.hours) || 0;
+              overtime += Number(entry.overtime) || 0;
+            });
+          }
         });
 
         // Substituir dayEntries pelos valores ajustados
