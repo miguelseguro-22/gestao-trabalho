@@ -1372,9 +1372,24 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,auth}
     return result;
   })();
 
-  // Calcular totais
-  const totalHours = listWithCalculatedHours.reduce((sum, t) => sum + (Number(t.hours) || 0), 0);
-  const totalOvertime = listWithCalculatedHours.reduce((sum, t) => sum + (Number(t.overtime) || 0), 0);
+  // Calcular totais - 🆕 Para FDS, as horas contam como extra
+  const hasWeekendWork = listWithCalculatedHours.some(t => t.template === 'Trabalho - Fim de Semana/Feriado');
+  const hasNormalWork = listWithCalculatedHours.some(t => t.template === 'Trabalho Normal');
+
+  let totalHours = 0;
+  let totalOvertime = 0;
+
+  listWithCalculatedHours.forEach(t => {
+    if (t.template === 'Trabalho - Fim de Semana/Feriado') {
+      // 🆕 Para FDS, as horas vão para overtime
+      totalOvertime += Number(t.hours) || 0;
+      totalOvertime += Number(t.overtime) || 0;
+    } else {
+      // Para trabalho normal, separar normalmente
+      totalHours += Number(t.hours) || 0;
+      totalOvertime += Number(t.overtime) || 0;
+    }
+  });
 
   // Navegação
   const prevDay = () => {
