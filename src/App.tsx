@@ -9828,6 +9828,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
   const [showAdminDashboard, setShowAdminDashboard] = useState(auth?.role === 'admin');
   const [infoModal, setInfoModal] = useState(null); // 📊 Modal para detalhes dos cards clicáveis
   const [showDebugPanel, setShowDebugPanel] = useState(false); // 🐛 Painel de debug de férias
+  const [weekOffset, setWeekOffset] = useState(0); // 📅 Offset de semanas (0 = atual, -1 = anterior, +1 = próxima)
 
   // 🔔 ALERTAS DE TAREFAS DA AGENDA
   const todayString = new Date().toISOString().slice(0, 10);
@@ -10193,10 +10194,10 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
     const now = new Date();
     const currentDay = now.getDay(); // 0 = Domingo, 1 = Segunda, ...
 
-    // Calcular início da semana (Segunda-feira)
+    // Calcular início da semana (Segunda-feira) com offset
     const startOfWeek = new Date(now);
     const diff = currentDay === 0 ? -6 : 1 - currentDay; // Se domingo, volta 6 dias; senão, vai para segunda
-    startOfWeek.setDate(now.getDate() + diff);
+    startOfWeek.setDate(now.getDate() + diff + (weekOffset * 7)); // 🆕 Aplicar offset
     startOfWeek.setHours(0, 0, 0, 0);
 
     // Criar array com os 7 dias da semana
@@ -10206,13 +10207,27 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       date.setDate(startOfWeek.getDate() + index);
       const dateStr = date.toISOString().slice(0, 10);
 
-      // Calcular horas para este dia
+      // 🆕 Coletar todos os registos deste dia com detalhes
+      const dayEntries = [];
       let hours = 0;
       let overtime = 0;
+
       myEntries.forEach((entry) => {
         if (entry.date === dateStr && isNormalWork(entry.template)) {
-          hours += Number(entry.hours) || 0;
-          overtime += Number(entry.overtime) || 0;
+          const entryHours = Number(entry.hours) || 0;
+          const entryOvertime = Number(entry.overtime) || 0;
+
+          hours += entryHours;
+          overtime += entryOvertime;
+
+          // 🆕 Guardar detalhes do registo
+          dayEntries.push({
+            project: entry.project || 'Sem Obra',
+            hours: entryHours,
+            overtime: entryOvertime,
+            total: entryHours + entryOvertime,
+            template: entry.template
+          });
         }
       });
 
@@ -10230,6 +10245,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
         isToday,
         isPast,
         isFuture,
+        entries: dayEntries, // 🆕 Lista de registos deste dia
       };
     });
 
@@ -10237,13 +10253,20 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
     const weekAverage = weekTotal / 7;
     const maxHours = Math.max(...weekData.map(d => d.total), 8); // Mínimo 8 para escala
 
+    // 🆕 Calcular range de datas da semana
+    const startDate = new Date(startOfWeek);
+    const endDate = new Date(startOfWeek);
+    endDate.setDate(startOfWeek.getDate() + 6);
+
     return {
       days: weekData,
       total: weekTotal,
       average: weekAverage,
       maxHours,
+      startDate,
+      endDate,
     };
-  }, [myEntries]);
+  }, [myEntries, weekOffset]);
 
   // Cores para o gráfico (paleta Engitagus)
   const colors = [
@@ -10800,14 +10823,51 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       {/* Gráfico de Horas Semanal */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-100">
-              Horas por Dia (Semana Atual)
-            </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Distribuição de horas trabalhadas esta semana
-            </p>
+          <div className="flex items-center gap-3">
+            {/* 🆕 Botão Semana Anterior */}
+            <button
+              onClick={() => setWeekOffset(weekOffset - 1)}
+              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              title="Semana anterior"
+            >
+              <svg className="w-5 h-5 text-slate-600 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+
+            <div>
+              <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-100">
+                Horas por Dia {weekOffset === 0 ? '(Semana Atual)' : ''}
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                {weeklyStats.startDate.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })} - {weeklyStats.endDate.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </p>
+            </div>
+
+            {/* 🆕 Botão Próxima Semana */}
+            <button
+              onClick={() => setWeekOffset(weekOffset + 1)}
+              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              title="Próxima semana"
+            >
+              <svg className="w-5 h-5 text-slate-600 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+
+            {/* 🆕 Botão Voltar para Hoje (só aparece se não estiver na semana atual) */}
+            {weekOffset !== 0 && (
+              <button
+                onClick={() => setWeekOffset(0)}
+                className="ml-2 px-3 py-1 rounded-lg text-xs font-medium transition-colors"
+                style={{ backgroundColor: '#00A9B8', color: 'white' }}
+                title="Voltar para semana atual"
+              >
+                Hoje
+              </button>
+            )}
           </div>
+
           <div className="text-right">
             <div className="text-3xl font-bold" style={{ color: '#00A9B8' }}>
               {weeklyStats.total}h
@@ -10842,16 +10902,39 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                 <div key={index} className="flex flex-col items-center">
                   {/* Container da barra */}
                   <div className="w-full h-48 flex flex-col justify-end relative group">
-                    {/* Tooltip ao hover */}
+                    {/* Tooltip ao hover - 🆕 Mostra detalhes de cada obra */}
                     {dayData.total > 0 && (
                       <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                        <div className="text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-nowrap" style={{ backgroundColor: '#2C3134' }}>
-                          <div className="font-semibold mb-1">{dayData.day}</div>
-                          <div style={{ color: '#E5ECEF' }}>Normal: {dayData.hours}h</div>
-                          {dayData.overtime > 0 && (
-                            <div style={{ color: '#BE8A3A' }}>Extra: +{dayData.overtime}h</div>
+                        <div className="text-white text-xs rounded-lg px-3 py-2 shadow-lg" style={{ backgroundColor: '#2C3134', minWidth: '180px' }}>
+                          <div className="font-semibold mb-2">{dayData.day}</div>
+
+                          {/* 🆕 Mostrar cada obra individualmente */}
+                          {dayData.entries && dayData.entries.length > 0 ? (
+                            <div className="space-y-1.5">
+                              {dayData.entries.map((entry, idx) => (
+                                <div key={idx} className="pb-1.5 border-b border-slate-600 last:border-0 last:pb-0">
+                                  <div className="font-medium" style={{ color: '#00C4D6' }}>
+                                    🏗️ {entry.project}
+                                  </div>
+                                  <div className="flex justify-between gap-4 mt-0.5">
+                                    <span style={{ color: '#E5ECEF' }}>Horas: {entry.hours}h</span>
+                                    {entry.overtime > 0 && (
+                                      <span style={{ color: '#BE8A3A' }}>Extra: +{entry.overtime}h</span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <>
+                              <div style={{ color: '#E5ECEF' }}>Normal: {dayData.hours}h</div>
+                              {dayData.overtime > 0 && (
+                                <div style={{ color: '#BE8A3A' }}>Extra: +{dayData.overtime}h</div>
+                              )}
+                            </>
                           )}
-                          <div className="text-white font-semibold mt-1 pt-1" style={{ borderTop: '1px solid #00677F' }}>
+
+                          <div className="text-white font-semibold mt-2 pt-2" style={{ borderTop: '1px solid #00677F' }}>
                             Total: {dayData.total}h
                           </div>
                         </div>
@@ -10862,34 +10945,89 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                       </div>
                     )}
 
-                    {/* Barra principal */}
-                    <div
-                      className={`w-full rounded-t-xl transition-all duration-500 ease-out relative overflow-hidden ${
-                        dayData.total === 0 ? 'opacity-30' : 'group-hover:brightness-110'
-                      }`}
-                      style={{
-                        height: `${Math.max(heightPercentage, 2)}%`,
-                        background: dayData.isToday
-                          ? 'linear-gradient(to top, #00677F, #007D99)'
-                          : dayData.isPast
-                          ? 'linear-gradient(to top, #00A9B8, #00C4D6)'
-                          : dayData.total > 0
-                          ? 'linear-gradient(to top, #00677F, #008AA4)'
-                          : 'linear-gradient(to top, #E5ECEF, #CDD5D9)',
-                        boxShadow: dayData.isToday ? '0 8px 16px rgba(0, 103, 127, 0.3)' : 'none',
-                        border: dayData.isToday ? '2px solid #00A9B8' : 'none',
-                      }}
-                    >
-                      {/* Indicador de horas extra */}
-                      {dayData.overtime > 0 && (
-                        <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(190, 138, 58, 0.4), rgba(190, 138, 58, 0.2))' }} />
-                      )}
+                    {/* Barra principal - 🆕 Dividida por obra quando há múltiplos registos */}
+                    {dayData.entries && dayData.entries.length > 1 ? (
+                      // 🆕 Múltiplos registos - dividir barra
+                      <div
+                        className="w-full rounded-t-xl overflow-hidden transition-all duration-500 ease-out"
+                        style={{
+                          height: `${Math.max(heightPercentage, 2)}%`,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          border: dayData.isToday ? '2px solid #00A9B8' : 'none',
+                          boxShadow: dayData.isToday ? '0 8px 16px rgba(0, 103, 127, 0.3)' : 'none',
+                        }}
+                      >
+                        {dayData.entries.map((entry, idx) => {
+                          const entryPercentage = (entry.total / dayData.total) * 100;
+                          return (
+                            <div
+                              key={idx}
+                              className="relative group/segment"
+                              style={{
+                                flex: `${entryPercentage} 0 0`,
+                                background: dayData.isToday
+                                  ? 'linear-gradient(to top, #00677F, #007D99)'
+                                  : dayData.isPast
+                                  ? 'linear-gradient(to top, #00A9B8, #00C4D6)'
+                                  : 'linear-gradient(to top, #00677F, #008AA4)',
+                                borderTop: idx > 0 ? '1px solid rgba(255, 255, 255, 0.3)' : 'none',
+                                minHeight: '16px',
+                              }}
+                            >
+                              {/* Overlay de horas extra */}
+                              {entry.overtime > 0 && (
+                                <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(190, 138, 58, 0.5), rgba(190, 138, 58, 0.2))' }} />
+                              )}
 
-                      {/* Shimmer effect ao hover */}
-                      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="absolute inset-0 bg-gradient-to-t from-white/20 to-transparent" />
+                              {/* 🆕 Mostrar nome da obra e horas no segmento */}
+                              <div className="absolute inset-0 flex flex-col items-center justify-center px-1 text-center">
+                                <div className="text-[9px] font-bold text-white leading-tight opacity-90 line-clamp-2">
+                                  {entry.project}
+                                </div>
+                                <div className="text-[10px] font-bold text-white mt-0.5">
+                                  {entry.total}h
+                                </div>
+                              </div>
+
+                              {/* Shimmer effect ao hover */}
+                              <div className="absolute inset-0 opacity-0 group-hover/segment:opacity-100 transition-opacity">
+                                <div className="absolute inset-0 bg-gradient-to-t from-white/30 to-transparent" />
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    </div>
+                    ) : (
+                      // Registo único - barra normal
+                      <div
+                        className={`w-full rounded-t-xl transition-all duration-500 ease-out relative overflow-hidden ${
+                          dayData.total === 0 ? 'opacity-30' : 'group-hover:brightness-110'
+                        }`}
+                        style={{
+                          height: `${Math.max(heightPercentage, 2)}%`,
+                          background: dayData.isToday
+                            ? 'linear-gradient(to top, #00677F, #007D99)'
+                            : dayData.isPast
+                            ? 'linear-gradient(to top, #00A9B8, #00C4D6)'
+                            : dayData.total > 0
+                            ? 'linear-gradient(to top, #00677F, #008AA4)'
+                            : 'linear-gradient(to top, #E5ECEF, #CDD5D9)',
+                          boxShadow: dayData.isToday ? '0 8px 16px rgba(0, 103, 127, 0.3)' : 'none',
+                          border: dayData.isToday ? '2px solid #00A9B8' : 'none',
+                        }}
+                      >
+                        {/* Indicador de horas extra */}
+                        {dayData.overtime > 0 && (
+                          <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(190, 138, 58, 0.4), rgba(190, 138, 58, 0.2))' }} />
+                        )}
+
+                        {/* Shimmer effect ao hover */}
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="absolute inset-0 bg-gradient-to-t from-white/20 to-transparent" />
+                        </div>
+                      </div>
+                    )}
 
                     {/* Valor no topo da barra */}
                     {dayData.total > 0 && (
