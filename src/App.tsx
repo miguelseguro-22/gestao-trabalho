@@ -1395,13 +1395,31 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,auth}
 
       {/* Resumo do dia */}
       {list.length > 0 && (
-        <div className="flex justify-center">
-          <div className="rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 p-4 text-center min-w-[120px]">
-            <div className="text-3xl font-bold text-blue-700 dark:text-blue-300">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 p-3 text-center">
+            <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">
               {list.length}
             </div>
-            <div className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+            <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
               {list.length === 1 ? 'Registo' : 'Registos'}
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900 p-3 text-center">
+            <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
+              {totalHours}h
+            </div>
+            <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+              Horas Normais
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900 p-3 text-center">
+            <div className="text-2xl font-bold text-amber-700 dark:text-amber-300">
+              +{totalOvertime}h
+            </div>
+            <div className="text-xs text-amber-600 dark:text-emerald-400 mt-1">
+              Horas Extra
             </div>
           </div>
         </div>
@@ -11134,7 +11152,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                           {period.days} {period.days === 1 ? 'dia' : 'dias'}
                         </div>
                       </div>
-                      {period.notes && (
+                      {period.notes && !period.notes.startsWith('Importado') && (
                         <div className="text-sm text-slate-500 dark:text-slate-400">
                           📝 {period.notes}
                         </div>
@@ -11746,24 +11764,8 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                 {/* HORAS TOTAIS */}
                 {infoModal.type === 'totalHours' && (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 rounded-xl" style={{ background: 'linear-gradient(to br, #00A9B8, #008A96)' }}>
-                        <div className="text-white text-sm opacity-90">Horas Normais</div>
-                        <div className="text-white text-3xl font-bold mt-2">{infoModal.data.stats.totalHours}h</div>
-                      </div>
-                      <div className="p-4 rounded-xl" style={{ background: 'linear-gradient(to br, #BE8A3A, #A07430)' }}>
-                        <div className="text-white text-sm opacity-90">Horas Extra</div>
-                        <div className="text-white text-3xl font-bold mt-2">{infoModal.data.stats.totalOvertime}h</div>
-                      </div>
-                    </div>
-                    <div className="p-4 rounded-xl border dark:border-slate-800">
-                      <div className="text-sm text-slate-600 dark:text-slate-400">Total Combinado</div>
-                      <div className="text-4xl font-bold text-slate-800 dark:text-slate-100 mt-2">
-                        {infoModal.data.stats.totalHours + infoModal.data.stats.totalOvertime}h
-                      </div>
-                      <div className="text-xs text-slate-500 mt-2">
-                        {infoModal.data.stats.daysWorked} dias trabalhados em {selectedYear}
-                      </div>
+                    <div className="text-center text-slate-500 dark:text-slate-400 py-8">
+                      Consulte os detalhes de horas na página de Timesheets
                     </div>
                   </div>
                 )}
