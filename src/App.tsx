@@ -1235,26 +1235,6 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
                   )}
                 </div>
               )}
-              {/* Diagonal text for Férias, Baixa, Falta */}
-              {inCycle && has && (primary === 'Férias' || primary === 'Baixa' || primary === 'Falta') && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%) rotate(-45deg)',
-                    fontSize: '14px',
-                    fontWeight: '700',
-                    color: 'rgba(255, 255, 255, 0.9)',
-                    textShadow: '1px 1px 2px rgba(0, 0, 0, 0.3)',
-                    pointerEvents: 'none',
-                    whiteSpace: 'nowrap',
-                    userSelect: 'none'
-                  }}
-                >
-                  {primary}
-                </div>
-              )}
             </button>
           );
         })}
