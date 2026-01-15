@@ -10131,10 +10131,19 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
   // Para admin/encarregado/diretor: TODOS os registos do ano
   const myEntries = useMemo(() => {
     return timeEntries.filter((t) => {
-      const year = new Date(t.date || t.periodStart).getFullYear();
+      const entryDate = new Date(t.date || t.periodStart);
+      const year = entryDate.getFullYear();
+      const month = entryDate.getMonth(); // 0 = Janeiro, 11 = Dezembro
 
-      // Apenas filtrar por ano (não por nome)
-      // O filtro por role já foi aplicado em filteredTimeEntries
+      // 🆕 Para férias: incluir até março do ano seguinte
+      if (t.template === 'Férias') {
+        // Incluir registos do ano selecionado OU
+        // Janeiro-Março do ano seguinte
+        return (year === selectedYear) ||
+               (year === selectedYear + 1 && month <= 2); // meses 0, 1, 2 = Jan, Fev, Mar
+      }
+
+      // Para outros registos: filtrar apenas por ano
       return year === selectedYear;
     });
   }, [timeEntries, selectedYear]);
@@ -10239,10 +10248,29 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       .sort((a, b) => b.hours - a.hours)
       .slice(0, 5);
 
+    // 🆕 Calcular dias úteis do ano (excluindo fins de semana)
+    const startOfYear = new Date(selectedYear, 0, 1); // 1 de Janeiro
+    const endOfYear = new Date(selectedYear, 11, 31); // 31 de Dezembro
+    let workingDaysInYear = 0;
+
+    for (let d = new Date(startOfYear); d <= endOfYear; d.setDate(d.getDate() + 1)) {
+      const dow = d.getDay();
+      if (dow !== 0 && dow !== 6) { // Não é sábado nem domingo
+        workingDaysInYear++;
+      }
+    }
+
+    // 🆕 Calcular taxa de presença (%)
+    const attendanceRate = workingDaysInYear > 0
+      ? Math.round((daysWorked.size / workingDaysInYear) * 100)
+      : 0;
+
     return {
       totalHours,
       totalOvertime,
       daysWorked: daysWorked.size,
+      workingDaysInYear,
+      attendanceRate,
       holidayDays,
       sickDays,
       absenceDays,
@@ -10251,7 +10279,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       sickEntries,
       absenceEntries,
     };
-  }, [myEntries]);
+  }, [myEntries, selectedYear]);
 
   // Calcular estatísticas mensais (dia 21 do mês anterior até dia 20 do mês atual)
   const monthlyStats = useMemo(() => {
@@ -10976,11 +11004,11 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
         <Card
           className="p-5 text-white cursor-pointer hover:scale-105 transition-all"
           style={{ background: 'linear-gradient(to bottom right, #00A9B8, #008A96)' }}
-          onClick={() => setInfoModal({ type: 'totalHours', data: { stats, myEntries } })}
+          onClick={() => setInfoModal({ type: 'attendance', data: { stats } })}
         >
-          <div className="text-sm opacity-90">Horas Totais</div>
-          <div className="text-4xl font-bold mt-2">{stats.totalHours}h</div>
-          <div className="text-sm opacity-80 mt-1">horas trabalhadas ({stats.totalOvertime}h extra)</div>
+          <div className="text-sm opacity-90">Taxa de Presença</div>
+          <div className="text-4xl font-bold mt-2">{stats.attendanceRate}%</div>
+          <div className="text-sm opacity-80 mt-1">{stats.daysWorked} de {stats.workingDaysInYear} dias úteis</div>
           <div className="text-xs opacity-70 mt-2">👆 Clique para detalhes</div>
         </Card>
 
@@ -10992,7 +11020,8 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
           <div className="text-sm opacity-90">Férias Gozadas</div>
           <div className="text-4xl font-bold mt-2">{stats.holidayDays}</div>
           <div className="text-sm opacity-80 mt-1">dias de férias · {stats.holidayEntries.length} períodos</div>
-          <div className="text-xs opacity-70 mt-2">👆 Clique para detalhes</div>
+          <div className="text-xs opacity-70 mt-1">{selectedYear} até Mar {selectedYear + 1}</div>
+          <div className="text-xs opacity-70 mt-1">👆 Clique para detalhes</div>
         </Card>
 
         <Card
@@ -11861,7 +11890,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                   {infoModal.type === 'catalog' && '📋 Lista de Itens do Catálogo'}
                   {infoModal.type === 'activeToday' && '👷 Colaboradores Ativos Hoje'}
                   {infoModal.type === 'monthlyOverview' && '📅 Visão Mensal Detalhada'}
-                  {infoModal.type === 'totalHours' && '⏰ Distribuição de Horas'}
+                  {infoModal.type === 'attendance' && '📊 Taxa de Presença'}
                   {infoModal.type === 'holidays' && '🏖️ Histórico de Férias'}
                   {infoModal.type === 'absences' && '🤒 Histórico de Baixas e Faltas'}
                   {infoModal.type === 'projectDetail' && '🏗️ Análise Detalhada da Obra'}
@@ -12089,10 +12118,24 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                 )}
 
                 {/* HORAS TOTAIS */}
-                {infoModal.type === 'totalHours' && (
+                {infoModal.type === 'attendance' && (
                   <div className="space-y-4">
-                    <div className="text-center text-slate-500 dark:text-slate-400 py-8">
-                      Consulte os detalhes de horas na página de Timesheets
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
+                        <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">Dias Trabalhados</div>
+                        <div className="text-3xl font-bold text-blue-700 dark:text-blue-300">{infoModal.data.stats.daysWorked}</div>
+                      </div>
+                      <div className="p-4 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
+                        <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">Dias Úteis</div>
+                        <div className="text-3xl font-bold text-slate-700 dark:text-slate-300">{infoModal.data.stats.workingDaysInYear}</div>
+                      </div>
+                    </div>
+                    <div className="p-6 rounded-xl bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 text-center">
+                      <div className="text-sm text-green-600 dark:text-green-400 mb-2">Taxa de Presença</div>
+                      <div className="text-5xl font-bold text-green-700 dark:text-green-300">{infoModal.data.stats.attendanceRate}%</div>
+                      <div className="text-sm text-green-600 dark:text-green-400 mt-2">
+                        {infoModal.data.stats.attendanceRate >= 90 ? '🌟 Excelente!' : infoModal.data.stats.attendanceRate >= 75 ? '✅ Bom' : '⚠️ Pode melhorar'}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -12102,9 +12145,10 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                   <div className="space-y-3">
                     <div className="text-sm text-slate-600 dark:text-slate-400 mb-4">
                       {infoModal.data.stats.holidayDays} dias de férias em {infoModal.data.stats.holidayEntries.length} períodos
+                      <div className="text-xs mt-1 opacity-70">Período: {selectedYear} até Março {selectedYear + 1}</div>
                     </div>
                     {infoModal.data.stats.holidayEntries.length === 0 ? (
-                      <div className="text-center text-slate-500 py-8">Sem férias registadas em {selectedYear}</div>
+                      <div className="text-center text-slate-500 py-8">Sem férias registadas de {selectedYear} até Março {selectedYear + 1}</div>
                     ) : (
                       infoModal.data.stats.holidayEntries.map((entry, i) => (
                         <div key={i} className="p-4 rounded-xl border dark:border-slate-800 hover:shadow-md transition-shadow">
