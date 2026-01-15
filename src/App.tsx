@@ -10279,9 +10279,11 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
         workerEntries.forEach((entries, worker) => {
           const numWorks = entries.length;
 
-          // Calcular totais do trabalhador
-          const totalWorkerHours = entries.reduce((sum, e) => sum + e.hours, 0);
-          const totalWorkerOvertime = entries.reduce((sum, e) => sum + e.overtime, 0);
+          // 🐛 FIX: Usar o primeiro registo para saber as horas reais (não somar!)
+          // Se trabalhador tem 2 obras com 8h cada, o total real é 8h (não 16h)
+          const firstEntry = entries[0];
+          const totalWorkerHours = Number(firstEntry.hours) || 0;
+          const totalWorkerOvertime = Number(firstEntry.overtime) || 0;
 
           // 🆕 Distribuir horas inteiras (ex: 8h ÷ 3 = [3, 3, 2])
           const hoursDistribution = distributeHours(totalWorkerHours, numWorks);
