@@ -139,6 +139,24 @@ const isNormalWork = (template) => {
   return t.includes('trabalho') || t.includes('normal') || t.includes('horário');
 };
 
+// 🆕 Distribui horas inteiras entre obras (sem decimais)
+// Exemplo: 8h ÷ 3 obras = [3h, 3h, 2h] em vez de [2.67h, 2.67h, 2.67h]
+const distributeHours = (totalHours, numWorks) => {
+  if (numWorks === 0) return [];
+  if (numWorks === 1) return [totalHours];
+
+  const base = Math.floor(totalHours / numWorks); // Base para todas as obras
+  const remainder = totalHours - (base * numWorks); // Horas que sobram
+
+  // Criar array: primeiras 'remainder' obras recebem base+1, restantes recebem base
+  const distribution = [];
+  for (let i = 0; i < numWorks; i++) {
+    distribution.push(i < remainder ? base + 1 : base);
+  }
+
+  return distribution;
+};
+
 const REQUESTER_SUGGESTIONS = ['Paulo Silva','Paulo Carujo','Hélder Pinto','António Sousa','André Sequeira','Alexandre Pires','Laura Luz','Márcio Batista','Cláudio Alves','José Duarte'];
 
 const uid=()=>Math.random().toString(36).slice(2,9);
@@ -1307,39 +1325,52 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,auth}
   };
   const list=timeEntries.filter(matches);
 
-  // 🆕 Calcular horas automáticas para Trabalho Normal baseado em deslocação
-  const listWithCalculatedHours = list.map(t => {
-    // ✅ Incluir também registos de fim de semana
-    if (t.template !== 'Trabalho Normal' && t.template !== 'Trabalho - Fim de Semana/Feriado') return t;
+  // 🆕 Calcular horas automáticas para Trabalho Normal baseado em deslocação (SEM DECIMAIS)
+  const listWithCalculatedHours = (() => {
+    // Primeiro, agrupar por trabalhador e tipo (deslocado/não deslocado)
+    const grouped = new Map(); // Key: worker|type
 
-    // Verifica se é deslocado
-    const displacementValue = String(t.displacement || '').toLowerCase().trim();
-    const isDisplaced = displacementValue === 'sim';
+    list.forEach(t => {
+      // ✅ Incluir também registos de fim de semana
+      if (t.template !== 'Trabalho Normal' && t.template !== 'Trabalho - Fim de Semana/Feriado') return;
 
-    // 🐛 DEBUG: Mostrar valor do displacement
-    console.log('🔍 Displacement check:', {
-      worker: t.worker,
-      project: t.project,
-      displacement: t.displacement,
-      normalized: displacementValue,
-      isDisplaced
+      const displacementValue = String(t.displacement || '').toLowerCase().trim();
+      const isDisplaced = displacementValue === 'sim';
+      const worker = t.worker || 'Unknown';
+      const key = `${worker}|${isDisplaced}`;
+
+      if (!grouped.has(key)) {
+        grouped.set(key, []);
+      }
+      grouped.get(key).push({ ...t, isDisplaced });
     });
 
-    // Conta registos do mesmo tipo (deslocado/não deslocado) no mesmo dia
-    const sameTypeCount = list.filter(entry =>
-      (entry.template === 'Trabalho Normal' || entry.template === 'Trabalho - Fim de Semana/Feriado') &&
-      ((entry.displacement || '').toLowerCase().trim() === 'sim') === isDisplaced
-    ).length;
+    // Para cada grupo, distribuir horas inteiras
+    const result = list.map(t => {
+      if (t.template !== 'Trabalho Normal' && t.template !== 'Trabalho - Fim de Semana/Feriado') return t;
 
-    // Divide 8h pelo número de registos do mesmo tipo
-    const calculatedHours = sameTypeCount > 0 ? 8 / sameTypeCount : 8;
+      const displacementValue = String(t.displacement || '').toLowerCase().trim();
+      const isDisplaced = displacementValue === 'sim';
+      const worker = t.worker || 'Unknown';
+      const key = `${worker}|${isDisplaced}`;
 
-    return {
-      ...t,
-      hours: calculatedHours,
-      isDisplaced // Adiciona flag para usar no render
-    };
-  });
+      const group = grouped.get(key) || [];
+      const numWorks = group.length;
+
+      // 🆕 Distribuir 8h inteiras entre as obras (ex: 8h ÷ 3 = [3, 3, 2])
+      const hoursDistribution = distributeHours(8, numWorks);
+      const index = group.findIndex(entry => entry === t || (entry.id === t.id && entry.project === t.project));
+      const calculatedHours = hoursDistribution[index] || 0;
+
+      return {
+        ...t,
+        hours: calculatedHours,
+        isDisplaced
+      };
+    });
+
+    return result;
+  })();
 
   // Calcular totais
   const totalHours = listWithCalculatedHours.reduce((sum, t) => sum + (Number(t.hours) || 0), 0);
@@ -10228,7 +10259,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
         }
       });
 
-      // 🆕 Dividir horas pelo número de obras quando há múltiplos registos
+      // 🆕 Dividir horas pelo número de obras quando há múltiplos registos (SEM DECIMAIS)
       let hours = 0;
       let overtime = 0;
 
@@ -10247,9 +10278,18 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
         const adjustedEntries = [];
         workerEntries.forEach((entries, worker) => {
           const numWorks = entries.length;
-          entries.forEach(entry => {
-            const adjustedHours = entry.hours / numWorks;
-            const adjustedOvertime = entry.overtime / numWorks;
+
+          // Calcular totais do trabalhador
+          const totalWorkerHours = entries.reduce((sum, e) => sum + e.hours, 0);
+          const totalWorkerOvertime = entries.reduce((sum, e) => sum + e.overtime, 0);
+
+          // 🆕 Distribuir horas inteiras (ex: 8h ÷ 3 = [3, 3, 2])
+          const hoursDistribution = distributeHours(totalWorkerHours, numWorks);
+          const overtimeDistribution = distributeHours(totalWorkerOvertime, numWorks);
+
+          entries.forEach((entry, idx) => {
+            const adjustedHours = hoursDistribution[idx] || 0;
+            const adjustedOvertime = overtimeDistribution[idx] || 0;
             adjustedEntries.push({
               ...entry,
               hours: adjustedHours,
@@ -19684,13 +19724,13 @@ function TimesheetsView({ onViewChange, cycleOffset }: { onViewChange?: boolean;
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
       .slice(0, 5);
 
-    // 🆕 Calcular horas ajustadas dividindo pelo número de obras no mesmo dia
+    // 🆕 Calcular horas ajustadas com distribuição inteira (SEM DECIMAIS)
     return entries.map(entry => {
       if (entry.template !== 'Trabalho Normal' && entry.template !== 'Trabalho - Fim de Semana/Feriado') {
         return entry;
       }
 
-      // Contar quantas obras diferentes o trabalhador tem no mesmo dia
+      // Buscar TODOS os registos do mesmo trabalhador no mesmo dia
       const sameDay = visibleTimeEntries.filter(e =>
         e.worker === entry.worker &&
         e.date === entry.date &&
@@ -19702,14 +19742,24 @@ function TimesheetsView({ onViewChange, cycleOffset }: { onViewChange?: boolean;
         return entry;
       }
 
-      // Se houver múltiplos registos, dividir as horas pelo número de registos
-      const adjustedHours = (Number(entry.hours) || 0) / sameDay.length;
-      const adjustedOvertime = (Number(entry.overtime) || 0) / sameDay.length;
+      // 🆕 Calcular totais reais do trabalhador nesse dia
+      const totalHours = sameDay.reduce((sum, e) => sum + (Number(e.hours) || 0), 0);
+      const totalOvertime = sameDay.reduce((sum, e) => sum + (Number(e.overtime) || 0), 0);
+
+      // 🆕 Distribuir horas inteiras (ex: 8h ÷ 3 = [3, 3, 2])
+      const hoursDistribution = distributeHours(totalHours, sameDay.length);
+      const overtimeDistribution = distributeHours(totalOvertime, sameDay.length);
+
+      // Encontrar índice do registo atual
+      const index = sameDay.findIndex(e =>
+        e.id === entry.id ||
+        (e.project === entry.project && e.worker === entry.worker && e.date === entry.date)
+      );
 
       return {
         ...entry,
-        displayHours: adjustedHours,
-        displayOvertime: adjustedOvertime
+        displayHours: hoursDistribution[index] || 0,
+        displayOvertime: overtimeDistribution[index] || 0
       };
     });
   }, [visibleTimeEntries]);
