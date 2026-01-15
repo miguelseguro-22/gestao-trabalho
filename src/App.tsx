@@ -10208,11 +10208,12 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       const dateStr = date.toISOString().slice(0, 10);
 
       // 🆕 Coletar todos os registos deste dia com detalhes
+      // 🐛 FIX: Usar timeEntries diretamente em vez de myEntries (que filtra por selectedYear)
       const dayEntries = [];
       let hours = 0;
       let overtime = 0;
 
-      myEntries.forEach((entry) => {
+      timeEntries.forEach((entry) => {
         if (entry.date === dateStr && isNormalWork(entry.template)) {
           const entryHours = Number(entry.hours) || 0;
           const entryOvertime = Number(entry.overtime) || 0;
@@ -10266,7 +10267,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       startDate,
       endDate,
     };
-  }, [myEntries, weekOffset]);
+  }, [timeEntries, weekOffset]);
 
   // Cores para o gráfico (paleta Engitagus)
   const colors = [
