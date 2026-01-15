@@ -1058,7 +1058,8 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
       const cur = m.get(iso);
       if (project) cur.projects.add(project);
       const ot = Number(overtime) || 0;
-      if (ot) cur.overtime = Number((cur.overtime || 0) + ot);
+      // ✅ FIX: Garantir que cur.overtime é sempre número antes de somar
+      if (ot) cur.overtime = Number(cur.overtime || 0) + ot;
       // 🆕 Contar status
       if (status === 'pending') cur.statuses.pending++;
       else if (status === 'approved') cur.statuses.approved++;
@@ -1066,7 +1067,8 @@ const CycleCalendar = ({ timeEntries, onDayClick, auth, offset = 0, setOffset = 
     };
 
     timeEntries.forEach((t) => {
-      if (t.template !== 'Trabalho Normal') return;
+      // ✅ FIX: Incluir também registos de fim de semana
+      if (t.template !== 'Trabalho Normal' && t.template !== 'Trabalho - Fim de Semana/Feriado') return;
       const d = new Date(t.date);
       if (!(d >= start && d <= end)) return;
       const iso = d.toISOString().slice(0, 10);
