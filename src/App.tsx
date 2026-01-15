@@ -157,6 +157,44 @@ const distributeHours = (totalHours, numWorks) => {
   return distribution;
 };
 
+// 🆕 Calcular horas trabalhadas (hora fim - hora início) descontando refeições
+// Almoço: 12:00-13:00, Jantar: 19:00-20:00
+const calculateWeekendHours = (startTime, endTime) => {
+  if (!startTime || !endTime) return 0;
+
+  // Parse horas (formato "HH:MM:SS" ou "HH:MM")
+  const parseTime = (timeStr) => {
+    if (!timeStr) return null;
+    const parts = String(timeStr).split(':');
+    if (parts.length < 2) return null;
+    const hours = parseInt(parts[0], 10);
+    const minutes = parseInt(parts[1], 10);
+    if (isNaN(hours) || isNaN(minutes)) return null;
+    return hours + minutes / 60; // Retorna em horas decimais
+  };
+
+  const start = parseTime(startTime);
+  const end = parseTime(endTime);
+
+  if (start === null || end === null) return 0;
+
+  // Calcular diferença
+  let totalHours = end - start;
+  if (totalHours < 0) totalHours += 24; // Se passou da meia-noite
+
+  // Verificar se inclui almoço (12:00-13:00)
+  const hasLunch = start < 13 && end > 12;
+
+  // Verificar se inclui jantar (19:00-20:00)
+  const hasDinner = start < 20 && end > 19;
+
+  // Descontar refeições
+  if (hasLunch) totalHours -= 1;
+  if (hasDinner) totalHours -= 1;
+
+  return Math.max(0, Math.round(totalHours)); // Retorna inteiro, mínimo 0
+};
+
 const REQUESTER_SUGGESTIONS = ['Paulo Silva','Paulo Carujo','Hélder Pinto','António Sousa','André Sequeira','Alexandre Pires','Laura Luz','Márcio Batista','Cláudio Alves','José Duarte'];
 
 const uid=()=>Math.random().toString(36).slice(2,9);
@@ -1349,6 +1387,17 @@ const DayDetails=({dateISO,timeEntries,onNew,onEdit,onDuplicate,onNavigate,auth}
     const result = list.map(t => {
       if (t.template !== 'Trabalho Normal' && t.template !== 'Trabalho - Fim de Semana/Feriado') return t;
 
+      // 🆕 Para FDS, calcular horas baseado em hora início/fim
+      if (t.template === 'Trabalho - Fim de Semana/Feriado') {
+        const calculatedHours = calculateWeekendHours(t.weekendStartTime, t.weekendEndTime);
+        return {
+          ...t,
+          hours: calculatedHours,
+          isDisplaced: false
+        };
+      }
+
+      // Para Trabalho Normal, continuar com lógica de distribuição
       const displacementValue = String(t.displacement || '').toLowerCase().trim();
       const isDisplaced = displacementValue === 'sim';
       const worker = t.worker || 'Unknown';
@@ -10259,8 +10308,14 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
 
       timeEntries.forEach((entry) => {
         if (entry.date === dateStr && isNormalWork(entry.template)) {
-          const entryHours = Number(entry.hours) || 0;
-          const entryOvertime = Number(entry.overtime) || 0;
+          let entryHours = Number(entry.hours) || 0;
+          let entryOvertime = Number(entry.overtime) || 0;
+
+          // 🆕 Para FDS, calcular horas baseado em hora início/fim
+          if (entry.template === 'Trabalho - Fim de Semana/Feriado') {
+            entryHours = calculateWeekendHours(entry.weekendStartTime, entry.weekendEndTime);
+            entryOvertime = 0; // Overtime separado já vem no campo overtime
+          }
 
           // 🆕 Guardar detalhes do registo
           dayEntries.push({
@@ -10279,57 +10334,71 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       let overtime = 0;
 
       if (dayEntries.length > 0) {
-        // Agrupar por trabalhador para dividir corretamente
-        const workerEntries = new Map();
-        dayEntries.forEach(entry => {
-          const worker = entry.worker || 'Unknown';
-          if (!workerEntries.has(worker)) {
-            workerEntries.set(worker, []);
-          }
-          workerEntries.get(worker).push(entry);
-        });
+        // 🆕 Separar registos FDS dos normais
+        const weekendEntries = dayEntries.filter(e => e.template === 'Trabalho - Fim de Semana/Feriado');
+        const normalEntries = dayEntries.filter(e => e.template === 'Trabalho Normal');
 
-        // Para cada trabalhador, dividir as horas pelo número de obras
         const adjustedEntries = [];
-        workerEntries.forEach((entries, worker) => {
-          const numWorks = entries.length;
 
-          // 🔍 Verificar se TODOS os registos têm as MESMAS horas (indicando duplicados)
-          const allHoursSame = entries.every(e => e.hours === entries[0].hours);
-          const allOvertimeSame = entries.every(e => e.overtime === entries[0].overtime);
-
-          if (numWorks > 1 && allHoursSame) {
-            // 🆕 Todos têm mesmas horas → são duplicados → dividir
-            const totalWorkerHours = Number(entries[0].hours) || 0;
-            const totalWorkerOvertime = Number(entries[0].overtime) || 0;
-
-            // Distribuir horas inteiras (ex: 8h ÷ 3 = [3, 3, 2])
-            const hoursDistribution = distributeHours(totalWorkerHours, numWorks);
-            const overtimeDistribution = allOvertimeSame
-              ? distributeHours(totalWorkerOvertime, numWorks)
-              : entries.map(e => Number(e.overtime) || 0);
-
-            entries.forEach((entry, idx) => {
-              const adjustedHours = hoursDistribution[idx] || 0;
-              const adjustedOvertime = overtimeDistribution[idx] || 0;
-              adjustedEntries.push({
-                ...entry,
-                hours: adjustedHours,
-                overtime: adjustedOvertime,
-                total: adjustedHours + adjustedOvertime
-              });
-              hours += adjustedHours;
-              overtime += adjustedOvertime;
-            });
-          } else {
-            // ✅ Horas diferentes → manter originais (já são específicas por obra)
-            entries.forEach(entry => {
-              adjustedEntries.push(entry);
-              hours += Number(entry.hours) || 0;
-              overtime += Number(entry.overtime) || 0;
-            });
-          }
+        // 🆕 Registos FDS: manter como estão (já calculados corretamente)
+        weekendEntries.forEach(entry => {
+          adjustedEntries.push(entry);
+          hours += Number(entry.hours) || 0;
+          overtime += Number(entry.overtime) || 0;
         });
+
+        // Registos normais: agrupar por trabalhador e dividir se necessário
+        if (normalEntries.length > 0) {
+          const workerEntries = new Map();
+          normalEntries.forEach(entry => {
+            const worker = entry.worker || 'Unknown';
+            if (!workerEntries.has(worker)) {
+              workerEntries.set(worker, []);
+            }
+            workerEntries.get(worker).push(entry);
+          });
+
+          // Para cada trabalhador, dividir as horas pelo número de obras
+          workerEntries.forEach((entries, worker) => {
+            const numWorks = entries.length;
+
+            // 🔍 Verificar se TODOS os registos têm as MESMAS horas (indicando duplicados)
+            const allHoursSame = entries.every(e => e.hours === entries[0].hours);
+            const allOvertimeSame = entries.every(e => e.overtime === entries[0].overtime);
+
+            if (numWorks > 1 && allHoursSame) {
+              // 🆕 Todos têm mesmas horas → são duplicados → dividir
+              const totalWorkerHours = Number(entries[0].hours) || 0;
+              const totalWorkerOvertime = Number(entries[0].overtime) || 0;
+
+              // Distribuir horas inteiras (ex: 8h ÷ 3 = [3, 3, 2])
+              const hoursDistribution = distributeHours(totalWorkerHours, numWorks);
+              const overtimeDistribution = allOvertimeSame
+                ? distributeHours(totalWorkerOvertime, numWorks)
+                : entries.map(e => Number(e.overtime) || 0);
+
+              entries.forEach((entry, idx) => {
+                const adjustedHours = hoursDistribution[idx] || 0;
+                const adjustedOvertime = overtimeDistribution[idx] || 0;
+                adjustedEntries.push({
+                  ...entry,
+                  hours: adjustedHours,
+                  overtime: adjustedOvertime,
+                  total: adjustedHours + adjustedOvertime
+                });
+                hours += adjustedHours;
+                overtime += adjustedOvertime;
+              });
+            } else {
+              // ✅ Horas diferentes → manter originais (já são específicas por obra)
+              entries.forEach(entry => {
+                adjustedEntries.push(entry);
+                hours += Number(entry.hours) || 0;
+                overtime += Number(entry.overtime) || 0;
+              });
+            }
+          });
+        }
 
         // Substituir dayEntries pelos valores ajustados
         dayEntries.length = 0;
