@@ -9939,6 +9939,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
   const [infoModal, setInfoModal] = useState(null); // 📊 Modal para detalhes dos cards clicáveis
   const [showDebugPanel, setShowDebugPanel] = useState(false); // 🐛 Painel de debug de férias
   const [weekOffset, setWeekOffset] = useState(0); // 📅 Offset de semanas (0 = atual, -1 = anterior, +1 = próxima)
+  const [attendanceYear, setAttendanceYear] = useState(new Date().getFullYear()); // 📊 Ano para taxa de presença
 
   // 🔔 ALERTAS DE TAREFAS DA AGENDA
   const todayString = new Date().toISOString().slice(0, 10);
@@ -10172,14 +10173,14 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
     const sickEntries = [];
     const absenceEntries = [];
 
-    // 🆕 Usar ano atual para Taxa de Presença (independente do selectedYear)
+    // 🆕 Usar attendanceYear para Taxa de Presença (pode ser diferente do selectedYear)
     const now = new Date();
     const currentYear = now.getFullYear();
 
-    // 🆕 Filtrar entradas do ANO ATUAL para Taxa de Presença
+    // 🆕 Filtrar entradas do ATTENDANCE YEAR para Taxa de Presença
     const currentYearEntries = timeEntries.filter(entry => {
       const entryDate = new Date(entry.date || entry.periodStart);
-      return entryDate.getFullYear() === currentYear;
+      return entryDate.getFullYear() === attendanceYear;
     });
 
     // ✅ DEDUPLICAR períodos de férias/baixas ANTES de processar
@@ -10279,13 +10280,26 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       .sort((a, b) => b.hours - a.hours)
       .slice(0, 5);
 
-    // 🆕 Calcular dias úteis do ANO ATUAL até HOJE (excluindo fins de semana)
-    const startOfYear = new Date(currentYear, 0, 1); // 1 de Janeiro do ano atual
+    // 🆕 Calcular dias úteis do ATTENDANCE YEAR (excluindo fins de semana)
+    const startOfYear = new Date(attendanceYear, 0, 1); // 1 de Janeiro do attendance year
     const today = new Date();
     today.setHours(23, 59, 59, 999);
-    let workingDaysInYear = 0;
 
-    for (let d = new Date(startOfYear); d <= today; d.setDate(d.getDate() + 1)) {
+    // Se o ano é no passado, conta o ano inteiro. Se é o atual ou futuro, conta até hoje.
+    let endOfPeriod;
+    if (attendanceYear < currentYear) {
+      // Ano passado: conta até 31 de Dezembro
+      endOfPeriod = new Date(attendanceYear, 11, 31, 23, 59, 59, 999);
+    } else if (attendanceYear === currentYear) {
+      // Ano atual: conta até hoje
+      endOfPeriod = today;
+    } else {
+      // Ano futuro: conta até hoje (se já começou) ou 0
+      endOfPeriod = today;
+    }
+
+    let workingDaysInYear = 0;
+    for (let d = new Date(startOfYear); d <= endOfPeriod; d.setDate(d.getDate() + 1)) {
       const dow = d.getDay();
       if (dow !== 0 && dow !== 6) { // Não é sábado nem domingo
         workingDaysInYear++;
@@ -10362,7 +10376,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       vacationStartYear,
       vacationEndYear,
     };
-  }, [timeEntries, selectedYear, myEntries]);
+  }, [timeEntries, selectedYear, myEntries, attendanceYear]);
 
   // Calcular estatísticas mensais (dia 21 do mês anterior até dia 20 do mês atual)
   const monthlyStats = useMemo(() => {
@@ -12217,9 +12231,36 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                   </div>
                 )}
 
-                {/* HORAS TOTAIS */}
+                {/* TAXA DE PRESENÇA */}
                 {infoModal.type === 'attendance' && (
                   <div className="space-y-4">
+                    {/* Navegação de Ano */}
+                    <div className="flex items-center justify-center gap-4 mb-4">
+                      <button
+                        onClick={() => setAttendanceYear(attendanceYear - 1)}
+                        className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        title="Ano anterior"
+                      >
+                        <svg className="w-5 h-5 text-slate-600 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+
+                      <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+                        {attendanceYear}
+                      </div>
+
+                      <button
+                        onClick={() => setAttendanceYear(attendanceYear + 1)}
+                        className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        title="Próximo ano"
+                      >
+                        <svg className="w-5 h-5 text-slate-600 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4 mb-4">
                       <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
                         <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">Dias Trabalhados</div>
