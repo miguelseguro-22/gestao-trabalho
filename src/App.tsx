@@ -10167,7 +10167,6 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
     let holidayDays = 0;
     let sickDays = 0;
     let absenceDays = 0;
-    const projectHours = new Map();
 
     const holidayEntries = [];
     const sickEntries = [];
@@ -10199,10 +10198,6 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
         totalHours += Number(entry.hours) || 0;
         totalOvertime += Number(entry.overtime) || 0;
         daysWorked.add(entry.date);
-
-        const project = entry.project || 'Sem obra';
-        const hours = (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
-        projectHours.set(project, (projectHours.get(project) || 0) + hours);
 
       } else if (entry.template === 'Férias') {
         // ✅ Só processa se for período único (evita duplicados)
@@ -10260,6 +10255,15 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
           notes: entry.notes || '',
         });
       }
+    });
+
+    // 🆕 Calcular projetos do SELECTED YEAR para o gráfico "Distribuição por Obra"
+    const projectHours = new Map();
+    myEntries.forEach(entry => {
+      if (!isNormalWork(entry.template) || !entry.project) return;
+
+      const hours = (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
+      projectHours.set(entry.project, (projectHours.get(entry.project) || 0) + hours);
     });
 
     const projectsArray = Array.from(projectHours.entries())
@@ -10350,7 +10354,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       vacationStartYear,
       vacationEndYear,
     };
-  }, [timeEntries, selectedYear]);
+  }, [timeEntries, selectedYear, myEntries]);
 
   // Calcular estatísticas mensais (dia 21 do mês anterior até dia 20 do mês atual)
   const monthlyStats = useMemo(() => {
@@ -20015,13 +20019,13 @@ function TimesheetsView({ onViewChange, cycleOffset }: { onViewChange?: boolean;
     )
   }
 
-  // 📊 Estatísticas em tempo real
+  // 📊 Estatísticas em tempo real (Hero Section)
   const today = todayISO();
   const thisWeekStart = new Date();
   thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay() + 1);
   const thisWeekStartISO = thisWeekStart.toISOString().slice(0, 10);
 
-  const stats = useMemo(() => {
+  const heroStats = useMemo(() => {
     const todayEntries = visibleTimeEntries.filter(t => t.date === today && t.template === 'Trabalho Normal');
     const weekEntries = visibleTimeEntries.filter(t => t.date >= thisWeekStartISO && t.template === 'Trabalho Normal');
     const monthEntries = visibleTimeEntries.filter(t => t.date?.startsWith(today.slice(0, 7)) && t.template === 'Trabalho Normal');
@@ -20156,22 +20160,22 @@ function TimesheetsView({ onViewChange, cycleOffset }: { onViewChange?: boolean;
           {/* Quick Stats na Hero */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-8" style={anim(0.2)}>
             <div className="glass-card rounded-2xl p-4 hover-lift cursor-pointer">
-              <div className="text-3xl font-bold">{stats.todayHours}h</div>
+              <div className="text-3xl font-bold">{heroStats.todayHours}h</div>
               <div className="text-sm text-white/80 mt-1">Hoje</div>
             </div>
             <div className="glass-card rounded-2xl p-4 hover-lift cursor-pointer">
-              <div className="text-3xl font-bold">{stats.weekHours}h</div>
+              <div className="text-3xl font-bold">{heroStats.weekHours}h</div>
               <div className="text-sm text-white/80 mt-1">Esta Semana</div>
             </div>
             <div
               className="glass-card rounded-2xl p-4 hover-lift cursor-pointer"
               onClick={() => setInfoModal({ type: 'myProjects', data: { timeEntries: visibleTimeEntries } })}
             >
-              <div className="text-3xl font-bold">{stats.activeProjects}</div>
+              <div className="text-3xl font-bold">{heroStats.activeProjects}</div>
               <div className="text-sm text-white/80 mt-1">Obras Ativas</div>
             </div>
             <div className="glass-card rounded-2xl p-4 hover-lift cursor-pointer">
-              <div className="text-3xl font-bold">{stats.todayEntries}</div>
+              <div className="text-3xl font-bold">{heroStats.todayEntries}</div>
               <div className="text-sm text-white/80 mt-1">Registos Hoje</div>
             </div>
           </div>
@@ -20192,13 +20196,13 @@ function TimesheetsView({ onViewChange, cycleOffset }: { onViewChange?: boolean;
           <div className="flex items-start justify-between">
             <div className="text-white">
               <div className="text-sm font-medium text-white/80 mb-2">Horas Mensais</div>
-              <div className="text-4xl font-bold mb-1">{stats.monthHours}h</div>
-              <div className="text-sm text-white/70">~{Math.round(stats.monthHours/22)}h por dia</div>
+              <div className="text-4xl font-bold mb-1">{heroStats.monthHours}h</div>
+              <div className="text-sm text-white/70">~{Math.round(heroStats.monthHours/22)}h por dia</div>
             </div>
             <div className="text-5xl opacity-20">📈</div>
           </div>
           <div className="mt-4 h-2 bg-white/20 rounded-full overflow-hidden">
-            <div className="h-full bg-white rounded-full" style={{ width: `${Math.min((stats.monthHours / 176) * 100, 100)}%`, transition: 'width 1s ease-out' }} />
+            <div className="h-full bg-white rounded-full" style={{ width: `${Math.min((heroStats.monthHours / 176) * 100, 100)}%`, transition: 'width 1s ease-out' }} />
           </div>
         </div>
 
@@ -20210,19 +20214,19 @@ function TimesheetsView({ onViewChange, cycleOffset }: { onViewChange?: boolean;
           <div className="flex items-start justify-between">
             <div className="text-white">
               <div className="text-sm font-medium text-white/80 mb-2">Pendentes Aprovação</div>
-              <div className="text-4xl font-bold mb-1">{stats.pendingApprovals}</div>
-              <div className="text-sm text-white/70">{stats.pendingApprovals === 0 ? '✅ Tudo aprovado!' : '🟡 A aguardar...'}</div>
+              <div className="text-4xl font-bold mb-1">{heroStats.pendingApprovals}</div>
+              <div className="text-sm text-white/70">{heroStats.pendingApprovals === 0 ? '✅ Tudo aprovado!' : '🟡 A aguardar...'}</div>
             </div>
             <div className="text-5xl opacity-20">📋</div>
           </div>
           <div className="mt-4 flex items-center gap-2">
             <div className="flex-1 h-2 bg-white/20 rounded-full overflow-hidden">
               <div className="h-full bg-white rounded-full" style={{
-                width: stats.pendingApprovals === 0 ? '100%' : '50%',
+                width: heroStats.pendingApprovals === 0 ? '100%' : '50%',
                 transition: 'width 1s ease-out'
               }} />
             </div>
-            <div className="text-xs text-white/70 font-medium">{stats.pendingApprovals === 0 ? '100%' : '50%'}</div>
+            <div className="text-xs text-white/70 font-medium">{heroStats.pendingApprovals === 0 ? '100%' : '50%'}</div>
           </div>
         </div>
       </div>
