@@ -10173,9 +10173,19 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
     const sickEntries = [];
     const absenceEntries = [];
 
+    // 🆕 Usar ano atual para Taxa de Presença (independente do selectedYear)
+    const now = new Date();
+    const currentYear = now.getFullYear();
+
+    // 🆕 Filtrar entradas do ANO ATUAL para Taxa de Presença
+    const currentYearEntries = timeEntries.filter(entry => {
+      const entryDate = new Date(entry.date || entry.periodStart);
+      return entryDate.getFullYear() === currentYear;
+    });
+
     // ✅ DEDUPLICAR períodos de férias/baixas ANTES de processar
     const uniquePeriods = new Map(); // Chave: worker|template|start|end
-    myEntries.forEach(entry => {
+    currentYearEntries.forEach(entry => {
       if (entry.template === 'Férias' || entry.template === 'Baixa') {
         const key = `${entry.worker}|${entry.template}|${entry.periodStart}|${entry.periodEnd}`;
         if (!uniquePeriods.has(key)) {
@@ -10184,7 +10194,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       }
     });
 
-    myEntries.forEach((entry) => {
+    currentYearEntries.forEach((entry) => {
       if (isNormalWork(entry.template)) { // ⬅️ USA A FUNÇÃO HELPER
         totalHours += Number(entry.hours) || 0;
         totalOvertime += Number(entry.overtime) || 0;
@@ -10193,7 +10203,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
         const project = entry.project || 'Sem obra';
         const hours = (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
         projectHours.set(project, (projectHours.get(project) || 0) + hours);
-        
+
       } else if (entry.template === 'Férias') {
         // ✅ Só processa se for período único (evita duplicados)
         const key = `${entry.worker}|${entry.template}|${entry.periodStart}|${entry.periodEnd}`;
@@ -10244,7 +10254,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
 
       } else if (entry.template === 'Falta') {
         absenceDays++;
-        
+
         absenceEntries.push({
           date: entry.date,
           notes: entry.notes || '',
@@ -10257,12 +10267,13 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       .sort((a, b) => b.hours - a.hours)
       .slice(0, 5);
 
-    // 🆕 Calcular dias úteis do ano (excluindo fins de semana)
-    const startOfYear = new Date(selectedYear, 0, 1); // 1 de Janeiro
-    const endOfYear = new Date(selectedYear, 11, 31); // 31 de Dezembro
+    // 🆕 Calcular dias úteis do ANO ATUAL até HOJE (excluindo fins de semana)
+    const startOfYear = new Date(currentYear, 0, 1); // 1 de Janeiro do ano atual
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
     let workingDaysInYear = 0;
 
-    for (let d = new Date(startOfYear); d <= endOfYear; d.setDate(d.getDate() + 1)) {
+    for (let d = new Date(startOfYear); d <= today; d.setDate(d.getDate() + 1)) {
       const dow = d.getDay();
       if (dow !== 0 && dow !== 6) { // Não é sábado nem domingo
         workingDaysInYear++;
@@ -10274,12 +10285,54 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       ? Math.round((daysWorked.size / workingDaysInYear) * 100)
       : 0;
 
-    // 🆕 Calcular período de férias baseado na data atual
-    const now = new Date();
+    // 🆕 Calcular período de férias baseado na data atual (para o card de férias)
     const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
     const vacationStartYear = currentMonth <= 2 ? currentYear - 1 : currentYear;
     const vacationEndYear = currentMonth <= 2 ? currentYear : currentYear + 1;
+
+    // 🆕 Filtrar férias para o período correto (ano até Março do próximo)
+    const vacationPeriodEntries = timeEntries.filter(entry => {
+      if (entry.template !== 'Férias') return false;
+      const entryDate = new Date(entry.date || entry.periodStart);
+      const year = entryDate.getFullYear();
+      const month = entryDate.getMonth();
+
+      return (year === vacationStartYear) ||
+             (year === vacationEndYear && month <= 2);
+    });
+
+    // Recalcular férias para o período correto
+    const vacationUniqueP = new Map();
+    vacationPeriodEntries.forEach(entry => {
+      const key = `${entry.worker}|${entry.template}|${entry.periodStart}|${entry.periodEnd}`;
+      if (!vacationUniqueP.has(key)) {
+        vacationUniqueP.set(key, entry);
+      }
+    });
+
+    const vacationHolidayEntries = [];
+    let vacationHolidayDays = 0;
+
+    vacationUniqueP.forEach(entry => {
+      const start = new Date(entry.periodStart || entry.date);
+      const end = new Date(entry.periodEnd || entry.date);
+      let days = 0;
+
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dow = d.getDay();
+        if (dow !== 0 && dow !== 6) {
+          vacationHolidayDays++;
+          days++;
+        }
+      }
+
+      vacationHolidayEntries.push({
+        start: entry.periodStart || entry.date,
+        end: entry.periodEnd || entry.date,
+        days,
+        notes: entry.notes || '',
+      });
+    });
 
     return {
       totalHours,
@@ -10287,17 +10340,17 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
       daysWorked: daysWorked.size,
       workingDaysInYear,
       attendanceRate,
-      holidayDays,
+      holidayDays: vacationHolidayDays,  // Férias do período correto
       sickDays,
       absenceDays,
       projects: projectsArray,
-      holidayEntries,
+      holidayEntries: vacationHolidayEntries,  // Férias do período correto
       sickEntries,
       absenceEntries,
       vacationStartYear,
       vacationEndYear,
     };
-  }, [myEntries, selectedYear]);
+  }, [timeEntries, selectedYear]);
 
   // Calcular estatísticas mensais (dia 21 do mês anterior até dia 20 do mês atual)
   const monthlyStats = useMemo(() => {
@@ -11913,6 +11966,7 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                   {infoModal.type === 'absences' && '🤒 Histórico de Baixas e Faltas'}
                   {infoModal.type === 'projectDetail' && '🏗️ Análise Detalhada da Obra'}
                   {infoModal.type === 'workerDetail' && '👤 Análise Detalhada do Colaborador'}
+                  {infoModal.type === 'myProjects' && '🏗️ Minhas Obras'}
                 </h3>
                 <button
                   onClick={() => setInfoModal(null)}
@@ -12236,6 +12290,57 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                     )}
                   </div>
                 )}
+
+                {/* MINHAS OBRAS */}
+                {infoModal.type === 'myProjects' && (() => {
+                  // Calcular horas por obra do colaborador
+                  const projectHours = new Map();
+
+                  infoModal.data.timeEntries.forEach(entry => {
+                    if (!isNormalWork(entry.template) || !entry.project) return;
+
+                    const hours = (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
+                    if (!projectHours.has(entry.project)) {
+                      projectHours.set(entry.project, { totalHours: 0, entries: 0 });
+                    }
+                    const stats = projectHours.get(entry.project);
+                    stats.totalHours += hours;
+                    stats.entries += 1;
+                  });
+
+                  // Ordenar por horas (desc)
+                  const sortedProjects = Array.from(projectHours.entries())
+                    .map(([name, data]) => ({ name, ...data }))
+                    .sort((a, b) => b.totalHours - a.totalHours);
+
+                  return (
+                    <div className="space-y-3">
+                      <div className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                        Total de {sortedProjects.length} {sortedProjects.length === 1 ? 'obra' : 'obras'} com registos de horas
+                      </div>
+                      {sortedProjects.length === 0 ? (
+                        <div className="text-center text-slate-500 py-8">
+                          <div className="text-4xl mb-2">🏗️</div>
+                          <div>Sem obras registadas</div>
+                        </div>
+                      ) : (
+                        sortedProjects.map((proj, i) => (
+                          <div key={i} className="p-4 rounded-xl border dark:border-slate-800 hover:shadow-md transition-shadow">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="font-semibold text-slate-800 dark:text-slate-100">{proj.name}</div>
+                                <div className="text-sm text-slate-500 mt-1">
+                                  {formatHours(proj.totalHours)} trabalhadas · {proj.entries} {proj.entries === 1 ? 'registo' : 'registos'}
+                                </div>
+                              </div>
+                              <div className="text-2xl font-bold" style={{ color: '#00A9B8' }}>#{i + 1}</div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* ANÁLISE DETALHADA DA OBRA */}
                 {infoModal.type === 'projectDetail' && (() => {
@@ -19918,13 +20023,24 @@ function TimesheetsView({ onViewChange, cycleOffset }: { onViewChange?: boolean;
         return entry;
       }
 
-      // 🆕 Calcular totais reais do trabalhador nesse dia
-      const totalHours = sameDay.reduce((sum, e) => sum + (Number(e.hours) || 0), 0);
-      const totalOvertime = sameDay.reduce((sum, e) => sum + (Number(e.overtime) || 0), 0);
+      // 🔍 Verificar se TODOS os registos têm as MESMAS horas (indicando duplicados)
+      const allHoursSame = sameDay.every(e => Number(e.hours) === Number(sameDay[0].hours));
+      const allOvertimeSame = sameDay.every(e => Number(e.overtime) === Number(sameDay[0].overtime));
+
+      // Se todos têm horas diferentes, são registos específicos → manter originais
+      if (!allHoursSame) {
+        return entry;
+      }
+
+      // 🆕 Todos têm mesmas horas → são duplicados → dividir
+      const totalHours = Number(sameDay[0].hours) || 0;
+      const totalOvertime = Number(sameDay[0].overtime) || 0;
 
       // 🆕 Distribuir horas inteiras (ex: 8h ÷ 3 = [3, 3, 2])
       const hoursDistribution = distributeHours(totalHours, sameDay.length);
-      const overtimeDistribution = distributeHours(totalOvertime, sameDay.length);
+      const overtimeDistribution = allOvertimeSame
+        ? distributeHours(totalOvertime, sameDay.length)
+        : sameDay.map(e => Number(e.overtime) || 0);
 
       // Encontrar índice do registo atual
       const index = sameDay.findIndex(e =>
@@ -20008,7 +20124,10 @@ function TimesheetsView({ onViewChange, cycleOffset }: { onViewChange?: boolean;
               <div className="text-3xl font-bold">{stats.weekHours}h</div>
               <div className="text-sm text-white/80 mt-1">Esta Semana</div>
             </div>
-            <div className="glass-card rounded-2xl p-4 hover-lift cursor-pointer">
+            <div
+              className="glass-card rounded-2xl p-4 hover-lift cursor-pointer"
+              onClick={() => setInfoModal({ type: 'myProjects', data: { timeEntries: visibleTimeEntries } })}
+            >
               <div className="text-3xl font-bold">{stats.activeProjects}</div>
               <div className="text-sm text-white/80 mt-1">Obras Ativas</div>
             </div>
@@ -20212,7 +20331,7 @@ function TimesheetsView({ onViewChange, cycleOffset }: { onViewChange?: boolean;
                     <div className="text-sm text-slate-500 dark:text-slate-400">
                       {t.date} • {
                         t.template === 'Trabalho Normal' || t.template === 'Trabalho - Fim de Semana/Feriado'
-                          ? `${t.displayHours !== undefined ? t.displayHours.toFixed(1) : (t.hours || 0)}h${((t.displayOvertime !== undefined ? t.displayOvertime : t.overtime) > 0) ? ` + ${(t.displayOvertime !== undefined ? t.displayOvertime.toFixed(1) : t.overtime)}h extra` : ''}`
+                          ? `${formatHours(t.displayHours !== undefined ? t.displayHours : (Number(t.hours) || 0))}${((t.displayOvertime !== undefined ? t.displayOvertime : Number(t.overtime)) > 0) ? ` + ${formatHours(t.displayOvertime !== undefined ? t.displayOvertime : Number(t.overtime))} extra` : ''}`
                           : t.template === 'Férias' || t.template === 'Baixa'
                             ? `${t.periodStart} → ${t.periodEnd}`
                             : t.template === 'Falta'
