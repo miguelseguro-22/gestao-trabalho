@@ -20177,7 +20177,13 @@ function TimesheetsView({ onViewChange, cycleOffset }: { onViewChange?: boolean;
             </div>
             <div
               className="glass-card rounded-2xl p-4 hover-lift cursor-pointer"
-              onClick={() => setInfoModal({ type: 'myProjects', data: { timeEntries: visibleTimeEntries } })}
+              onClick={() => {
+                console.log('🏗️ Card Obras Ativas clicado:', {
+                  activeProjects: heroStats.activeProjects,
+                  totalEntries: visibleTimeEntries.length
+                });
+                setInfoModal({ type: 'myProjects', data: { timeEntries: visibleTimeEntries } });
+              }}
             >
               <div className="text-3xl font-bold">{heroStats.activeProjects}</div>
               <div className="text-sm text-white/80 mt-1">Obras Ativas</div>
