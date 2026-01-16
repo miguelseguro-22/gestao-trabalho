@@ -10401,24 +10401,34 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
   // Calcular horas por dia da semana atual
   const weeklyStats = useMemo(() => {
     const now = new Date();
-    const currentDay = now.getDay(); // 0 = Domingo, 1 = Segunda, ...
 
-    // Calcular início da semana (Segunda-feira) com offset
-    const startOfWeek = new Date(now);
-    const diff = currentDay === 0 ? -6 : 1 - currentDay; // Se domingo, volta 6 dias; senão, vai para segunda
-    startOfWeek.setDate(now.getDate() + diff + (weekOffset * 7)); // 🆕 Aplicar offset
-    startOfWeek.setHours(0, 0, 0, 0);
+    // 🆕 Calcular início da semana (Segunda-feira) de forma robusta
+    const currentDay = now.getDay(); // 0 = Domingo, 1 = Segunda, ...
+    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1; // Quantos dias desde segunda
+
+    // Criar a segunda-feira da semana atual
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysFromMonday);
+
+    // Aplicar offset de semanas
+    monday.setDate(monday.getDate() + (weekOffset * 7));
+    monday.setHours(0, 0, 0, 0);
 
     // 🆕 Mapear dias da semana (0=Domingo, 1=Segunda, ..., 6=Sábado)
     const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
     // Criar array com os 7 dias da semana (Segunda a Domingo)
     const weekData = Array.from({ length: 7 }, (_, index) => {
-      const date = new Date(startOfWeek);
-      date.setDate(startOfWeek.getDate() + index);
-      const dateStr = date.toISOString().slice(0, 10);
+      // 🆕 Criar data sem problemas de timezone
+      const date = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + index);
+      date.setHours(0, 0, 0, 0);
 
-      // 🆕 Calcular o dia da semana REAL baseado na data
+      // Formatar data como YYYY-MM-DD (sem timezone issues)
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+
+      // 🆕 Calcular o dia da semana REAL baseado na data criada
       const realDayOfWeek = date.getDay(); // 0=Dom, 1=Seg, 2=Ter, ...
       const dayName = dayNames[realDayOfWeek];
 
@@ -10547,10 +10557,10 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
     const weekAverage = weekTotal / 7;
     const maxHours = Math.max(...weekData.map(d => d.total), 8); // Mínimo 8 para escala
 
-    // 🆕 Calcular range de datas da semana
-    const startDate = new Date(startOfWeek);
-    const endDate = new Date(startOfWeek);
-    endDate.setDate(startOfWeek.getDate() + 6);
+    // 🆕 Calcular range de datas da semana (segunda a domingo)
+    const startDate = new Date(monday);
+    const endDate = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+    endDate.setHours(0, 0, 0, 0);
 
     return {
       days: weekData,
