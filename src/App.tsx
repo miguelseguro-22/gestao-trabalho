@@ -10259,11 +10259,19 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
 
     // 🆕 Calcular projetos do SELECTED YEAR para o gráfico "Distribuição por Obra"
     const projectHours = new Map();
+    let projectsTotalHours = 0;
+    let projectsTotalOvertime = 0;
+
     myEntries.forEach(entry => {
       if (!isNormalWork(entry.template) || !entry.project) return;
 
-      const hours = (Number(entry.hours) || 0) + (Number(entry.overtime) || 0);
-      projectHours.set(entry.project, (projectHours.get(entry.project) || 0) + hours);
+      const hours = (Number(entry.hours) || 0);
+      const overtime = (Number(entry.overtime) || 0);
+      const totalHours = hours + overtime;
+
+      projectHours.set(entry.project, (projectHours.get(entry.project) || 0) + totalHours);
+      projectsTotalHours += hours;
+      projectsTotalOvertime += overtime;
     });
 
     const projectsArray = Array.from(projectHours.entries())
@@ -10339,8 +10347,8 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
     });
 
     return {
-      totalHours,
-      totalOvertime,
+      totalHours: projectsTotalHours,  // 🆕 Total de horas do selectedYear para o gráfico
+      totalOvertime: projectsTotalOvertime,  // 🆕 Total de horas extra do selectedYear
       daysWorked: daysWorked.size,
       workingDaysInYear,
       attendanceRate,
