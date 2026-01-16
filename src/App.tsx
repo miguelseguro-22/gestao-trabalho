@@ -10409,12 +10409,18 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
     startOfWeek.setDate(now.getDate() + diff + (weekOffset * 7)); // 🆕 Aplicar offset
     startOfWeek.setHours(0, 0, 0, 0);
 
-    // Criar array com os 7 dias da semana
-    const days = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-    const weekData = days.map((dayName, index) => {
+    // 🆕 Mapear dias da semana (0=Domingo, 1=Segunda, ..., 6=Sábado)
+    const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+    // Criar array com os 7 dias da semana (Segunda a Domingo)
+    const weekData = Array.from({ length: 7 }, (_, index) => {
       const date = new Date(startOfWeek);
       date.setDate(startOfWeek.getDate() + index);
       const dateStr = date.toISOString().slice(0, 10);
+
+      // 🆕 Calcular o dia da semana REAL baseado na data
+      const realDayOfWeek = date.getDay(); // 0=Dom, 1=Seg, 2=Ter, ...
+      const dayName = dayNames[realDayOfWeek];
 
       // 🆕 Coletar todos os registos deste dia com detalhes
       // 🐛 FIX: Usar timeEntries diretamente em vez de myEntries (que filtra por selectedYear)
