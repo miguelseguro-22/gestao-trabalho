@@ -12324,15 +12324,25 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                     stats.entries += 1;
                   });
 
-                  // Ordenar por horas (desc)
+                  // Calcular total de horas trabalhadas
+                  const totalHoursWorked = Array.from(projectHours.values())
+                    .reduce((sum, proj) => sum + proj.totalHours, 0);
+
+                  // Ordenar por horas (desc) e calcular percentagens
                   const sortedProjects = Array.from(projectHours.entries())
-                    .map(([name, data]) => ({ name, ...data }))
+                    .map(([name, data]) => ({
+                      name,
+                      ...data,
+                      percentage: totalHoursWorked > 0
+                        ? Math.round((data.totalHours / totalHoursWorked) * 100)
+                        : 0
+                    }))
                     .sort((a, b) => b.totalHours - a.totalHours);
 
                   return (
                     <div className="space-y-3">
                       <div className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                        Total de {sortedProjects.length} {sortedProjects.length === 1 ? 'obra' : 'obras'} com registos de horas
+                        Total de {sortedProjects.length} {sortedProjects.length === 1 ? 'obra' : 'obras'} · {formatHours(totalHoursWorked)} trabalhadas
                       </div>
                       {sortedProjects.length === 0 ? (
                         <div className="text-center text-slate-500 py-8">
@@ -12342,14 +12352,27 @@ const ProfileView = ({ timeEntries, auth, people, prefs, orders = [], projects =
                       ) : (
                         sortedProjects.map((proj, i) => (
                           <div key={i} className="p-4 rounded-xl border dark:border-slate-800 hover:shadow-md transition-shadow">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between mb-3">
                               <div className="flex-1">
                                 <div className="font-semibold text-slate-800 dark:text-slate-100">{proj.name}</div>
                                 <div className="text-sm text-slate-500 mt-1">
                                   {formatHours(proj.totalHours)} trabalhadas · {proj.entries} {proj.entries === 1 ? 'registo' : 'registos'}
                                 </div>
                               </div>
-                              <div className="text-2xl font-bold" style={{ color: '#00A9B8' }}>#{i + 1}</div>
+                              <div className="text-right">
+                                <div className="text-2xl font-bold" style={{ color: '#00A9B8' }}>{proj.percentage}%</div>
+                                <div className="text-xs text-slate-500">presença</div>
+                              </div>
+                            </div>
+                            {/* Barra de progresso */}
+                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{
+                                  width: `${proj.percentage}%`,
+                                  background: 'linear-gradient(to right, #00A9B8, #00677F)'
+                                }}
+                              />
                             </div>
                           </div>
                         ))
